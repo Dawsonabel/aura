@@ -1,0 +1,35 @@
+# Runtime data — contains real phone numbers, session tokens, IAP records. NEVER commit.
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+db.json
+db.json.migrated
+
+# Secrets / local env
+.env
+.env.*
+*.pem
+*.p8
+*.mobileprovision
+secrets.json
+
+# Dependencies
+node_modules/
+
+# Capacitor / iOS build artifacts (generated)
+www/
+ios/App/Pods/
+ios/App/App/public/
+ios/App/build/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
