@@ -1,0 +1,18 @@
+# Normalize all text files to LF in the repo (checked out natively per-OS).
+* text=auto eol=lf
+
+# Shell scripts must stay LF even on Windows checkouts.
+*.sh text eol=lf
+
+# Treat these as binary — never line-ending-convert or text-diff them.
+*.woff2 binary
+*.woff  binary
+*.ttf   binary
+*.otf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.ico   binary
+*.p8    binary
+*.pem   binary
+*.mobileprovision binary
