@@ -9,7 +9,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, 'data');
+const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data'); // set DATA_DIR to a mounted disk for persistence
 const DB_PATH = path.join(DATA_DIR, 'db.json');
 const PORT = process.env.PORT || 8777;
 const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'gas-admin';
@@ -265,6 +265,11 @@ async function handleApi(req,res,p){
   if(body.__tooLarge) return json(res,413,{error:'Payload too large'});
   const ip = clientIp(req);
   const seg = p.split('/').filter(Boolean); // ['api', ...]
+
+  // ---- health check (public, unauthenticated) ----
+  if(p==='/api/health' && m==='GET'){
+    return json(res,200,{ ok:true, service:'gas', ts:nowISO(), uptime:Math.round(process.uptime()), sms: SMS_ON?'live':'dev' });
+  }
 
   // ---- public / user auth ----
   if(p==='/api/auth/request-code' && m==='POST'){

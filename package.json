@@ -1,0 +1,13 @@
+{
+  "name": "gas-clone",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gas app clone — faithful UI + real backend (SQLite, phone-code auth, Apple IAP).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
