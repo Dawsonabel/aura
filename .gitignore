@@ -33,3 +33,6 @@ Thumbs.db
 *.log
 .idea/
 .vscode/
+
+# Generated single-file build (node build-static.js)
+dist/
