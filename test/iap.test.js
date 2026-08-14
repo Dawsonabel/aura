@@ -24,7 +24,7 @@ test('rejects a transaction that is not a 3-part JWS', async () => {
 test('rejects a well-formed JWS with an empty cert chain', async () => {
   const bogus = [
     Buffer.from(JSON.stringify({ alg: 'ES256', x5c: [] })).toString('base64url'),
-    Buffer.from(JSON.stringify({ productId: 'gas.godmode.weekly' })).toString('base64url'),
+    Buffer.from(JSON.stringify({ productId: 'aura.godmode.weekly' })).toString('base64url'),
     'signature'
   ].join('.');
   const r = await api(base, 'POST', '/api/iap/validate', { token, body: { signedTransaction: bogus } });
@@ -35,7 +35,7 @@ test('rejects a well-formed JWS with an empty cert chain', async () => {
 test('rejects an unsupported signing algorithm', async () => {
   const bogus = [
     Buffer.from(JSON.stringify({ alg: 'HS256', x5c: ['aaaa'] })).toString('base64url'),
-    Buffer.from(JSON.stringify({ productId: 'gas.godmode.weekly' })).toString('base64url'),
+    Buffer.from(JSON.stringify({ productId: 'aura.godmode.weekly' })).toString('base64url'),
     'signature'
   ].join('.');
   const r = await api(base, 'POST', '/api/iap/validate', { token, body: { signedTransaction: bogus } });

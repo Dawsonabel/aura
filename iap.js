@@ -1,4 +1,4 @@
-/* ===== Gas clone — Apple In-App Purchase verification (StoreKit 2) =====
+/* ===== Aura — Apple In-App Purchase verification (StoreKit 2) =====
    The iOS app buys God Mode via StoreKit 2 and sends the *signed transaction*
    (a JWS) to POST /api/iap/validate. We verify it here, server-side, before
    granting the entitlement — clients can never self-grant God Mode.

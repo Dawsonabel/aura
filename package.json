@@ -1,8 +1,8 @@
 {
-  "name": "gas-clone",
+  "name": "aura-app",
   "version": "1.0.0",
   "private": true,
-  "description": "Gas app clone — faithful UI + real backend (Neon Postgres, phone-code auth, Apple IAP).",
+  "description": "Aura — faithful UI + real backend (Neon Postgres, phone-code auth, Apple IAP).",
   "main": "server.js",
   "scripts": {
     "build": "tsc",

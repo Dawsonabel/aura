@@ -7,7 +7,7 @@ let base, adminToken;
 
 before(async () => {
   ({ base } = await boot());
-  const login = await api(base, 'POST', '/api/admin/login', { body: { passcode: 'gas-admin' } });
+  const login = await api(base, 'POST', '/api/admin/login', { body: { passcode: 'aura-admin' } });
   assert.equal(login.status, 200);
   adminToken = login.body.token;
 });

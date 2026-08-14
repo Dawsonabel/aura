@@ -450,7 +450,7 @@ async function removeFriend(id,name){
   await api('DELETE','/friends',{userId:id}); const r=await api('GET','/friends'); cache.friends=r.friends||[];
   toast(`Removed ${(name||'').split(' ')[0]}`); renderProfile();
 }
-const GODMODE_PRODUCT_ID = 'gas.godmode.weekly';
+const GODMODE_PRODUCT_ID = 'aura.godmode.weekly';
 function isNative(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
 async function activateGodMode(){
   if(isNative()){ return purchaseGodModeNative(); }

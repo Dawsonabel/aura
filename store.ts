@@ -1,4 +1,4 @@
-/* ===== Gas clone — Neon Postgres persistence layer =====
+/* ===== Aura — Neon Postgres persistence layer =====
    Drop-in replacement for the previous node:sqlite Store: same kv-document
    shape (coll, id, data), same in-memory `db` object it loads into/persists
    from. server.js's route handlers are untouched — they still just read and

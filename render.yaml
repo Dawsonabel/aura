@@ -1,8 +1,8 @@
-# Render Blueprint — one-click deploy of the Gas backend.
+# Render Blueprint — one-click deploy of the Aura backend.
 # In Render: New → Blueprint → connect the Dawsonabel/aura repo → Apply.
 services:
   - type: web
-    name: gas-backend
+    name: aura-backend
     runtime: node
     plan: free                 # data now lives in Neon Postgres, not local disk — free plan is fine for persistence.
     buildCommand: npm install --include=dev && npm run build   # --include=dev: NODE_ENV=production below would otherwise skip `typescript`

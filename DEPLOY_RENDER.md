@@ -7,16 +7,16 @@ Everything here is on the web dashboard — no Mac needed for this part.
 1. Go to **https://render.com** → sign up (free) with GitHub.
 2. **New → Blueprint**.
 3. Connect and pick the **`Dawsonabel/aura`** repo. Render reads `render.yaml`.
-4. Click **Apply**. It builds and deploys `gas-backend`.
+4. Click **Apply**. It builds and deploys `aura-backend`.
 
 ## 2. Grab your URL + admin passcode
-- When it goes live you'll get a URL like **`https://gas-backend-XXXX.onrender.com`**. Copy it.
+- When it goes live you'll get a URL like **`https://aura-backend-XXXX.onrender.com`**. Copy it.
 - Open the service → **Environment** → reveal **`ADMIN_PASSCODE`** (Render generated a strong one). That's your login for `/admin`.
 
 ## 3. Verify it's up
 Visit `https://<your-url>/api/health` — you should see:
 ```json
-{ "ok": true, "service": "gas", "sms": "dev", ... }
+{ "ok": true, "service": "aura", "sms": "dev", ... }
 ```
 `"sms":"dev"` means verification codes show **on-screen** (no Twilio needed for the demo).
 

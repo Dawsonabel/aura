@@ -24,7 +24,7 @@ NODE_ENV=production \
 ADMIN_PASSCODE=<a-strong-secret> \
 TWILIO_ACCOUNT_SID=AC... TWILIO_SID=AC...orSK... TWILIO_TOKEN=... TWILIO_FROM=+1... \
 APPLE_ROOT_CA=/path/to/AppleRootCA-G3.pem \
-GODMODE_PRODUCT_IDS=gas.godmode.weekly \
+GODMODE_PRODUCT_IDS=aura.godmode.weekly \
 node server.js
 ```
 - In production the server **refuses to boot** with the default admin passcode.
@@ -80,7 +80,7 @@ Then `npx cap sync ios`.
 God Mode is already enforced server-side (`/api/iap/validate` verifies the StoreKit 2 signed transaction; `app.js → purchaseGodModeNative()` posts it). You just wire the client purchase:
 
 **App Store Connect**
-1. Create an **Auto-Renewable Subscription**, Product ID **`gas.godmode.weekly`**, price $6.99/week (matches the paywall).
+1. Create an **Auto-Renewable Subscription**, Product ID **`aura.godmode.weekly`**, price $6.99/week (matches the paywall).
 2. Add a **Sandbox test account** (Users and Access → Sandbox).
 
 **Client plugin — pick one:**

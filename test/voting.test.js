@@ -21,7 +21,7 @@ before(async () => {
   schoolmateId = mate.id;
 
   // an ineligible target: a user at a different school, via the admin API
-  const adminLogin = await api(base, 'POST', '/api/admin/login', { body: { passcode: 'gas-admin' } });
+  const adminLogin = await api(base, 'POST', '/api/admin/login', { body: { passcode: 'aura-admin' } });
   assert.equal(adminLogin.status, 200);
   const adminToken = adminLogin.body.token;
   const school = await api(base, 'POST', '/api/admin/schools', { token: adminToken, body: { name: 'Other High' } });

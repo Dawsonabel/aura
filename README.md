@@ -16,7 +16,7 @@ node --env-file=.env server.js
 Then open:
 
 - **Phone app:** http://localhost:8777  → best viewed in a phone emulator (Chrome/Edge DevTools → Ctrl+Shift+M → pick an iPhone)
-- **Admin dashboard:** http://localhost:8777/admin  → passcode **`gas-admin`**
+- **Admin dashboard:** http://localhost:8777/admin  → passcode **`aura-admin`**
 
 Change the port or passcode with env vars: `PORT=3000 ADMIN_PASSCODE=secret node server.js`
 

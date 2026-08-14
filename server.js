@@ -1,5 +1,5 @@
-/* ===== Gas clone — zero-dependency Node backend =====
-   Static hosting + REST API + JSON file store + demo auth.
+/* ===== Aura — Node backend =====
+   Static hosting + REST API + Neon Postgres store + demo auth.
    Run:  node server.js      then open http://localhost:8777
 */
 const http = require('http');
@@ -11,10 +11,10 @@ const crypto = require('crypto');
 const ROOT = __dirname;
 const DATABASE_URL = process.env.DATABASE_URL;
 const PORT = process.env.PORT || 8777;
-const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'gas-admin';
+const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'aura-admin';
 const IS_PROD = process.env.NODE_ENV === 'production';
 const ALLOW_DEMO = process.env.ALLOW_DEMO === '1' || !IS_PROD; // demo login: on in dev, off in prod unless forced
-if(IS_PROD && ADMIN_PASSCODE === 'gas-admin'){
+if(IS_PROD && ADMIN_PASSCODE === 'aura-admin'){
   console.error('\n🛑 REFUSING TO START: NODE_ENV=production with the default admin passcode. Set ADMIN_PASSCODE to a strong secret.\n');
   process.exit(1);
 }
@@ -99,7 +99,7 @@ function seedVote(voter, target, poll){
 }
 const { Store } = require('./store');
 const { verifySignedTransaction, DEV_TRUST } = require('./iap');
-const GODMODE_PRODUCTS = (process.env.GODMODE_PRODUCT_IDS || 'gas.godmode.weekly,gas.godmode.lifetime').split(',');
+const GODMODE_PRODUCTS = (process.env.GODMODE_PRODUCT_IDS || 'aura.godmode.weekly,aura.godmode.lifetime').split(',');
 let store;
 async function load(){
   store = new Store(DATABASE_URL);
@@ -259,7 +259,7 @@ async function handleApi(req,res,p){
 
   // ---- health check (public, unauthenticated) ----
   if(p==='/api/health' && m==='GET'){
-    return json(res,200,{ ok:true, service:'gas', ts:nowISO(), uptime:Math.round(process.uptime()), sms: SMS_ON?'live':'dev' });
+    return json(res,200,{ ok:true, service:'aura', ts:nowISO(), uptime:Math.round(process.uptime()), sms: SMS_ON?'live':'dev' });
   }
 
   // ---- public / user auth ----
@@ -271,7 +271,7 @@ async function handleApi(req,res,p){
     if(!rateLimit('codeip:'+ip, 20, 60*60*1000)) return json(res,429,{error:'Too many requests from this network.'});
     const code=genCode();
     codes.set(digits,{ code, expires:Date.now()+10*60*1000, attempts:0 });
-    await sendSMS(digits, `Your Gas verification code is ${code}`);
+    await sendSMS(digits, `Your Aura verification code is ${code}`);
     return json(res,200,{ sent:true, sms:SMS_ON, devCode: SMS_ON?undefined:code });
   }
   if(p==='/api/auth/login' && m==='POST'){
@@ -503,11 +503,11 @@ function start(port = PORT){
     server.once('error', reject);
     server.listen(port, ()=>{
       const boundPort = server.address().port;
-      console.log(`Gas server on http://localhost:${boundPort}  (admin: /admin, passcode "${ADMIN_PASSCODE}")`);
+      console.log(`Aura server on http://localhost:${boundPort}  (admin: /admin, passcode "${ADMIN_PASSCODE}")`);
       console.log(`🗄️  DB: Neon Postgres`);
       console.log(SMS_ON ? `📲 SMS: LIVE via Twilio (from ${TWILIO.from})` : `📱 SMS: dev mode (codes printed here + shown on screen). Set TWILIO_ACCOUNT_SID / TWILIO_SID / TWILIO_TOKEN / TWILIO_FROM for real texts.`);
       console.log(`🔐 IAP: ${DEV_TRUST ? 'dev trust (set APPLE_ROOT_CA for production receipt validation)' : 'production (Apple root trusted)'}`);
-      if(!IS_PROD && ADMIN_PASSCODE==='gas-admin') console.log(`⚠️  Admin passcode is the default "gas-admin" — set ADMIN_PASSCODE before exposing this server.`);
+      if(!IS_PROD && ADMIN_PASSCODE==='aura-admin') console.log(`⚠️  Admin passcode is the default "aura-admin" — set ADMIN_PASSCODE before exposing this server.`);
       resolve(server);
     });
   }));

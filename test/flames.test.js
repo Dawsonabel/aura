@@ -7,7 +7,7 @@ let base, adminToken, schoolId;
 
 before(async () => {
   ({ base } = await boot());
-  const login = await api(base, 'POST', '/api/admin/login', { body: { passcode: 'gas-admin' } });
+  const login = await api(base, 'POST', '/api/admin/login', { body: { passcode: 'aura-admin' } });
   adminToken = login.body.token;
   const school = await api(base, 'POST', '/api/admin/schools', { token: adminToken, body: { name: 'Flames High' } });
   schoolId = school.body.school.id;
