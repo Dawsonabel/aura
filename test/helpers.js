@@ -18,7 +18,7 @@ const app = require('../server');
 
 async function resetDb() {
   const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try { await pool.query('DROP TABLE IF EXISTS kv'); }
+  try { await pool.query('DROP TABLE IF EXISTS users, schools, kv CASCADE'); }
   finally { await pool.end(); }
 }
 

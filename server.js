@@ -1,6 +1,13 @@
 /* ===== Aura — Node backend =====
    Static hosting + REST API + Neon Postgres store + demo auth.
    Run:  node server.js      then open http://localhost:8777
+
+   Persistence is split two ways:
+   - polls/votes/boosts/reports/sessions/rounds/meta: one in-memory snapshot,
+     debounced-saved to a generic kv table (see store.ts).
+   - schools/users: real relational tables, queried directly per request —
+     no in-memory snapshot, real foreign key (users.school_id -> schools.id
+     ON DELETE SET NULL), real index. See store.ts for the schema/queries.
 */
 const http = require('http');
 const https = require('https');
@@ -11,6 +18,7 @@ const crypto = require('crypto');
 const ROOT = __dirname;
 const DATABASE_URL = process.env.DATABASE_URL;
 const PORT = process.env.PORT || 8777;
+const MIN_AGE = 13; // COPPA-safe floor — under-13 accounts are refused outright, not just under-collected
 const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'aura-admin';
 const IS_PROD = process.env.NODE_ENV === 'production';
 const ALLOW_DEMO = process.env.ALLOW_DEMO === '1' || !IS_PROD; // demo login: on in dev, off in prod unless forced
@@ -68,29 +76,32 @@ const POLL_LIB = [
 ];
 
 /* ---------- DB ---------- */
-let db;
+let db; // polls/votes/boosts/reports/sessions/rounds/meta only — schools/users are queried live, see store.ts
 function uid(p){ return (p||'')+crypto.randomBytes(6).toString('hex'); }
 function nowISO(){ return new Date().toISOString(); }
+function isFKViolation(e){ return e && e.code === '23503'; }
 
-function seed(){
-  const school = { id:uid('sch_'), name:'Lincoln High School', city:'Springfield', createdAt:nowISO() };
+async function seed(){
+  const school = await store.createSchool({ id:uid('sch_'), name:'Lincoln High School', city:'Springfield' });
   const first=['Ava','Liam','Maya','Noah','Sofia','Ethan','Zoe','Lucas','Mia','Jack','Emma','Leo','Chloe','Owen','Isla','Kai'];
   const last=['Martinez','Chen','Patel','Kim','Rossi','Brooks','Nguyen','Silva','Johnson','Turner','Davis','Garcia','Adams','Wright','Moore','Robinson'];
   const genders=['girl','boy','girl','boy','girl','boy','girl','boy','girl','boy','girl','boy','girl','boy','girl','boy'];
   const grades=['Grade 9','Grade 10','Grade 11','Grade 12'];
-  const users = first.map((f,i)=>({
+  const userSeeds = first.map((f,i)=>({
     id:uid('usr_'), schoolId:school.id, firstName:f, lastName:last[i],
     username:(f+last[i]).toLowerCase(), gender:genders[i], grade:grades[i%4],
     age:15+(i%4), phone:'', coins:2, godMode:false, friendIds:[], onboarded:true, createdAt:nowISO(), photo:null
   }));
   // everyone friends with a few others
-  users.forEach((u,i)=>{ u.friendIds=[users[(i+1)%users.length].id, users[(i+2)%users.length].id, users[(i+3)%users.length].id]; });
-  const polls = POLL_LIB.map(([emoji,text,color])=>({ id:uid('pol_'), emoji, text, color, enabled:true, schoolId:null, createdAt:nowISO() }));
-  db = { schools:[school], users, polls, votes:[], sessions:{}, rounds:{}, meta:{createdAt:nowISO()} };
+  userSeeds.forEach((u,i)=>{ u.friendIds=[userSeeds[(i+1)%userSeeds.length].id, userSeeds[(i+2)%userSeeds.length].id, userSeeds[(i+3)%userSeeds.length].id]; });
+  const users = await Promise.all(userSeeds.map(u=>store.createUser(u))); // school already committed above, so this is FK-safe
+  db.polls = POLL_LIB.map(([emoji,text,color])=>({ id:uid('pol_'), emoji, text, color, enabled:true, schoolId:null, createdAt:nowISO() }));
+  db.votes = [];
+  db.meta = { createdAt: nowISO() };
   // a couple of seed votes so inboxes aren't empty (targets: first two users)
-  seedVote(users[2], users[0], polls[6]); // Best smile -> Ava
-  seedVote(users[5], users[0], polls[0]); // Cooler -> Ava
-  seedVote(users[1], users[3], polls[7]); // Famous -> Noah
+  seedVote(users[2], users[0], db.polls[6]); // Best smile -> Ava
+  seedVote(users[5], users[0], db.polls[0]); // Cooler -> Ava
+  seedVote(users[1], users[3], db.polls[7]); // Famous -> Noah
   save();
 }
 function seedVote(voter, target, poll){
@@ -104,34 +115,49 @@ let store;
 async function load(){
   store = new Store(DATABASE_URL);
   await store.init();
-  if(!(await store.isEmpty())){                 // normal boot: load from Neon
-    db = await store.loadInto();
-    return;
-  }
-  seed(); // seed() calls save() → schedules a write to Neon
+  db = await store.loadInto(); // polls/votes/etc — empty shape if this is a fresh kv table
+  if((await store.schoolsCount()) === 0) await seed(); // schools/users live outside kv, so isEmpty() alone can't signal "fresh boot"
 }
 let saveTimer=null;
-function save(){ clearTimeout(saveTimer); saveTimer=setTimeout(saveNow, 50); }
+// Serializes persist() calls: with more `await`s now sitting between a mutation and its save(),
+// a slow in-flight persist() can still be running when the next debounced one fires — two
+// concurrent wipe-and-reinsert transactions race and collide (duplicate key on kv_pkey). Chaining
+// onto this promise means the next persist() always waits for the previous one to finish first.
+let saveChain=Promise.resolve();
+function save(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveChain = saveChain.then(saveNow, saveNow); }, 50); }
 async function saveNow(){ try{ await store.persist(db); }catch(e){ console.error('save failed', e.message); } }
+/** Cancel any pending debounce and wait for the save chain to fully drain — used on shutdown. */
+async function flushSave(){ clearTimeout(saveTimer); saveChain = saveChain.then(saveNow, saveNow); await saveChain; }
 
 /* ---------- helpers ---------- */
-const U = id => db.users.find(u=>u.id===id);
+async function U(id){ return id ? await store.getUserById(id) : null; }
 function publicUser(u){ if(!u) return null; const {phone, ...rest}=u; return rest; }
-function schoolMates(u){ return db.users.filter(x=>x.schoolId===u.schoolId && x.id!==u.id); }
+async function schoolMates(u){ return await store.getUsersBySchool(u.schoolId, u.id); }
 function initial(u){ return (u.firstName||'?').charAt(0).toUpperCase(); }
 function tokenFor(userId){ const t=uid('tok_'); db.sessions[t]={userId}; save(); return t; }
 function adminToken(){ const t=uid('adm_'); db.sessions[t]={admin:true}; save(); return t; }
-function sessionUser(req){ const t=getToken(req); const s=t&&db.sessions[t]; const u=s&&s.userId?U(s.userId):null; if(u) enforceEntitlement(u); return u; }
+async function sessionUser(req){ const t=getToken(req); const s=t&&db.sessions[t]; const u=s&&s.userId?await U(s.userId):null; if(u) await enforceEntitlement(u); return u; }
 // Auto-downgrade God Mode when an Apple subscription lapses (expiresDate in the past).
-function enforceEntitlement(u){ if(u.godMode && u.godModeExpires && Date.parse(u.godModeExpires) <= Date.now()){ u.godMode=false; save(); } }
+async function enforceEntitlement(u){ if(u.godMode && u.godModeExpires && Date.parse(u.godModeExpires) <= Date.now()){ u.godMode=false; await store.updateUser(u.id, {godMode:false}); } }
 function isAdmin(req){ const t=getToken(req); const s=t&&db.sessions[t]; return !!(s&&s.admin); }
 function getToken(req){ return (req.headers['x-token']) || (req._url.searchParams.get('token')) || ''; }
 
+/** Batch-fetch a set of user ids once, then hand back a synchronous lookup — avoids N+1 queries
+    and, for anything used inside .filter()/.map(), avoids the "async predicate is always truthy" bug. */
+async function usersById(ids){
+  const uniq = [...new Set(ids.filter(Boolean))];
+  const list = await store.getUsersByIds(uniq);
+  const map = new Map(list.map(u=>[u.id,u]));
+  return id => map.get(id) || null;
+}
+
 /* ---------- flames view ---------- */
-function flamesFor(user){
+async function flamesFor(user){
   const revealedVoters = user.revealedVoters||[];
-  return db.votes.filter(v=>v.targetId===user.id).sort((a,b)=>b.ts.localeCompare(a.ts)).map(v=>{
-    const voter=U(v.voterId); const gm=user.godMode;
+  const votes = db.votes.filter(v=>v.targetId===user.id).sort((a,b)=>b.ts.localeCompare(a.ts));
+  const voterOf = await usersById(votes.map(v=>v.voterId));
+  return votes.map(v=>{
+    const voter=voterOf(v.voterId); const gm=user.godMode;
     const anonymous=!!(voter && voter.godMode);   // Anonymous Mode: God Mode voters can't be unmasked
     const hintShown=v.revealed||gm;               // first-initial hint (coin reveal or God Mode)
     const pickCount=db.votes.filter(x=>x.voterId===v.voterId && x.targetId===user.id).length;
@@ -150,11 +176,16 @@ function flamesFor(user){
 }
 
 /* ---------- build a poll round ---------- */
-function notify(user, text, emoji){ if(!user) return; user.notifications=user.notifications||[]; user.notifications.unshift({ id:uid('ntf_'), text, emoji:emoji||'🔔', ts:nowISO(), read:false }); if(user.notifications.length>30) user.notifications.length=30; }
+async function notify(user, text, emoji){
+  if(!user) return;
+  const notifications = [{ id:uid('ntf_'), text, emoji:emoji||'🔔', ts:nowISO(), read:false }, ...(user.notifications||[])].slice(0,30);
+  user.notifications = notifications;
+  await store.updateUser(user.id, {notifications});
+}
 
 function notBlocked(a,b){ return !((a.blocked||[]).includes(b.id)) && !((b.blocked||[]).includes(a.id)); }
-function buildRound(user){
-  const mates=schoolMates(user).filter(m=>notBlocked(user,m));
+async function buildRound(user){
+  const mates=(await schoolMates(user)).filter(m=>notBlocked(user,m));
   const friends=mates.filter(m=>user.friendIds.includes(m.id));
   const pool=friends.length>=4?friends:mates; // prefer friends, else all schoolmates
   const enabled=db.polls.filter(p=>p.enabled && (p.schoolId===null||p.schoolId===user.schoolId));
@@ -162,14 +193,18 @@ function buildRound(user){
   const roundId=uid('rnd_');
   // --- coin boosts: people who paid to appear in this user's polls ---
   db.boosts=db.boosts||[];
-  const applicable=db.boosts.filter(b=>b.remaining>0 && b.byUserId!==user.id && U(b.byUserId) && notBlocked(user,U(b.byUserId))
-    && (b.targetId===user.id || (b.targetId===null && U(b.byUserId).schoolId===user.schoolId)));
+  const candidateBoosts=db.boosts.filter(b=>b.remaining>0 && b.byUserId!==user.id && (b.targetId===user.id || b.targetId===null));
+  const boosterOf = await usersById(candidateBoosts.map(b=>b.byUserId));
+  const applicable=candidateBoosts.filter(b=>{
+    const bu=boosterOf(b.byUserId);
+    return bu && notBlocked(user,bu) && (b.targetId===user.id || (b.targetId===null && bu.schoolId===user.schoolId));
+  });
   let boostedInserts=0; const MAX_BOOST_PER_ROUND=4; const boosters=new Set();
   const polls=qs.map(q=>{
     let choices=shuffle(pool).slice(0,4).map(c=>({id:c.id,name:c.firstName+' '+c.lastName}));
     if(boostedInserts<MAX_BOOST_PER_ROUND){
       const b=applicable.find(x=>x.remaining>0);
-      if(b){ const bu=U(b.byUserId);
+      if(b){ const bu=boosterOf(b.byUserId);
         if(bu && !choices.some(c=>c.id===bu.id)){
           choices[Math.floor(Math.random()*4)]={ id:bu.id, name:bu.firstName+' '+bu.lastName, boosted:true };
           b.remaining--; boostedInserts++; boosters.add(bu.id);
@@ -178,7 +213,7 @@ function buildRound(user){
     }
     return { questionId:q.id, emoji:q.emoji, text:q.text, color:q.color, choices };
   });
-  if(boostedInserts>0 && user.godMode){ const n=boosters.size; notify(user, n>1?`${n} people added themselves to your polls 👀`:'Someone added themselves to your polls 👀', '👑'); }
+  if(boostedInserts>0 && user.godMode){ const n=boosters.size; await notify(user, n>1?`${n} people added themselves to your polls 👀`:'Someone added themselves to your polls 👀', '👑'); }
   db.rounds[roundId]={ userId:user.id, ts:nowISO(), answered:0, votedQ:[], claimed:false };
   // prune rounds older than 6h so db.rounds can't grow unbounded
   const cutoff = Date.now() - 6*3600*1000;
@@ -209,18 +244,20 @@ const server=http.createServer(async (req,res)=>{
     if(p.startsWith('/api/')){
       setCors(req,res);
       if(req.method==='OPTIONS'){ res.writeHead(204); return res.end(); } // preflight
-      return handleApi(req,res,p);
+      return await handleApi(req,res,p); // awaited: DB errors inside must hit this catch, not become unhandled rejections
     }
     return serveStatic(req,res,p);
   }catch(e){ console.error(e); json(res,500,{error:e.message}); }
 });
 
 // Only these web assets are publicly served — never source (.js backend), the DB, or docs.
-const PUBLIC_FILES = new Set(['/index.html','/styles.css','/app.js','/config.js','/admin.html','/admin.js','/favicon.ico']);
+const PUBLIC_FILES = new Set(['/index.html','/styles.css','/app.js','/config.js','/admin.html','/admin.js','/favicon.ico','/privacy.html','/terms.html']);
 function isPublicAsset(rel){ return PUBLIC_FILES.has(rel) || rel.startsWith('/fonts/'); }
 function serveStatic(req,res,p){
   let rel = p==='/'?'/index.html':p;
   if(p==='/admin'||p==='/admin/') rel='/admin.html';
+  if(p==='/privacy') rel='/privacy.html';
+  if(p==='/terms') rel='/terms.html';
   if(!isPublicAsset(rel)) return notFound(res);
   const fp=path.join(ROOT, decodeURIComponent(rel));
   if(!fp.startsWith(ROOT)) return notFound(res);
@@ -283,16 +320,19 @@ async function handleApi(req,res,p){
     if(rec.attempts>=5){ codes.delete(digits); return json(res,429,{error:'Too many tries — tap Resend'}); }
     if(String(body.code||'')!==rec.code){ rec.attempts++; return json(res,401,{error:'Incorrect code'}); }
     codes.delete(digits); // one-time use
-    let u=db.users.find(x=>normPhone(x.phone)===digits);
-    if(!u){ u={ id:uid('usr_'), schoolId:null, firstName:'', lastName:'', username:'', gender:'boy', grade:'', age:null, phone:body.phone, coins:2, godMode:false, friendIds:[], onboarded:false, createdAt:nowISO(), photo:null }; db.users.push(u); save(); }
+    let u = await store.getUserByPhone(digits);
+    if(!u){
+      u = await store.createUser({ id:uid('usr_'), schoolId:null, firstName:'', lastName:'', username:'', gender:'boy', grade:'', age:null, phone:body.phone, coins:2, godMode:false, friendIds:[], onboarded:false, createdAt:nowISO(), photo:null });
+    }
     return json(res,200,{ token:tokenFor(u.id), user:publicUser(u) });
   }
   if(p==='/api/auth/demo' && m==='POST'){ // quick "log in as a seeded student" — DEV ONLY
     if(!ALLOW_DEMO) return json(res,403,{error:'Disabled'});
-    const u=db.users.find(x=>x.onboarded && x.schoolId) || db.users[0];
+    const u = await store.getDemoUser();
+    if(!u) return json(res,404,{error:'No users to demo login as'});
     return json(res,200,{ token:tokenFor(u.id), user:publicUser(u) });
   }
-  if(p==='/api/schools' && m==='GET') return json(res,200,{schools:db.schools}); // public (for onboarding)
+  if(p==='/api/schools' && m==='GET') return json(res,200,{schools: await store.getSchools()}); // public (for onboarding)
 
   // ---- admin ----
   if(p==='/api/admin/login' && m==='POST'){
@@ -302,77 +342,145 @@ async function handleApi(req,res,p){
   }
   if(p.startsWith('/api/admin/')){
     if(!isAdmin(req)) return json(res,401,{error:'Admin only'});
-    return handleAdmin(req,res,p,m,body);
+    return await handleAdmin(req,res,p,m,body);
   }
 
   // ---- everything below needs a user ----
-  const me=sessionUser(req);
+  const me=await sessionUser(req);
   if(!me) return json(res,401,{error:'Not logged in'});
 
   if(p==='/api/me' && m==='GET') return json(res,200,{user:me}); // own record incl. phone
   if(p==='/api/me' && m==='PATCH'){
-    if('firstName' in body) me.firstName = str(body.firstName, 40).trim();
-    if('lastName'  in body) me.lastName  = str(body.lastName, 40).trim();
-    if('username'  in body) me.username  = str(body.username, 30).replace(/[^a-zA-Z0-9_.]/g,'');
-    if('gender'    in body) me.gender    = ['boy','girl','nonbinary'].includes(body.gender)?body.gender:me.gender;
-    if('grade'     in body) me.grade     = str(body.grade, 30);
-    if('age'       in body){ const a=parseInt(body.age,10); me.age = (a>=10&&a<=99)?a:me.age; }
-    if('schoolId'  in body) me.schoolId  = str(body.schoolId, 60) || null;
-    if('photo'     in body) me.photo     = body.photo==null?null:str(body.photo, 500000); // data-URI cap ~500KB
-    if('onboarded' in body) me.onboarded = !!body.onboarded;
-    if('hideTopFlames' in body) me.hideTopFlames = !!body.hideTopFlames;
-    save(); return json(res,200,{user:publicUser(me)});
+    const fields={};
+    if('firstName' in body) fields.firstName = str(body.firstName, 40).trim();
+    if('lastName'  in body) fields.lastName  = str(body.lastName, 40).trim();
+    if('username'  in body) fields.username  = str(body.username, 30).replace(/[^a-zA-Z0-9_.]/g,'');
+    if('gender'    in body && ['boy','girl','nonbinary'].includes(body.gender)) fields.gender = body.gender;
+    if('grade'     in body) fields.grade = str(body.grade, 30);
+    if('age'       in body){
+      const a=parseInt(body.age,10);
+      if(!(a>=MIN_AGE&&a<=99)) return json(res,400,{error:`You must be at least ${MIN_AGE} to use Aura.`});
+      fields.age = a;
+    }
+    if('schoolId'  in body) fields.schoolId = str(body.schoolId, 60) || null;
+    if('photo'     in body) fields.photo = body.photo==null?null:str(body.photo, 500000); // data-URI cap ~500KB
+    if('onboarded' in body){
+      const willBeOnboarded = !!body.onboarded;
+      // Enforced here, not just on the age field itself: onboarded gets set in a separate call
+      // from age in the real onboarding flow, so this is the actual chokepoint — a valid age must
+      // already be on file (or set in this same request) before onboarding can complete.
+      if(willBeOnboarded){
+        const effectiveAge = ('age' in fields) ? fields.age : me.age;
+        if(!(effectiveAge>=MIN_AGE)) return json(res,400,{error:`Set your age (${MIN_AGE}+) before finishing onboarding.`});
+      }
+      fields.onboarded = willBeOnboarded;
+    }
+    if('hideTopFlames' in body) fields.hideTopFlames = !!body.hideTopFlames;
+    try{
+      const updated = await store.updateUser(me.id, fields);
+      return json(res,200,{user:publicUser(updated)});
+    }catch(e){ if(isFKViolation(e)) return json(res,400,{error:'Unknown school'}); throw e; }
   }
   if(p==='/api/me' && m==='DELETE'){ // delete account / opt out entirely
     const id=me.id;
-    db.users=db.users.filter(u=>u.id!==id);
+    await store.deleteUser(id); // strips id from other users' friendIds/blocked/revealedVoters, then removes the row
     db.votes=db.votes.filter(v=>v.voterId!==id && v.targetId!==id);
-    db.users.forEach(u=>{ u.friendIds=(u.friendIds||[]).filter(f=>f!==id); u.blocked=(u.blocked||[]).filter(b=>b!==id); u.revealedVoters=(u.revealedVoters||[]).filter(r=>r!==id); });
     db.boosts=(db.boosts||[]).filter(b=>b.byUserId!==id && b.targetId!==id);
     Object.keys(db.sessions).forEach(t=>{ if(db.sessions[t].userId===id) delete db.sessions[t]; });
     save(); return json(res,200,{ok:true,deleted:true});
   }
   // ---- safety: block / report ----
-  if(p==='/api/block' && m==='POST'){ const {userId}=body; me.blocked=me.blocked||[];
-    if(U(userId)&&userId!==me.id&&!me.blocked.includes(userId)){ me.blocked.push(userId);
-      me.friendIds=me.friendIds.filter(id=>id!==userId); const o=U(userId); if(o) o.friendIds=o.friendIds.filter(id=>id!==me.id); save(); }
-    return json(res,200,{blocked:me.blocked}); }
-  if(p==='/api/block' && m==='DELETE'){ const {userId}=body; me.blocked=(me.blocked||[]).filter(id=>id!==userId); save(); return json(res,200,{blocked:me.blocked}); }
-  if(p==='/api/blocked' && m==='GET'){ return json(res,200,{blocked:(me.blocked||[]).map(id=>publicUser(U(id))).filter(Boolean)}); }
+  if(p==='/api/block' && m==='POST'){
+    const {userId}=body;
+    const target = userId ? await U(userId) : null;
+    if(target && userId!==me.id && !(me.blocked||[]).includes(userId)){
+      const blocked=[...(me.blocked||[]), userId];
+      const friendIds=(me.friendIds||[]).filter(id=>id!==userId);
+      await store.updateUser(me.id, {blocked, friendIds});
+      if((target.friendIds||[]).includes(me.id)){
+        await store.updateUser(target.id, {friendIds:(target.friendIds||[]).filter(id=>id!==me.id)});
+      }
+      return json(res,200,{blocked});
+    }
+    return json(res,200,{blocked:me.blocked||[]});
+  }
+  if(p==='/api/block' && m==='DELETE'){
+    const {userId}=body;
+    const blocked=(me.blocked||[]).filter(id=>id!==userId);
+    await store.updateUser(me.id, {blocked});
+    return json(res,200,{blocked});
+  }
+  if(p==='/api/blocked' && m==='GET'){
+    const blocked = await store.getUsersByIds(me.blocked||[]);
+    return json(res,200,{blocked: blocked.map(publicUser)});
+  }
   if(p==='/api/report' && m==='POST'){ const {userId,reason}=body; db.reports=db.reports||[];
     db.reports.push({ id:uid('rep_'), byUserId:me.id, targetId:userId||null, reason:(reason||'').slice(0,300), ts:nowISO(), status:'open' }); save();
     return json(res,200,{ok:true}); }
-  if(p==='/api/schools' && m==='GET') return json(res,200,{schools:db.schools});
   if(p==='/api/suggestions' && m==='GET'){
     if(!me.schoolId) return json(res,200,{contacts:[],fof:[]});
-    const mates=schoolMates(me).filter(u=>!me.friendIds.includes(u.id) && notBlocked(me,u));
+    const mates=(await schoolMates(me)).filter(u=>!me.friendIds.includes(u.id) && notBlocked(me,u));
     const contacts=mates.slice(0,Math.ceil(mates.length/2)).map(publicUser);
     const fof=mates.slice(Math.ceil(mates.length/2)).map(u=>({...publicUser(u), mutual:Math.max(0,me.friendIds.filter(f=>u.friendIds.includes(f)).length)}));
     return json(res,200,{contacts,fof});
   }
-  if(p==='/api/friends' && m==='GET') return json(res,200,{friends:me.friendIds.map(id=>publicUser(U(id))).filter(Boolean)});
-  if(p==='/api/friends' && m==='POST'){ const {userId}=body; if(U(userId)&&!me.friendIds.includes(userId)){ me.friendIds.push(userId); const other=U(userId); if(other && !other.friendIds.includes(me.id)) other.friendIds.push(me.id); save(); } return json(res,200,{friends:me.friendIds}); }
-  if(p==='/api/friends' && m==='DELETE'){ const {userId}=body; me.friendIds=me.friendIds.filter(id=>id!==userId); const other=U(userId); if(other) other.friendIds=other.friendIds.filter(id=>id!==me.id); save(); return json(res,200,{friends:me.friendIds}); }
+  if(p==='/api/friends' && m==='GET'){
+    const friends = await store.getUsersByIds(me.friendIds||[]);
+    return json(res,200,{friends: friends.map(publicUser)});
+  }
+  if(p==='/api/friends' && m==='POST'){
+    const {userId}=body;
+    const other = userId ? await U(userId) : null;
+    if(other && !(me.friendIds||[]).includes(userId)){
+      const friendIds=[...(me.friendIds||[]), userId];
+      await store.updateUser(me.id, {friendIds});
+      if(!(other.friendIds||[]).includes(me.id)){
+        await store.updateUser(other.id, {friendIds:[...(other.friendIds||[]), me.id]});
+      }
+      return json(res,200,{friends:friendIds});
+    }
+    return json(res,200,{friends:me.friendIds||[]});
+  }
+  if(p==='/api/friends' && m==='DELETE'){
+    const {userId}=body;
+    const friendIds=(me.friendIds||[]).filter(id=>id!==userId);
+    await store.updateUser(me.id, {friendIds});
+    const other = userId ? await U(userId) : null;
+    if(other) await store.updateUser(other.id, {friendIds:(other.friendIds||[]).filter(id=>id!==me.id)});
+    return json(res,200,{friends:friendIds});
+  }
 
   // ---- coin boosts: add yourself to polls ----
-  if(p==='/api/boost/random' && m==='POST'){ const COST=100;
-    if(me.coins<COST) return json(res,402,{error:'You need 100 coins'});
-    me.coins-=COST; db.boosts=db.boosts||[]; db.boosts.push({ id:uid('bst_'), byUserId:me.id, targetId:null, remaining:3, ts:nowISO() });
-    save(); return json(res,200,{coins:me.coins, message:"You'll appear in 3 random polls 🔥"}); }
-  if(p==='/api/boost/crush' && m==='POST'){ const COST=300; const {targetId}=body;
-    const t=U(targetId); if(!t||t.id===me.id) return json(res,400,{error:'Pick a valid crush'});
-    if(me.coins<COST) return json(res,402,{error:'You need 300 coins'});
-    me.coins-=COST; db.boosts=db.boosts||[]; db.boosts.push({ id:uid('bst_'), byUserId:me.id, targetId:t.id, remaining:6, ts:nowISO() });
-    save(); return json(res,200,{coins:me.coins, message:`You'll show up in ${t.firstName}'s polls 💘`}); }
+  if(p==='/api/boost/random' && m==='POST'){
+    const COST=100;
+    const newCoins = await store.adjustCoins(me.id, -COST);
+    if(newCoins===null) return json(res,402,{error:'You need 100 coins'});
+    db.boosts=db.boosts||[]; db.boosts.push({ id:uid('bst_'), byUserId:me.id, targetId:null, remaining:3, ts:nowISO() });
+    save(); return json(res,200,{coins:newCoins, message:"You'll appear in 3 random polls 🔥"});
+  }
+  if(p==='/api/boost/crush' && m==='POST'){
+    const COST=300; const {targetId}=body;
+    const t = targetId ? await U(targetId) : null;
+    if(!t||t.id===me.id) return json(res,400,{error:'Pick a valid crush'});
+    const newCoins = await store.adjustCoins(me.id, -COST);
+    if(newCoins===null) return json(res,402,{error:'You need 300 coins'});
+    db.boosts=db.boosts||[]; db.boosts.push({ id:uid('bst_'), byUserId:me.id, targetId:t.id, remaining:6, ts:nowISO() });
+    save(); return json(res,200,{coins:newCoins, message:`You'll show up in ${t.firstName}'s polls 💘`});
+  }
 
   // ---- notifications ----
   if(p==='/api/notifications' && m==='GET'){ return json(res,200,{ notifications: me.notifications||[] }); }
-  if(p==='/api/notifications/read' && m==='POST'){ (me.notifications||[]).forEach(n=>n.read=true); save(); return json(res,200,{ok:true}); }
+  if(p==='/api/notifications/read' && m==='POST'){
+    const notifications=(me.notifications||[]).map(n=>({...n, read:true}));
+    await store.updateUser(me.id, {notifications});
+    return json(res,200,{ok:true});
+  }
 
-  if(p==='/api/polls/round' && m==='GET') return json(res,200, buildRound(me));
+  if(p==='/api/polls/round' && m==='GET') return json(res,200, await buildRound(me));
   if(p==='/api/vote' && m==='POST'){
     const {questionId,targetId,roundId}=body;
-    const q=db.polls.find(x=>x.id===questionId && x.enabled); const target=U(targetId);
+    const q=db.polls.find(x=>x.id===questionId && x.enabled);
+    const target = targetId ? await U(targetId) : null;
     if(!q||!target) return json(res,400,{error:'bad vote'});
     if(target.id===me.id) return json(res,400,{error:'cannot vote for yourself'});
     // integrity: target must be an eligible schoolmate (or someone boosted into your polls) and not blocked
@@ -394,40 +502,58 @@ async function handleApi(req,res,p){
     if(!round || round.userId!==me.id) return json(res,400,{error:'no active round'});
     if(round.claimed) return json(res,200,{coins:me.coins, earned:0, already:true}); // no double-claim
     if((round.answered||0) < 1) return json(res,400,{error:'answer at least one poll first'});
-    round.claimed = true;
-    const earned = me.godMode?4:2; me.coins += earned; save();
-    return json(res,200,{coins:me.coins, earned});
+    round.claimed = true; save();
+    const earned = me.godMode?4:2;
+    const newCoins = await store.adjustCoins(me.id, earned);
+    return json(res,200,{coins:newCoins, earned});
   }
 
-  if(p==='/api/flames' && m==='GET'){ const list=flamesFor(me); return json(res,200,{flames:list, coins:me.coins, godMode:me.godMode, bonusRevealsLeft: me.godMode?(2-(me.bonusRevealsUsed||0)):0}); }
+  if(p==='/api/flames' && m==='GET'){
+    const list = await flamesFor(me);
+    return json(res,200,{flames:list, coins:me.coins, godMode:me.godMode, bonusRevealsLeft: me.godMode?(2-(me.bonusRevealsUsed||0)):0});
+  }
   if(p==='/api/flames/read' && m==='POST'){ db.votes.forEach(v=>{ if(v.targetId===me.id) v.unread=false; }); save(); return json(res,200,{ok:true}); }
   if(seg[1]==='flames' && seg[3]==='reveal' && m==='POST'){
     const v=db.votes.find(x=>x.id===seg[2] && x.targetId===me.id);
     if(!v) return json(res,404,{error:'no flame'});
-    const rv=U(v.voterId); if(rv&&rv.godMode) return json(res,400,{error:'This admirer is anonymous 🔒'});
+    const rv = await U(v.voterId);
+    if(rv&&rv.godMode) return json(res,400,{error:'This admirer is anonymous 🔒'});
     if(me.godMode){ v.revealed=true; save(); return json(res,200,{ok:true,coins:me.coins}); }
-    if(me.coins<1) return json(res,402,{error:'no coins'});
-    me.coins-=1; v.revealed=true; save(); return json(res,200,{ok:true,coins:me.coins});
+    const newCoins = await store.adjustCoins(me.id, -1);
+    if(newCoins===null) return json(res,402,{error:'no coins'});
+    v.revealed=true; save();
+    return json(res,200,{ok:true,coins:newCoins});
   }
   if(seg[1]==='flames' && seg[3]==='reveal-name' && m==='POST'){
     const v=db.votes.find(x=>x.id===seg[2] && x.targetId===me.id);
     if(!v) return json(res,404,{error:'no flame'});
     if(!me.godMode) return json(res,402,{error:'God Mode required'});
-    const voter=U(v.voterId); if(!voter) return json(res,404,{error:'voter gone'});
+    const voter = await U(v.voterId);
+    if(!voter) return json(res,404,{error:'voter gone'});
     if(voter.godMode) return json(res,400,{error:'This admirer is anonymous 🔒'});
     const pickCount=db.votes.filter(x=>x.voterId===v.voterId && x.targetId===me.id).length;
     if(pickCount<2) return json(res,400,{error:'Only works for someone who picked you twice'});
-    me.revealedVoters=me.revealedVoters||[];
-    if(!me.revealedVoters.includes(v.voterId)){
-      if((me.bonusRevealsUsed||0)>=2) return json(res,402,{error:'No bonus reveals left'});
-      me.bonusRevealsUsed=(me.bonusRevealsUsed||0)+1; me.revealedVoters.push(v.voterId); save();
+    let bonusRevealsUsed = me.bonusRevealsUsed||0;
+    const revealedVoters = me.revealedVoters||[];
+    if(!revealedVoters.includes(v.voterId)){
+      if(bonusRevealsUsed>=2) return json(res,402,{error:'No bonus reveals left'});
+      bonusRevealsUsed += 1;
+      await store.updateUser(me.id, {revealedVoters:[...revealedVoters, v.voterId], bonusRevealsUsed});
     }
-    return json(res,200,{ name:voter.firstName+' '+voter.lastName, bonusRevealsLeft:2-(me.bonusRevealsUsed||0) });
+    return json(res,200,{ name:voter.firstName+' '+voter.lastName, bonusRevealsLeft:2-bonusRevealsUsed });
   }
 
-  if(p==='/api/shop/boost' && m==='POST'){ const cost=body.cost|0; if(me.coins<cost) return json(res,402,{error:'not enough coins'}); me.coins-=cost; save(); return json(res,200,{coins:me.coins}); }
+  if(p==='/api/shop/boost' && m==='POST'){
+    const cost=body.cost|0;
+    const newCoins = await store.adjustCoins(me.id, -cost);
+    if(newCoins===null) return json(res,402,{error:'not enough coins'});
+    return json(res,200,{coins:newCoins});
+  }
   // Legacy/dev instant unlock — kept for the web demo. Real iOS uses /api/iap/validate.
-  if(p==='/api/godmode' && m==='POST'){ me.godMode=true; me.godModeExpires=null; save(); return json(res,200,{godMode:true}); }
+  if(p==='/api/godmode' && m==='POST'){
+    await store.updateUser(me.id, {godMode:true, godModeExpires:null});
+    return json(res,200,{godMode:true});
+  }
   // Real Apple In-App Purchase: verify the StoreKit2 signed transaction, then grant God Mode.
   if(p==='/api/iap/validate' && m==='POST'){
     const jws = body.signedTransaction;
@@ -435,31 +561,37 @@ async function handleApi(req,res,p){
     catch(e){ return json(res,400,{error:'Invalid receipt: '+e.message}); }
     if(!GODMODE_PRODUCTS.includes(tx.productId)) return json(res,400,{error:'Unknown product '+tx.productId});
     // replay protection: each StoreKit transactionId is single-use (renewals get new ids)
-    me.iapTransactions = me.iapTransactions || [];
+    const iapTransactions = me.iapTransactions || [];
     const txId = String(tx.transactionId);
-    const already = me.iapTransactions.includes(txId);
-    if(!already) me.iapTransactions.push(txId);
+    const already = iapTransactions.includes(txId);
+    const newIapTransactions = already ? iapTransactions : [...iapTransactions, txId];
     // subscription expiry (StoreKit dates are epoch ms); lifetime products have no expiresDate
     const expMs = tx.expiresDate ? Number(tx.expiresDate) : null;
-    if(expMs && expMs <= Date.now()) return json(res,200,{ godMode:false, expired:true, expires:new Date(expMs).toISOString() });
-    me.godModeExpires = expMs ? new Date(expMs).toISOString() : null;
-    me.godMode = true; save();
-    return json(res,200,{ godMode:true, expires:me.godModeExpires, environment:tx.environment||null, renewed:!already && me.iapTransactions.length>1 });
+    if(expMs && expMs <= Date.now()){
+      await store.updateUser(me.id, {iapTransactions:newIapTransactions});
+      return json(res,200,{ godMode:false, expired:true, expires:new Date(expMs).toISOString() });
+    }
+    const godModeExpires = expMs ? new Date(expMs).toISOString() : null;
+    await store.updateUser(me.id, {iapTransactions:newIapTransactions, godModeExpires, godMode:true});
+    return json(res,200,{ godMode:true, expires:godModeExpires, environment:tx.environment||null, renewed:!already && newIapTransactions.length>1 });
   }
 
   return json(res,404,{error:'unknown endpoint '+p});
 }
 
 /* ---------- Admin API ---------- */
-function handleAdmin(req,res,p,m,body){
+async function handleAdmin(req,res,p,m,body){
   const seg=p.split('/').filter(Boolean); // ['api','admin', coll, id?, action?]
   const coll=seg[2], id=seg[3];
 
   if(p==='/api/admin/stats' && m==='GET'){
-    return json(res,200,{ schools:db.schools.length, users:db.users.length, polls:db.polls.length, votes:db.votes.length, godMode:db.users.filter(u=>u.godMode).length, reports:(db.reports||[]).filter(r=>r.status==='open').length });
+    const [schools, users, godMode] = await Promise.all([store.schoolsCount(), store.countUsers(), store.countGodModeUsers()]);
+    return json(res,200,{ schools, users, polls:db.polls.length, votes:db.votes.length, godMode, reports:(db.reports||[]).filter(r=>r.status==='open').length });
   }
   if(p==='/api/admin/reports' && m==='GET'){
-    const rows=(db.reports||[]).slice().reverse().map(r=>{ const b=U(r.byUserId),t=U(r.targetId);
+    const reports=(db.reports||[]).slice().reverse();
+    const userOf = await usersById(reports.flatMap(r=>[r.byUserId, r.targetId]));
+    const rows=reports.map(r=>{ const b=userOf(r.byUserId), t=userOf(r.targetId);
       return {...r, byName:b?`${b.firstName} ${b.lastName}`:'—', targetName:t?`${t.firstName} ${t.lastName}`:'(deleted)'} });
     return json(res,200,{reports:rows});
   }
@@ -467,18 +599,44 @@ function handleAdmin(req,res,p,m,body){
 
   // Schools
   if(coll==='schools'){
-    if(m==='GET') return json(res,200,{schools:db.schools.map(s=>({...s, userCount:db.users.filter(u=>u.schoolId===s.id).length}))});
-    if(m==='POST'){ const s={id:uid('sch_'),name:body.name||'New School',city:body.city||'',createdAt:nowISO()}; db.schools.push(s); save(); return json(res,200,{school:s}); }
-    if(m==='PATCH'){ const s=db.schools.find(x=>x.id===id); if(!s)return json(res,404,{error:'nf'}); ['name','city'].forEach(k=>{if(k in body)s[k]=body[k];}); save(); return json(res,200,{school:s}); }
-    if(m==='DELETE'){ db.schools=db.schools.filter(x=>x.id!==id); db.users.forEach(u=>{ if(u.schoolId===id) u.schoolId=null; }); save(); return json(res,200,{ok:true}); }
+    if(m==='GET') return json(res,200,{schools: await store.getSchoolsWithUserCounts()});
+    if(m==='POST'){ const school = await store.createSchool({id:uid('sch_'), name:body.name||'New School', city:body.city||''}); return json(res,200,{school}); }
+    if(m==='PATCH'){ const school = await store.updateSchool(id, {name:body.name, city:body.city}); if(!school) return json(res,404,{error:'nf'}); return json(res,200,{school}); }
+    if(m==='DELETE'){ await store.deleteSchool(id); return json(res,200,{ok:true}); } // ON DELETE SET NULL handles the user cascade
   }
   // Users
   if(coll==='users'){
-    if(id && seg[4]==='token' && m==='POST'){ const u=U(id); if(!u)return json(res,404,{error:'nf'}); return json(res,200,{token:tokenFor(u.id)}); }
-    if(m==='GET'){ const sid=req._url.searchParams.get('schoolId'); let list=db.users; if(sid) list=list.filter(u=>u.schoolId===sid); return json(res,200,{users:list.map(u=>({...publicUser(u), phone:u.phone, flames:db.votes.filter(v=>v.targetId===u.id).length}))}); }
-    if(m==='POST' && !id){ const u={ id:uid('usr_'), schoolId:body.schoolId||null, firstName:body.firstName||'', lastName:body.lastName||'', username:(body.username||((body.firstName||'')+(body.lastName||''))).toLowerCase(), gender:body.gender||'boy', grade:body.grade||'Grade 9', age:body.age||15, phone:body.phone||'', coins:2, godMode:!!body.godMode, friendIds:[], onboarded:true, createdAt:nowISO(), photo:null }; db.users.push(u); save(); return json(res,200,{user:publicUser(u)}); }
-    if(m==='PATCH'){ const u=U(id); if(!u)return json(res,404,{error:'nf'}); ['schoolId','firstName','lastName','username','gender','grade','age','coins','godMode','godModeExpires','onboarded'].forEach(k=>{if(k in body)u[k]=body[k];}); save(); return json(res,200,{user:publicUser(u)}); }
-    if(m==='DELETE'){ db.users=db.users.filter(x=>x.id!==id); db.votes=db.votes.filter(v=>v.voterId!==id&&v.targetId!==id); db.users.forEach(u=>u.friendIds=u.friendIds.filter(f=>f!==id)); save(); return json(res,200,{ok:true}); }
+    if(id && seg[4]==='token' && m==='POST'){ const u=await U(id); if(!u)return json(res,404,{error:'nf'}); return json(res,200,{token:tokenFor(u.id)}); }
+    if(m==='GET'){
+      const sid=req._url.searchParams.get('schoolId');
+      const list = await store.getAllUsers(sid || undefined);
+      return json(res,200,{users:list.map(u=>({...publicUser(u), phone:u.phone, flames:db.votes.filter(v=>v.targetId===u.id).length}))});
+    }
+    if(m==='POST' && !id){
+      const age = 'age' in body ? parseInt(body.age,10) : 15;
+      if(!(age>=MIN_AGE&&age<=99)) return json(res,400,{error:`Users must be at least ${MIN_AGE}.`});
+      const u={ id:uid('usr_'), schoolId:body.schoolId||null, firstName:body.firstName||'', lastName:body.lastName||'', username:(body.username||((body.firstName||'')+(body.lastName||''))).toLowerCase(), gender:body.gender||'boy', grade:body.grade||'Grade 9', age, phone:body.phone||'', coins:2, godMode:!!body.godMode, friendIds:[], onboarded:true, createdAt:nowISO(), photo:null };
+      try{ const created = await store.createUser(u); return json(res,200,{user:publicUser(created)}); }
+      catch(e){ if(isFKViolation(e)) return json(res,400,{error:'Unknown school'}); throw e; }
+    }
+    if(m==='PATCH'){
+      const fields={}; ['schoolId','firstName','lastName','username','gender','grade','age','coins','godMode','godModeExpires','onboarded'].forEach(k=>{if(k in body)fields[k]=body[k];});
+      if('age' in fields){
+        const a=parseInt(fields.age,10);
+        if(!(a>=MIN_AGE&&a<=99)) return json(res,400,{error:`Users must be at least ${MIN_AGE}.`});
+        fields.age = a;
+      }
+      try{ const u = await store.updateUser(id, fields); if(!u)return json(res,404,{error:'nf'}); return json(res,200,{user:publicUser(u)}); }
+      catch(e){ if(isFKViolation(e)) return json(res,400,{error:'Unknown school'}); throw e; }
+    }
+    if(m==='DELETE'){
+      await store.deleteUser(id); // strips id from other users' friendIds/blocked/revealedVoters, then removes the row
+      db.votes=db.votes.filter(v=>v.voterId!==id&&v.targetId!==id);
+      db.boosts=(db.boosts||[]).filter(b=>b.byUserId!==id && b.targetId!==id);
+      Object.keys(db.sessions).forEach(t=>{ if(db.sessions[t].userId===id) delete db.sessions[t]; });
+      save();
+      return json(res,200,{ok:true});
+    }
   }
   // Polls
   if(coll==='polls'){
@@ -489,12 +647,16 @@ function handleAdmin(req,res,p,m,body){
   }
   // Votes / flames moderation
   if(coll==='votes'){
-    if(m==='GET') return json(res,200,{votes:db.votes.slice().reverse().slice(0,300).map(v=>({...v, voter:nameOf(v.voterId), target:nameOf(v.targetId)}))});
+    if(m==='GET'){
+      const votes = db.votes.slice().reverse().slice(0,300);
+      const userOf = await usersById(votes.flatMap(v=>[v.voterId,v.targetId]));
+      const nameOf = id => { const u=userOf(id); return u?`${u.firstName} ${u.lastName}`:'(deleted)'; };
+      return json(res,200,{votes:votes.map(v=>({...v, voter:nameOf(v.voterId), target:nameOf(v.targetId)}))});
+    }
     if(m==='DELETE'){ db.votes=db.votes.filter(x=>x.id!==id); save(); return json(res,200,{ok:true}); }
   }
   return json(res,404,{error:'unknown admin endpoint'});
 }
-function nameOf(id){ const u=U(id); return u?`${u.firstName} ${u.lastName}`:'(deleted)'; }
 
 /* ---------- boot ---------- */
 // port=0 lets the OS pick a free port — used by the test suite to run many servers in parallel.
@@ -513,14 +675,13 @@ function start(port = PORT){
   }));
 }
 async function stop(){
-  clearTimeout(saveTimer);            // cancel any pending debounced write...
   await new Promise(resolve=>server.close(resolve));
-  if(store){ await saveNow(); await store.close(); } // ...then flush once, before closing the pool
+  if(store){ await flushSave(); await store.close(); } // wait for the save chain to fully drain before closing the pool
 }
 
 // flush any pending debounced save on shutdown so nothing is lost
 let _shuttingDown=false;
-async function gracefulExit(){ if(_shuttingDown) return; _shuttingDown=true; try{ if(store) await saveNow(); }catch(e){} process.exit(0); }
+async function gracefulExit(){ if(_shuttingDown) return; _shuttingDown=true; try{ if(store) await flushSave(); }catch(e){} process.exit(0); }
 
 if(require.main === module){
   start().catch(e=>{ console.error('🛑 Failed to start (could not connect/init Neon):', e.message); process.exit(1); });

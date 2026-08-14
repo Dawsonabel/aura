@@ -20,13 +20,38 @@ test('PATCH /api/me updates allowed fields and sanitizes username', async () => 
   assert.equal(patch.body.user.hideTopFlames, true);
 });
 
-test('PATCH /api/me ignores an out-of-range age', async () => {
+test('PATCH /api/me rejects an out-of-range age, leaving the stored value unchanged', async () => {
   const demo = await api(base, 'POST', '/api/auth/demo');
   const token = demo.body.token;
   const before1 = await api(base, 'GET', '/api/me', { token });
   const patch = await api(base, 'PATCH', '/api/me', { token, body: { age: 999 } });
-  assert.equal(patch.status, 200);
-  assert.equal(patch.body.user.age, before1.body.user.age); // out of the 10-99 range, left unchanged
+  assert.equal(patch.status, 400);
+  const after1 = await api(base, 'GET', '/api/me', { token });
+  assert.equal(after1.body.user.age, before1.body.user.age);
+});
+
+test('PATCH /api/me rejects an under-13 age', async () => {
+  const demo = await api(base, 'POST', '/api/auth/demo');
+  const token = demo.body.token;
+  const patch = await api(base, 'PATCH', '/api/me', { token, body: { age: 12 } });
+  assert.equal(patch.status, 400);
+});
+
+test('onboarding cannot complete without a valid 13+ age on file', async () => {
+  const req = await api(base, 'POST', '/api/auth/request-code', { body: { phone: '5559990099' } });
+  const login = await api(base, 'POST', '/api/auth/login', { body: { phone: '5559990099', code: req.body.devCode } });
+  const token = login.body.token;
+  assert.equal(login.body.user.onboarded, false);
+  assert.equal(login.body.user.age, null); // fresh self-signup, age never set
+
+  const attempt = await api(base, 'PATCH', '/api/me', { token, body: { onboarded: true } });
+  assert.equal(attempt.status, 400);
+
+  const setAge = await api(base, 'PATCH', '/api/me', { token, body: { age: 15 } });
+  assert.equal(setAge.status, 200);
+  const finish = await api(base, 'PATCH', '/api/me', { token, body: { onboarded: true } });
+  assert.equal(finish.status, 200);
+  assert.equal(finish.body.user.onboarded, true);
 });
 
 test('DELETE /api/me removes the account, kills the session, and cascades to friends', async () => {
