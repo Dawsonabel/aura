@@ -90,4 +90,4 @@ Requires a **second, disposable** Neon branch (Neon dashboard â†’ your project â
 npm test
 ```
 
-Current coverage: auth (rate limits, code expiry/attempts), voting integrity (self-vote, cross-school, blocked users, round rules), coins/boosts, and IAP validation error paths. Not yet covered: the IAP happy path (needs a real signed StoreKit2 JWS), admin CRUD, and most of the remaining ~30 routes.
+Current coverage: auth (rate limits, code expiry/attempts), voting integrity (self-vote, cross-school, blocked users, round rules), coins/boosts, IAP validation error paths, admin CRUD (schools/users/polls/votes/reports, gating, rate limits), flame reveal mechanics (coin reveal, anonymous God Mode admirers, reveal-name gating + bonus-reveal cap), and account lifecycle (profile edits, delete cascades). Not yet covered: the IAP happy path (needs a real signed StoreKit2 JWS), friends/notifications/suggestions, and a few minor routes (`/api/health`, `/api/shop/boost`, legacy `/api/godmode`).
