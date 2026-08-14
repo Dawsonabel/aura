@@ -79,3 +79,15 @@ Self-signup also works: open the app, tap through onboarding (pick your school, 
 ## Reset
 
 Stop the server, connect to your Neon database and run `DROP TABLE kv;` (or `DELETE FROM kv;`), then start again for a fresh seeded network.
+
+## Tests
+
+Black-box API tests (`node:test`, zero extra dependencies) — they boot the real server and hit it over HTTP, so they keep passing across storage/framework refactors as long as the API contract doesn't change.
+
+Requires a **second, disposable** Neon branch (Neon dashboard → your project → Branches → New Branch → schema only, no auto-delete) so the suite has something safe to wipe and reseed on every run. Set it as `TEST_DATABASE_URL` in `.env` (see `.env.example`) — it must not be the same value as `DATABASE_URL`, or the suite refuses to run.
+
+```
+npm test
+```
+
+Current coverage: auth (rate limits, code expiry/attempts), voting integrity (self-vote, cross-school, blocked users, round rules), coins/boosts, and IAP validation error paths. Not yet covered: the IAP happy path (needs a real signed StoreKit2 JWS), admin CRUD, and most of the remaining ~30 routes.

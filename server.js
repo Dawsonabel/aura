@@ -497,18 +497,35 @@ function handleAdmin(req,res,p,m,body){
 function nameOf(id){ const u=U(id); return u?`${u.firstName} ${u.lastName}`:'(deleted)'; }
 
 /* ---------- boot ---------- */
-load().then(()=>{
-  server.listen(PORT,()=>{
-    console.log(`Gas server on http://localhost:${PORT}  (admin: /admin, passcode "${ADMIN_PASSCODE}")`);
-    console.log(`🗄️  DB: Neon Postgres`);
-    console.log(SMS_ON ? `📲 SMS: LIVE via Twilio (from ${TWILIO.from})` : `📱 SMS: dev mode (codes printed here + shown on screen). Set TWILIO_ACCOUNT_SID / TWILIO_SID / TWILIO_TOKEN / TWILIO_FROM for real texts.`);
-    console.log(`🔐 IAP: ${DEV_TRUST ? 'dev trust (set APPLE_ROOT_CA for production receipt validation)' : 'production (Apple root trusted)'}`);
-    if(!IS_PROD && ADMIN_PASSCODE==='gas-admin') console.log(`⚠️  Admin passcode is the default "gas-admin" — set ADMIN_PASSCODE before exposing this server.`);
-  });
-}).catch(e=>{ console.error('🛑 Failed to start (could not connect/init Neon):', e.message); process.exit(1); });
+// port=0 lets the OS pick a free port — used by the test suite to run many servers in parallel.
+function start(port = PORT){
+  return load().then(()=>new Promise((resolve,reject)=>{
+    server.once('error', reject);
+    server.listen(port, ()=>{
+      const boundPort = server.address().port;
+      console.log(`Gas server on http://localhost:${boundPort}  (admin: /admin, passcode "${ADMIN_PASSCODE}")`);
+      console.log(`🗄️  DB: Neon Postgres`);
+      console.log(SMS_ON ? `📲 SMS: LIVE via Twilio (from ${TWILIO.from})` : `📱 SMS: dev mode (codes printed here + shown on screen). Set TWILIO_ACCOUNT_SID / TWILIO_SID / TWILIO_TOKEN / TWILIO_FROM for real texts.`);
+      console.log(`🔐 IAP: ${DEV_TRUST ? 'dev trust (set APPLE_ROOT_CA for production receipt validation)' : 'production (Apple root trusted)'}`);
+      if(!IS_PROD && ADMIN_PASSCODE==='gas-admin') console.log(`⚠️  Admin passcode is the default "gas-admin" — set ADMIN_PASSCODE before exposing this server.`);
+      resolve(server);
+    });
+  }));
+}
+async function stop(){
+  clearTimeout(saveTimer);            // cancel any pending debounced write...
+  await new Promise(resolve=>server.close(resolve));
+  if(store){ await saveNow(); await store.close(); } // ...then flush once, before closing the pool
+}
 
 // flush any pending debounced save on shutdown so nothing is lost
 let _shuttingDown=false;
 async function gracefulExit(){ if(_shuttingDown) return; _shuttingDown=true; try{ if(store) await saveNow(); }catch(e){} process.exit(0); }
-process.on('SIGINT', gracefulExit);
-process.on('SIGTERM', gracefulExit);
+
+if(require.main === module){
+  start().catch(e=>{ console.error('🛑 Failed to start (could not connect/init Neon):', e.message); process.exit(1); });
+  process.on('SIGINT', gracefulExit);
+  process.on('SIGTERM', gracefulExit);
+}
+
+module.exports = { server, start, stop };

@@ -7,7 +7,9 @@
   "scripts": {
     "build": "tsc",
     "prestart": "tsc",
-    "start": "node server.js"
+    "pretest": "tsc",
+    "start": "node server.js",
+    "test": "node --env-file=.env --test --test-concurrency=1 test/*.test.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4"
