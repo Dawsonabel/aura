@@ -10,6 +10,7 @@ db.json.migrated
 # Secrets / local env
 .env
 .env.*
+!.env.example
 *.pem
 *.p8
 *.mobileprovision
@@ -17,6 +18,10 @@ secrets.json
 
 # Dependencies
 node_modules/
+
+# TypeScript build output (compiled from store.ts — run `npm run build`)
+store.js
+*.tsbuildinfo
 
 # Capacitor / iOS build artifacts (generated)
 www/

@@ -9,14 +9,17 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = __dirname;
-const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data'); // set DATA_DIR to a mounted disk for persistence
-const DB_PATH = path.join(DATA_DIR, 'db.json');
+const DATABASE_URL = process.env.DATABASE_URL;
 const PORT = process.env.PORT || 8777;
 const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'gas-admin';
 const IS_PROD = process.env.NODE_ENV === 'production';
 const ALLOW_DEMO = process.env.ALLOW_DEMO === '1' || !IS_PROD; // demo login: on in dev, off in prod unless forced
 if(IS_PROD && ADMIN_PASSCODE === 'gas-admin'){
   console.error('\n🛑 REFUSING TO START: NODE_ENV=production with the default admin passcode. Set ADMIN_PASSCODE to a strong secret.\n');
+  process.exit(1);
+}
+if(!DATABASE_URL){
+  console.error('\n🛑 REFUSING TO START: DATABASE_URL is not set. Point it at your Neon connection string (see README).\n');
   process.exit(1);
 }
 
@@ -97,31 +100,19 @@ function seedVote(voter, target, poll){
 const { Store } = require('./store');
 const { verifySignedTransaction, DEV_TRUST } = require('./iap');
 const GODMODE_PRODUCTS = (process.env.GODMODE_PRODUCT_IDS || 'gas.godmode.weekly,gas.godmode.lifetime').split(',');
-const SQLITE_PATH = path.join(DATA_DIR, 'gas.db');
 let store;
-function load(){
-  if(!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR,{recursive:true});
-  store = new Store(SQLITE_PATH);
-  if(!store.isEmpty()){                          // normal boot: load from SQLite
-    db = store.loadInto();
+async function load(){
+  store = new Store(DATABASE_URL);
+  await store.init();
+  if(!(await store.isEmpty())){                 // normal boot: load from Neon
+    db = await store.loadInto();
     return;
   }
-  // first run on SQLite — migrate an existing JSON db if present, else seed fresh
-  if(fs.existsSync(DB_PATH)){
-    try{
-      db = JSON.parse(fs.readFileSync(DB_PATH,'utf8'));
-      if(!db.users) throw 0;
-      store.persist(db);
-      fs.renameSync(DB_PATH, DB_PATH+'.migrated');   // keep a backup, stop reading it
-      console.log('✅ Migrated data/db.json → SQLite (gas.db). Old file kept as db.json.migrated');
-      return;
-    }catch(e){ /* fall through to seed */ }
-  }
-  seed(); // seed() calls save() → writes to SQLite
+  seed(); // seed() calls save() → schedules a write to Neon
 }
 let saveTimer=null;
 function save(){ clearTimeout(saveTimer); saveTimer=setTimeout(saveNow, 50); }
-function saveNow(){ try{ store.persist(db); }catch(e){ console.error('save failed', e.message); } }
+async function saveNow(){ try{ await store.persist(db); }catch(e){ console.error('save failed', e.message); } }
 
 /* ---------- helpers ---------- */
 const U = id => db.users.find(u=>u.id===id);
@@ -506,16 +497,18 @@ function handleAdmin(req,res,p,m,body){
 function nameOf(id){ const u=U(id); return u?`${u.firstName} ${u.lastName}`:'(deleted)'; }
 
 /* ---------- boot ---------- */
-load();
-server.listen(PORT,()=>{
-  console.log(`Gas server on http://localhost:${PORT}  (admin: /admin, passcode "${ADMIN_PASSCODE}")`);
-  console.log(`🗄️  DB: SQLite (data/gas.db, WAL)`);
-  console.log(SMS_ON ? `📲 SMS: LIVE via Twilio (from ${TWILIO.from})` : `📱 SMS: dev mode (codes printed here + shown on screen). Set TWILIO_ACCOUNT_SID / TWILIO_SID / TWILIO_TOKEN / TWILIO_FROM for real texts.`);
-  console.log(`🔐 IAP: ${DEV_TRUST ? 'dev trust (set APPLE_ROOT_CA for production receipt validation)' : 'production (Apple root trusted)'}`);
-  if(!IS_PROD && ADMIN_PASSCODE==='gas-admin') console.log(`⚠️  Admin passcode is the default "gas-admin" — set ADMIN_PASSCODE before exposing this server.`);
-});
+load().then(()=>{
+  server.listen(PORT,()=>{
+    console.log(`Gas server on http://localhost:${PORT}  (admin: /admin, passcode "${ADMIN_PASSCODE}")`);
+    console.log(`🗄️  DB: Neon Postgres`);
+    console.log(SMS_ON ? `📲 SMS: LIVE via Twilio (from ${TWILIO.from})` : `📱 SMS: dev mode (codes printed here + shown on screen). Set TWILIO_ACCOUNT_SID / TWILIO_SID / TWILIO_TOKEN / TWILIO_FROM for real texts.`);
+    console.log(`🔐 IAP: ${DEV_TRUST ? 'dev trust (set APPLE_ROOT_CA for production receipt validation)' : 'production (Apple root trusted)'}`);
+    if(!IS_PROD && ADMIN_PASSCODE==='gas-admin') console.log(`⚠️  Admin passcode is the default "gas-admin" — set ADMIN_PASSCODE before exposing this server.`);
+  });
+}).catch(e=>{ console.error('🛑 Failed to start (could not connect/init Neon):', e.message); process.exit(1); });
+
 // flush any pending debounced save on shutdown so nothing is lost
 let _shuttingDown=false;
-function gracefulExit(){ if(_shuttingDown) return; _shuttingDown=true; try{ if(store) saveNow(); }catch(e){} process.exit(0); }
+async function gracefulExit(){ if(_shuttingDown) return; _shuttingDown=true; try{ if(store) await saveNow(); }catch(e){} process.exit(0); }
 process.on('SIGINT', gracefulExit);
 process.on('SIGTERM', gracefulExit);

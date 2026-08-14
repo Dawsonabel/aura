@@ -4,8 +4,8 @@ services:
   - type: web
     name: gas-backend
     runtime: node
-    plan: free                 # free = ephemeral disk (SQLite resets on redeploy/sleep). See note below.
-    buildCommand: npm install
+    plan: free                 # data now lives in Neon Postgres, not local disk — free plan is fine for persistence.
+    buildCommand: npm install --include=dev && npm run build   # --include=dev: NODE_ENV=production below would otherwise skip `typescript`
     startCommand: node server.js
     healthCheckPath: /api/health
     autoDeploy: true
@@ -14,6 +14,8 @@ services:
         value: production
       - key: NODE_VERSION
         value: "24"
+      - key: DATABASE_URL       # Neon connection string — set manually in the Render dashboard
+        sync: false
       - key: ADMIN_PASSCODE     # auto-generated strong secret; read it in the Render dashboard to log into /admin
         generateValue: true
       # ---- Optional: real SMS. Leave unset and codes show on-screen (dev mode) — fine for a demo. ----
@@ -25,12 +27,3 @@ services:
         sync: false
       - key: TWILIO_FROM
         sync: false
-      # ---- Optional: persistent DB. Requires a paid instance + the disk block below uncommented. ----
-      # - key: DATA_DIR
-      #   value: /var/data
-
-# To make accounts survive restarts/redeploys, switch plan to "starter" and uncomment:
-#    disk:
-#      name: gas-data
-#      mountPath: /var/data
-#      sizeGB: 1

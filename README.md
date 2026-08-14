@@ -4,11 +4,13 @@ A faithful front-end clone of the shut-down **Gas** app, now with a **real multi
 
 ## Run it
 
-Requires Node.js (uses only built-in modules — no `npm install`).
+Requires Node.js and a [Neon](https://neon.tech) Postgres database (free tier is fine).
 
 ```
-cd gas-clone
-node server.js
+npm install
+npm run build          # compiles store.ts → store.js
+cp .env.example .env   # fill in DATABASE_URL with your Neon connection string
+node --env-file=.env server.js
 ```
 
 Then open:
@@ -61,8 +63,8 @@ Self-signup also works: open the app, tap through onboarding (pick your school, 
 
 | File | Purpose |
 |------|---------|
-| `server.js` | Zero-dependency Node server: static hosting + REST API |
-| `data/db.json` | JSON database (auto-created & seeded on first run; delete it to reset) |
+| `server.js` | Node server: static hosting + REST API |
+| `store.ts` | Persistence layer — Neon Postgres, one `kv(coll,id,data)` table (compiles to `store.js`) |
 | `index.html` / `styles.css` / `app.js` | The phone app (API-backed) |
 | `admin.html` / `admin.js` | Desktop admin dashboard |
 | `fonts/` | Bundled Fredoka + Nunito (works offline) |
@@ -76,4 +78,4 @@ Self-signup also works: open the app, tap through onboarding (pick your school, 
 
 ## Reset
 
-Stop the server and delete `data/db.json`, then start again for a fresh seeded network.
+Stop the server, connect to your Neon database and run `DROP TABLE kv;` (or `DELETE FROM kv;`), then start again for a fresh seeded network.
