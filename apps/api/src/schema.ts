@@ -10,6 +10,7 @@ export interface Env {
   UPSTASH_REDIS_REST_URL: string;
   UPSTASH_REDIS_REST_TOKEN: string;
   CLERK_SECRET_KEY: string;
+  ALLOWED_ORIGIN?: string; // apps/web's origin, for CORS — see index.ts. Unset in dev, falls back to localhost.
 }
 
 const MIN_AGE = 13; // COPPA-safe floor — mirrors server.js's MIN_AGE exactly, same reasoning
@@ -21,12 +22,16 @@ const MIN_AGE = 13; // COPPA-safe floor — mirrors server.js's MIN_AGE exactly,
 export type GraphQLContext = {
   req: Request; env: Env; ip: string;
   db: Db; ratelimit: RateLimiter; rounds: RoundStore;
-  me: User | null; // null when unauthenticated — existing admin queries from Phases 1-2 still work without it
+  me: User | null; // null when unauthenticated — public queries (schools, school, pollLibrary) still work without it
+  isAdmin: boolean; // derived from the Clerk role claim, independent of `me` — admins don't get/need a student profile row
 };
 
 function requireMe(ctx: GraphQLContext): User {
   if (!ctx.me) throw new Error('Not logged in');
   return ctx.me;
+}
+function requireAdmin(ctx: GraphQLContext): void {
+  if (!ctx.isAdmin) throw new Error('Admin only');
 }
 
 // Mirrors POLL_LIB in server.js — static template list for the admin "add from library" UI, not DB-backed.
@@ -256,12 +261,14 @@ const resolvers = {
       return ctx.db.getSchoolsWithUserCounts();
     },
     school: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.getSchool(args.id),
-    user: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.getUserById(args.id),
-    polls: (_: unknown, __: unknown, ctx: GraphQLContext) => ctx.db.getPolls(),
+    // No public "look up any student" endpoint exists in server.js — this was open since Phase 1 and shouldn't have been.
+    user: (_: unknown, args: { id: string }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getUserById(args.id); },
+    // server.js only exposes poll listing via the admin-gated /api/admin/polls — matching that here.
+    polls: (_: unknown, __: unknown, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getPolls(); },
     pollLibrary: () => POLL_LIB.map(([emoji, text, color]) => ({ emoji, text, color })),
-    votes: (_: unknown, args: { limit?: number }, ctx: GraphQLContext) => ctx.db.getVotes(args.limit),
-    reports: (_: unknown, __: unknown, ctx: GraphQLContext) => ctx.db.getReports(),
-    adminStats: (_: unknown, __: unknown, ctx: GraphQLContext) => ctx.db.getAdminStats(),
+    votes: (_: unknown, args: { limit?: number }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getVotes(args.limit); },
+    reports: (_: unknown, __: unknown, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getReports(); },
+    adminStats: (_: unknown, __: unknown, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getAdminStats(); },
 
     me: (_: unknown, __: unknown, ctx: GraphQLContext) => requireMe(ctx),
 
@@ -291,29 +298,37 @@ const resolvers = {
     }
   },
   Mutation: {
-    createSchool: (_: unknown, args: { name: string; city?: string }, ctx: GraphQLContext) =>
-      ctx.db.createSchool({ id: 'sch_' + crypto.randomUUID().slice(0, 12), name: args.name, city: args.city }),
-    updateSchool: (_: unknown, args: { id: string; name?: string; city?: string }, ctx: GraphQLContext) =>
-      ctx.db.updateSchool(args.id, { name: args.name, city: args.city }),
-    deleteSchool: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.deleteSchool(args.id),
+    createSchool: (_: unknown, args: { name: string; city?: string }, ctx: GraphQLContext) => {
+      requireAdmin(ctx);
+      return ctx.db.createSchool({ id: 'sch_' + crypto.randomUUID().slice(0, 12), name: args.name, city: args.city });
+    },
+    updateSchool: (_: unknown, args: { id: string; name?: string; city?: string }, ctx: GraphQLContext) => {
+      requireAdmin(ctx);
+      return ctx.db.updateSchool(args.id, { name: args.name, city: args.city });
+    },
+    deleteSchool: (_: unknown, args: { id: string }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.deleteSchool(args.id); },
 
     createPoll: (
       _: unknown,
       args: { emoji: string; text: string; color: string; schoolId?: string; enabled?: boolean },
       ctx: GraphQLContext
-    ) => ctx.db.createPoll({ id: 'pol_' + crypto.randomUUID().slice(0, 12), ...args }),
+    ) => {
+      requireAdmin(ctx);
+      return ctx.db.createPoll({ id: 'pol_' + crypto.randomUUID().slice(0, 12), ...args });
+    },
     updatePoll: (
       _: unknown,
       args: { id: string; emoji?: string; text?: string; color?: string; enabled?: boolean; schoolId?: string },
       ctx: GraphQLContext
     ) => {
+      requireAdmin(ctx);
       const fields: Record<string, unknown> = { emoji: args.emoji, text: args.text, color: args.color, enabled: args.enabled };
       if ('schoolId' in args) fields.schoolId = args.schoolId;
       return ctx.db.updatePoll(args.id, fields);
     },
-    deletePoll: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.deletePoll(args.id),
-    deleteVote: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.deleteVote(args.id),
-    resolveReport: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.resolveReport(args.id),
+    deletePoll: (_: unknown, args: { id: string }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.deletePoll(args.id); },
+    deleteVote: (_: unknown, args: { id: string }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.deleteVote(args.id); },
+    resolveReport: (_: unknown, args: { id: string }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.resolveReport(args.id); },
 
     updateMe: async (
       _: unknown,

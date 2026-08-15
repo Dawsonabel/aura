@@ -22,7 +22,20 @@
       "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"{ flames { coins godMode bonusRevealsLeft flames { id initial repeatAdmirer pickCount anonymous unread } } }\"}')",
       "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"mutation { revealFlame\\(id: \\\\\"vote_p3_1\\\\\"\\) { ok coins } }\"}')",
       "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"{ flames { flames { id initial } } }\"}')",
-      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -H \"Authorization: Bearer garbage.not.a.token\" -d '{\"query\":\"{ me { id } }\"}')"
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -H \"Authorization: Bearer garbage.not.a.token\" -d '{\"query\":\"{ me { id } }\"}')",
+      "Bash(lsof -ti:8788)",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"{ pollLibrary { emoji text } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"{ adminStats { schools } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"{ adminStats { schools users polls votes godMode reports } reports { id } votes\\(limit: 5\\) { id } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"{ polls { id } user\\(id: \\\\\"usr_bd075c8e140f\\\\\"\\) { id firstName } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"mutation { createPoll\\(emoji: \\\\\"✨\\\\\", text: \\\\\"Admin-gated test poll\\\\\", color: \\\\\"#000000\\\\\"\\) { id } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __TRACKED_VAR__' -d '{\"query\":\"{ adminStats { users } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"{ adminStats { users } }\"}')",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "WebFetch(domain:tanstack.com)",
+      "Bash(pnpm -v)",
+      "Bash(direnv status *)",
+      "WebFetch(domain:clerk.com)"
     ]
   }
 }

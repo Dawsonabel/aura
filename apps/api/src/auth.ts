@@ -3,7 +3,10 @@
    the right fit for a GraphQL context factory that runs on every request. */
 import { verifyToken } from '@clerk/backend';
 
-export type ClerkClaims = { sub: string; [key: string]: unknown };
+// `role` arrives via a custom session-token claim (Clerk dashboard: Sessions → Customize session
+// token → "role": "{{user.public_metadata.role}}") — not a separate Backend API call, so checking
+// it costs nothing extra per request, same reasoning as verifyToken() itself being networkless.
+export type ClerkClaims = { sub: string; role?: string; [key: string]: unknown };
 
 export async function verifyClerkRequest(req: Request, secretKey: string): Promise<ClerkClaims | null> {
   const authHeader = req.headers.get('authorization') || '';
