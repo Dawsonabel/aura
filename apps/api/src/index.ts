@@ -1,21 +1,20 @@
 import { createYoga } from 'graphql-yoga';
-import { schema, type GraphQLContext } from './schema';
+import { schema, type GraphQLContext, type Env } from './schema';
 import { makeDb } from './db';
 import { makeRateLimiter } from './ratelimit';
 
-export interface Env {
-  DATABASE_URL: string;
-  UPSTASH_REDIS_REST_URL: string;
-  UPSTASH_REDIS_REST_TOKEN: string;
-}
-
+// Yoga merges the initial context ({req, env, ip}, below) with whatever `context` returns — the
+// schema's resolvers see that full merge, so GraphQLContext (schema.ts) has to describe the whole
+// thing, not just the new db/ratelimit fields, or the two generics fight each other.
 const yoga = createYoga<{ req: Request; env: Env; ip: string }>({
   schema,
   graphqlEndpoint: '/graphql',
-  context: ({ env, ip }): GraphQLContext => ({
+  context: ({ req, env, ip }): GraphQLContext => ({
+    req,
+    env,
+    ip,
     db: makeDb(env.DATABASE_URL),
-    ratelimit: makeRateLimiter(env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN),
-    ip
+    ratelimit: makeRateLimiter(env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN)
   })
 });
 

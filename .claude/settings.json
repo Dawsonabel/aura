@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"^const resolvers\\\\|Query: {\\\\|Mutation: {\\\\|^};$\\\\|^export const schema\" /Users/blake/repos/aura/apps/api/src/schema.ts)",
+      "Bash(lsof -ti:8777)",
+      "Bash(python3 -c \"import sys,json; users=json.load\\(sys.stdin\\)['users']; print\\(users[0]['id']\\); print\\(users[1]['id']\\)\")",
+      "Bash(kill %1)",
+      "Bash(xargs -r kill)",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"{ votes\\(limit: 10\\) { id voterName targetName emoji revealed unread } }\"}')",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"{ reports { id byName targetName reason status } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"{ adminStats { schools users polls votes godMode reports } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"mutation { resolveReport\\(id: \\\\\"rep_test1\\\\\"\\) { id status } }\"}')"
+    ]
+  }
+}
