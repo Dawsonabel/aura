@@ -1,18 +1,33 @@
 import { createSchema } from 'graphql-yoga';
-import type { Db } from './db';
+import type { Db, User } from './db';
 import type { RateLimiter } from './ratelimit';
+import type { RoundStore } from './rounds';
+import { buildRound, notBlocked } from './pollRound';
+import { flamesFor } from './flames';
 
 export interface Env {
   DATABASE_URL: string;
   UPSTASH_REDIS_REST_URL: string;
   UPSTASH_REDIS_REST_TOKEN: string;
+  CLERK_SECRET_KEY: string;
 }
 
+const MIN_AGE = 13; // COPPA-safe floor — mirrors server.js's MIN_AGE exactly, same reasoning
+
 // The full context Yoga hands resolvers — the initial per-request fields (req/env/ip, set in
-// index.ts's context factory) plus the derived ones (db/ratelimit). Yoga merges the initial
-// context with whatever the `context` factory returns, so this has to describe that whole merge,
-// not just the new fields, or its generic and createYoga's fight each other.
-export type GraphQLContext = { req: Request; env: Env; ip: string; db: Db; ratelimit: RateLimiter };
+// index.ts's context factory) plus the derived ones (db/ratelimit/rounds/me). Yoga merges the
+// initial context with whatever the `context` factory returns, so this has to describe that
+// whole merge, not just the new fields, or its generic and createYoga's fight each other.
+export type GraphQLContext = {
+  req: Request; env: Env; ip: string;
+  db: Db; ratelimit: RateLimiter; rounds: RoundStore;
+  me: User | null; // null when unauthenticated — existing admin queries from Phases 1-2 still work without it
+};
+
+function requireMe(ctx: GraphQLContext): User {
+  if (!ctx.me) throw new Error('Not logged in');
+  return ctx.me;
+}
 
 // Mirrors POLL_LIB in server.js — static template list for the admin "add from library" UI, not DB-backed.
 const POLL_LIB: [string, string, string][] = [
@@ -54,6 +69,83 @@ const typeDefs = /* GraphQL */ `
     onboarded: Boolean
     coins: Int
     godMode: Boolean
+    friendIds: [ID!]
+    blocked: [ID!]
+    hideTopFlames: Boolean
+    photo: String
+  }
+  type Notification {
+    id: ID!
+    text: String!
+    emoji: String!
+    ts: String!
+    read: Boolean!
+  }
+  type Suggestions {
+    contacts: [User!]!
+    fof: [User!]!
+  }
+  type RoundChoice {
+    id: ID!
+    name: String!
+    boosted: Boolean
+  }
+  type RoundPoll {
+    questionId: ID!
+    emoji: String!
+    text: String!
+    color: String!
+    choices: [RoundChoice!]!
+  }
+  type PollRound {
+    roundId: ID!
+    polls: [RoundPoll!]!
+    canPlay: Boolean!
+    boostedInserts: Int!
+  }
+  type VoteResult {
+    ok: Boolean!
+    dup: Boolean
+  }
+  type RoundCompleteResult {
+    coins: Int!
+    earned: Int!
+    already: Boolean
+  }
+  type Flame {
+    id: ID!
+    emoji: String!
+    q: String!
+    color: String!
+    gender: String!
+    grade: String!
+    revealed: Boolean!
+    godMode: Boolean!
+    unread: Boolean!
+    anonymous: Boolean!
+    initial: String
+    name: String
+    repeatAdmirer: Boolean!
+    pickCount: Int!
+    ts: String!
+  }
+  type FlamesResult {
+    flames: [Flame!]!
+    coins: Int!
+    godMode: Boolean!
+    bonusRevealsLeft: Int!
+  }
+  type RevealResult {
+    ok: Boolean!
+    coins: Int!
+  }
+  type RevealNameResult {
+    name: String!
+    bonusRevealsLeft: Int!
+  }
+  type CoinResult {
+    coins: Int!
+    message: String
   }
   type Poll {
     id: ID!
@@ -110,6 +202,14 @@ const typeDefs = /* GraphQL */ `
     votes(limit: Int): [Vote!]!
     reports: [Report!]!
     adminStats: AdminStats!
+
+    me: User!
+    suggestions: Suggestions!
+    friends: [User!]!
+    blocked: [User!]!
+    notifications: [Notification!]!
+    pollRound: PollRound!
+    flames: FlamesResult!
   }
   type Mutation {
     createSchool(name: String!, city: String): School!
@@ -120,8 +220,33 @@ const typeDefs = /* GraphQL */ `
     deletePoll(id: ID!): Boolean!
     deleteVote(id: ID!): Boolean!
     resolveReport(id: ID!): Report
+
+    updateMe(
+      firstName: String, lastName: String, username: String, gender: String, grade: String,
+      age: Int, schoolId: ID, photo: String, onboarded: Boolean, hideTopFlames: Boolean
+    ): User!
+    deleteMe: Boolean!
+    block(userId: ID!): [ID!]!
+    unblock(userId: ID!): [ID!]!
+    addFriend(userId: ID!): [ID!]!
+    removeFriend(userId: ID!): [ID!]!
+    reportUser(userId: ID, reason: String): Boolean!
+    markNotificationsRead: Boolean!
+    vote(questionId: ID!, targetId: ID!, roundId: ID!): VoteResult!
+    completeRound(roundId: ID!): RoundCompleteResult!
+    markFlamesRead: Boolean!
+    revealFlame(id: ID!): RevealResult!
+    revealFlameName(id: ID!): RevealNameResult!
+    boostRandom: CoinResult!
+    boostCrush(targetId: ID!): CoinResult!
+    shopBoost(cost: Int!): CoinResult!
+    legacyGodMode: Boolean!
   }
 `;
+
+function str(v: unknown, max: number): string {
+  return typeof v === 'string' ? v.slice(0, max) : '';
+}
 
 const resolvers = {
   Query: {
@@ -136,7 +261,34 @@ const resolvers = {
     pollLibrary: () => POLL_LIB.map(([emoji, text, color]) => ({ emoji, text, color })),
     votes: (_: unknown, args: { limit?: number }, ctx: GraphQLContext) => ctx.db.getVotes(args.limit),
     reports: (_: unknown, __: unknown, ctx: GraphQLContext) => ctx.db.getReports(),
-    adminStats: (_: unknown, __: unknown, ctx: GraphQLContext) => ctx.db.getAdminStats()
+    adminStats: (_: unknown, __: unknown, ctx: GraphQLContext) => ctx.db.getAdminStats(),
+
+    me: (_: unknown, __: unknown, ctx: GraphQLContext) => requireMe(ctx),
+
+    suggestions: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      if (!me.schoolId) return { contacts: [], fof: [] };
+      const friendIds = (me.friendIds as string[]) || [];
+      const mates = (await ctx.db.getUsersBySchool(me.schoolId, me.id)).filter(u => !friendIds.includes(u.id) && notBlocked(me, u));
+      const half = Math.ceil(mates.length / 2);
+      return { contacts: mates.slice(0, half), fof: mates.slice(half) };
+    },
+    friends: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      return ctx.db.getUsersByIds((me.friendIds as string[]) || []);
+    },
+    blocked: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      return ctx.db.getUsersByIds((me.blocked as string[]) || []);
+    },
+    notifications: (_: unknown, __: unknown, ctx: GraphQLContext) => (requireMe(ctx).notifications as unknown[]) || [],
+    pollRound: (_: unknown, __: unknown, ctx: GraphQLContext) => buildRound(ctx.db, ctx.rounds, requireMe(ctx)),
+    flames: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const list = await flamesFor(ctx.db, me);
+      const bonusRevealsUsed = (me.bonusRevealsUsed as number) || 0;
+      return { flames: list, coins: me.coins as number, godMode: !!me.godMode, bonusRevealsLeft: me.godMode ? 2 - bonusRevealsUsed : 0 };
+    }
   },
   Mutation: {
     createSchool: (_: unknown, args: { name: string; city?: string }, ctx: GraphQLContext) =>
@@ -161,7 +313,222 @@ const resolvers = {
     },
     deletePoll: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.deletePoll(args.id),
     deleteVote: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.deleteVote(args.id),
-    resolveReport: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.resolveReport(args.id)
+    resolveReport: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.resolveReport(args.id),
+
+    updateMe: async (
+      _: unknown,
+      args: {
+        firstName?: string; lastName?: string; username?: string; gender?: string; grade?: string;
+        age?: number; schoolId?: string; photo?: string; onboarded?: boolean; hideTopFlames?: boolean;
+      },
+      ctx: GraphQLContext
+    ) => {
+      const me = requireMe(ctx);
+      const fields: Record<string, unknown> = {};
+      if (args.firstName !== undefined) fields.firstName = str(args.firstName, 40).trim();
+      if (args.lastName !== undefined) fields.lastName = str(args.lastName, 40).trim();
+      if (args.username !== undefined) fields.username = str(args.username, 30).replace(/[^a-zA-Z0-9_.]/g, '');
+      if (args.gender !== undefined && ['boy', 'girl', 'nonbinary'].includes(args.gender)) fields.gender = args.gender;
+      if (args.grade !== undefined) fields.grade = str(args.grade, 30);
+      if (args.age !== undefined) {
+        if (!(args.age >= MIN_AGE && args.age <= 99)) throw new Error(`You must be at least ${MIN_AGE} to use Aura.`);
+        fields.age = args.age;
+      }
+      if (args.schoolId !== undefined) fields.schoolId = args.schoolId || null;
+      if (args.photo !== undefined) fields.photo = args.photo == null ? null : str(args.photo, 500000);
+      if (args.onboarded !== undefined) {
+        const willBeOnboarded = !!args.onboarded;
+        // Same chokepoint as server.js: onboarded is set in a separate call from age in the real
+        // flow, so this is where "valid age already on file (or set right now)" is actually enforced.
+        if (willBeOnboarded) {
+          const effectiveAge = 'age' in fields ? (fields.age as number) : (me.age as number | null);
+          if (!(effectiveAge != null && effectiveAge >= MIN_AGE)) throw new Error(`Set your age (${MIN_AGE}+) before finishing onboarding.`);
+        }
+        fields.onboarded = willBeOnboarded;
+      }
+      if (args.hideTopFlames !== undefined) fields.hideTopFlames = !!args.hideTopFlames;
+      try {
+        return await ctx.db.updateUser(me.id, fields);
+      } catch (e: any) {
+        if (e?.code === '23503') throw new Error('Unknown school');
+        throw e;
+      }
+    },
+
+    // votes/boosts cascade automatically via real FKs (ON DELETE CASCADE) — no manual cleanup
+    // needed here, unlike server.js's DELETE handler. Sessions don't exist in this stack; Clerk owns them.
+    deleteMe: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      await ctx.db.deleteUser(me.id);
+      return true;
+    },
+
+    block: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const target = await ctx.db.getUserById(args.userId);
+      const meBlocked = (me.blocked as string[]) || [];
+      if (target && args.userId !== me.id && !meBlocked.includes(args.userId)) {
+        const blocked = [...meBlocked, args.userId];
+        const friendIds = ((me.friendIds as string[]) || []).filter(id => id !== args.userId);
+        await ctx.db.updateUser(me.id, { blocked, friendIds });
+        const targetFriendIds = (target.friendIds as string[]) || [];
+        if (targetFriendIds.includes(me.id)) {
+          await ctx.db.updateUser(target.id, { friendIds: targetFriendIds.filter(id => id !== me.id) });
+        }
+        return blocked;
+      }
+      return meBlocked;
+    },
+    unblock: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const blocked = ((me.blocked as string[]) || []).filter(id => id !== args.userId);
+      await ctx.db.updateUser(me.id, { blocked });
+      return blocked;
+    },
+    addFriend: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const other = await ctx.db.getUserById(args.userId);
+      const meFriends = (me.friendIds as string[]) || [];
+      if (other && !meFriends.includes(args.userId)) {
+        const friendIds = [...meFriends, args.userId];
+        await ctx.db.updateUser(me.id, { friendIds });
+        const otherFriends = (other.friendIds as string[]) || [];
+        if (!otherFriends.includes(me.id)) await ctx.db.updateUser(other.id, { friendIds: [...otherFriends, me.id] });
+        return friendIds;
+      }
+      return meFriends;
+    },
+    removeFriend: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const friendIds = ((me.friendIds as string[]) || []).filter(id => id !== args.userId);
+      await ctx.db.updateUser(me.id, { friendIds });
+      const other = await ctx.db.getUserById(args.userId);
+      if (other) await ctx.db.updateUser(other.id, { friendIds: ((other.friendIds as string[]) || []).filter(id => id !== me.id) });
+      return friendIds;
+    },
+    reportUser: async (_: unknown, args: { userId?: string; reason?: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      await ctx.db.createReport({
+        id: 'rep_' + crypto.randomUUID().slice(0, 12),
+        byUserId: me.id, targetId: args.userId || null, reason: (args.reason || '').slice(0, 300)
+      });
+      return true;
+    },
+    markNotificationsRead: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const notifications = ((me.notifications as any[]) || []).map(n => ({ ...n, read: true }));
+      await ctx.db.updateUser(me.id, { notifications });
+      return true;
+    },
+
+    vote: async (_: unknown, args: { questionId: string; targetId: string; roundId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const polls = await ctx.db.getPolls();
+      const q = polls.find(p => p.id === args.questionId && p.enabled);
+      const target = await ctx.db.getUserById(args.targetId);
+      if (!q || !target) throw new Error('bad vote');
+      if (target.id === me.id) throw new Error('cannot vote for yourself');
+      // integrity: target must be an eligible schoolmate (or someone boosted into your polls) and not blocked
+      const eligible = target.schoolId === me.schoolId || (await ctx.db.hasActiveBoostFor(target.id, me.id));
+      if (!eligible || !notBlocked(me, target)) throw new Error('not eligible');
+      const round = await ctx.rounds.get(args.roundId);
+      if (round) {
+        if (round.userId !== me.id) throw new Error('not your round');
+        if (round.votedQ.includes(args.questionId)) return { ok: true, dup: true };
+        if (round.votedQ.length >= 12) throw new Error('round full');
+        round.votedQ.push(args.questionId);
+        round.answered = round.votedQ.length;
+        await ctx.rounds.save(args.roundId, round);
+      }
+      await ctx.db.createVote({
+        id: 'vote_' + crypto.randomUUID().slice(0, 12),
+        voterId: me.id, targetId: args.targetId, questionId: args.questionId, emoji: q.emoji, text: q.text, color: q.color
+      });
+      return { ok: true, dup: false };
+    },
+    completeRound: async (_: unknown, args: { roundId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const round = await ctx.rounds.get(args.roundId);
+      if (!round || round.userId !== me.id) throw new Error('no active round');
+      if (round.claimed) return { coins: me.coins as number, earned: 0, already: true };
+      if ((round.answered || 0) < 1) throw new Error('answer at least one poll first');
+      round.claimed = true;
+      await ctx.rounds.save(args.roundId, round);
+      const earned = me.godMode ? 4 : 2;
+      const newCoins = await ctx.db.adjustCoins(me.id, earned);
+      return { coins: newCoins, earned, already: false };
+    },
+
+    markFlamesRead: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      await ctx.db.markAllVotesReadForTarget(me.id);
+      return true;
+    },
+    revealFlame: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const v = await ctx.db.getVoteForTarget(args.id, me.id);
+      if (!v) throw new Error('no flame');
+      const voter = await ctx.db.getUserById(v.voterId);
+      if (voter && voter.godMode) throw new Error('This admirer is anonymous 🔒');
+      if (me.godMode) {
+        await ctx.db.markVoteRevealed(v.id);
+        return { ok: true, coins: me.coins as number };
+      }
+      const newCoins = await ctx.db.adjustCoins(me.id, -1);
+      if (newCoins === null) throw new Error('no coins');
+      await ctx.db.markVoteRevealed(v.id);
+      return { ok: true, coins: newCoins };
+    },
+    revealFlameName: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const v = await ctx.db.getVoteForTarget(args.id, me.id);
+      if (!v) throw new Error('no flame');
+      if (!me.godMode) throw new Error('God Mode required');
+      const voter = await ctx.db.getUserById(v.voterId);
+      if (!voter) throw new Error('voter gone');
+      if (voter.godMode) throw new Error('This admirer is anonymous 🔒');
+      const pickCount = await ctx.db.countVotesFromVoterToTarget(v.voterId, me.id);
+      if (pickCount < 2) throw new Error('Only works for someone who picked you twice');
+      let bonusRevealsUsed = (me.bonusRevealsUsed as number) || 0;
+      const revealedVoters = (me.revealedVoters as string[]) || [];
+      if (!revealedVoters.includes(v.voterId)) {
+        if (bonusRevealsUsed >= 2) throw new Error('No bonus reveals left');
+        bonusRevealsUsed += 1;
+        await ctx.db.updateUser(me.id, { revealedVoters: [...revealedVoters, v.voterId], bonusRevealsUsed });
+      }
+      return { name: `${voter.firstName} ${voter.lastName}`, bonusRevealsLeft: 2 - bonusRevealsUsed };
+    },
+
+    boostRandom: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const COST = 100;
+      const newCoins = await ctx.db.adjustCoins(me.id, -COST);
+      if (newCoins === null) throw new Error('You need 100 coins');
+      await ctx.db.createBoost({ id: 'bst_' + crypto.randomUUID().slice(0, 12), byUserId: me.id, targetId: null, remaining: 3 });
+      return { coins: newCoins, message: "You'll appear in 3 random polls 🔥" };
+    },
+    boostCrush: async (_: unknown, args: { targetId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const COST = 300;
+      const t = await ctx.db.getUserById(args.targetId);
+      if (!t || t.id === me.id) throw new Error('Pick a valid crush');
+      const newCoins = await ctx.db.adjustCoins(me.id, -COST);
+      if (newCoins === null) throw new Error('You need 300 coins');
+      await ctx.db.createBoost({ id: 'bst_' + crypto.randomUUID().slice(0, 12), byUserId: me.id, targetId: t.id, remaining: 6 });
+      return { coins: newCoins, message: `You'll show up in ${t.firstName}'s polls 💘` };
+    },
+    shopBoost: async (_: unknown, args: { cost: number }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const newCoins = await ctx.db.adjustCoins(me.id, -(args.cost | 0));
+      if (newCoins === null) throw new Error('not enough coins');
+      return { coins: newCoins, message: null };
+    },
+    // Legacy/dev instant unlock — kept for the web demo. Real iOS uses IAP validation (a later phase).
+    legacyGodMode: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      await ctx.db.updateUser(me.id, { godMode: true, godModeExpires: null });
+      return true;
+    }
   }
 };
 

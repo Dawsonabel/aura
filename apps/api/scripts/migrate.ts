@@ -65,7 +65,21 @@ async function main() {
   `;
   await sql`CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status)`;
 
-  console.log('Migration complete: polls, votes, reports tables ready.');
+  // Phase 3: Clerk identity mapping + boosts
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS clerk_user_id TEXT UNIQUE`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS boosts (
+      id TEXT PRIMARY KEY,
+      by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      target_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      remaining INT NOT NULL,
+      ts TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS idx_boosts_by_user_id ON boosts(by_user_id)`;
+
+  console.log('Migration complete: polls, votes, reports, boosts tables + users.clerk_user_id ready.');
 }
 
 main().catch(e => {

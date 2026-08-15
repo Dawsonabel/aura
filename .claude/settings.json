@@ -10,7 +10,19 @@
       "Bash(python3 -m json.tool)",
       "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"{ reports { id byName targetName reason status } }\"}')",
       "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"{ adminStats { schools users polls votes godMode reports } }\"}')",
-      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"mutation { resolveReport\\(id: \\\\\"rep_test1\\\\\"\\) { id status } }\"}')"
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"mutation { resolveReport\\(id: \\\\\"rep_test1\\\\\"\\) { id status } }\"}')",
+      "WebSearch",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"{ schools { id name } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"{ me { id } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"mutation { updateMe\\(onboarded: true\\) { id onboarded } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"{ pollRound { roundId canPlay boostedInserts polls { questionId choices { id name } } } }\"}')",
+      "Read(//tmp/**)",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"mutation { vote\\(questionId: \\\\\"pol_fe4f214f-a65\\\\\", targetId: \\\\\"usr_bd075c8e140f\\\\\", roundId: \\\\\"rnd_bb91bece-fb6\\\\\"\\) { ok dup } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"mutation { completeRound\\(roundId: \\\\\"rnd_bb91bece-fb6\\\\\"\\) { coins earned already } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"{ flames { coins godMode bonusRevealsLeft flames { id initial repeatAdmirer pickCount anonymous unread } } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"mutation { revealFlame\\(id: \\\\\"vote_p3_1\\\\\"\\) { ok coins } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"{ flames { flames { id initial } } }\"}')",
+      "Bash(curl -s -X POST http://localhost:8788/graphql -H \"Content-Type: application/json\" -H \"Authorization: Bearer garbage.not.a.token\" -d '{\"query\":\"{ me { id } }\"}')"
     ]
   }
 }

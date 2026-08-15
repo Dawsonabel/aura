@@ -12,6 +12,7 @@ db.json.migrated
 .env.*
 !.env.example
 .dev.vars
+.clerk-test-token
 *.pem
 *.p8
 *.mobileprovision
