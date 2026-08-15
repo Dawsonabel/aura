@@ -12,10 +12,12 @@
         pkgs = import nixpkgs { inherit system; };
       in {
         devShells.default = pkgs.mkShell {
-          buildInputs = [ pkgs.nodejs_24 ];
+          buildInputs = [ pkgs.nodejs_24 pkgs.pnpm ];
 
           shellHook = ''
+            export PATH="$PWD/node_modules/.bin:$PATH"
             echo "node $(node --version)"
+            echo "pnpm $(pnpm --version)"
           '';
         };
       });

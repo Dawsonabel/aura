@@ -1,0 +1,10 @@
+# Copy to .dev.vars (gitignored) for local `wrangler dev`. Same idea as the root .env.
+
+# Same Neon connection string already in the root .env's DATABASE_URL — Neon's serverless
+# driver works over both the pooled/WebSocket mode (used by the root server) and plain HTTP
+# (used here); no separate database or connection string needed.
+DATABASE_URL=postgres://user:password@ep-xxxx-pooler.region.aws.neon.tech/neondb?sslmode=require
+
+# New — Upstash console → Create Database → REST API tab (copy both values)
+UPSTASH_REDIS_REST_URL=https://your-db.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-token

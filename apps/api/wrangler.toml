@@ -1,0 +1,8 @@
+name = "aura-api"
+main = "src/index.ts"
+compatibility_date = "2025-07-18"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets (DATABASE_URL, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN) are supplied via
+# .dev.vars locally (gitignored, same idea as the root .env) and `wrangler secret put` in production —
+# never committed here.

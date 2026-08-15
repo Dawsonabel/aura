@@ -11,13 +11,20 @@ db.json.migrated
 .env
 .env.*
 !.env.example
+.dev.vars
 *.pem
 *.p8
 *.mobileprovision
 secrets.json
+.direnv/
 
 # Dependencies
 node_modules/
+
+# Turborepo / Wrangler
+.turbo/
+.wrangler/
+apps/*/dist/
 
 # TypeScript build output (compiled from store.ts — run `npm run build`)
 store.js
