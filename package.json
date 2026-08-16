@@ -2,21 +2,13 @@
   "name": "aura-app",
   "version": "1.0.0",
   "private": true,
-  "description": "Aura — faithful UI + real backend (Neon Postgres, phone-code auth, Apple IAP).",
-  "main": "server.js",
+  "description": "Aura — GraphQL backend (apps/api, Cloudflare Workers) + TanStack Start frontend (apps/web).",
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
-    "build": "tsc",
-    "prestart": "tsc",
-    "pretest": "tsc",
-    "start": "node server.js",
-    "test": "node --env-file=.env --test --test-concurrency=1 test/*.test.js"
-  },
-  "dependencies": {
-    "@neondatabase/serverless": "^0.10.4"
+    "dev": "turbo run dev"
   },
   "devDependencies": {
-    "typescript": "^5.6.3",
-    "@types/node": "^22.10.2"
+    "turbo": "^2.10.9"
   },
   "engines": {
     "node": ">=22.5.0"

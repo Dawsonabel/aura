@@ -10,7 +10,11 @@ export default defineConfig({
   plugins: [
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
     // SPA mode — no public SEO surface, everything meaningful is behind Clerk auth
-    tanstackStart({ spa: { enabled: true } }),
+    tanstackStart({
+      spa: { enabled: true },
+      // *.test.tsx lives alongside routes it tests (see index.test.tsx) — router shouldn't scan those as routes
+      router: { routeFileIgnorePattern: '\\.test\\.tsx$' }
+    }),
     tailwindcss(),
     // react's plugin must come after start's, per TanStack Start's own setup docs
     viteReact()

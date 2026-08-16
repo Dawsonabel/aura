@@ -12,3 +12,7 @@ UPSTASH_REDIS_REST_TOKEN=your-token
 # New — Clerk dashboard → your application → API Keys → Secret key. Enable phone-number
 # sign-in under User & Authentication → Email, Phone, Username before testing.
 CLERK_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# New — a disposable Neon branch (Neon console → Branches → New Branch), NOT your real database.
+# `pnpm test` drops and recreates every table here on every run. Must never equal DATABASE_URL.
+TEST_DATABASE_URL=postgres://user:password@ep-yyyy-pooler.region.aws.neon.tech/neondb?sslmode=require

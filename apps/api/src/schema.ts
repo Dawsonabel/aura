@@ -4,6 +4,7 @@ import type { RateLimiter } from './ratelimit';
 import type { RoundStore } from './rounds';
 import { buildRound, notBlocked } from './pollRound';
 import { flamesFor } from './flames';
+import { verifySignedTransaction } from './iap';
 
 export interface Env {
   DATABASE_URL: string;
@@ -11,7 +12,11 @@ export interface Env {
   UPSTASH_REDIS_REST_TOKEN: string;
   CLERK_SECRET_KEY: string;
   ALLOWED_ORIGIN?: string; // apps/web's origin, for CORS — see index.ts. Unset in dev, falls back to localhost.
+  APPLE_ROOT_CA?: string; // Apple's root cert PEM — see iap.ts. Unset in dev/sandbox (relaxed trust anchor).
+  GODMODE_PRODUCT_IDS?: string; // comma-separated StoreKit product IDs, mirrors server.js's GODMODE_PRODUCTS
 }
+
+const DEFAULT_GODMODE_PRODUCTS = 'aura.godmode.weekly,aura.godmode.lifetime';
 
 const MIN_AGE = 13; // COPPA-safe floor — mirrors server.js's MIN_AGE exactly, same reasoning
 
@@ -152,6 +157,13 @@ const typeDefs = /* GraphQL */ `
     coins: Int!
     message: String
   }
+  type IapResult {
+    godMode: Boolean!
+    expired: Boolean
+    expires: String
+    environment: String
+    renewed: Boolean
+  }
   type Poll {
     id: ID!
     emoji: String!
@@ -202,6 +214,7 @@ const typeDefs = /* GraphQL */ `
     schools: [School!]!
     school(id: ID!): School
     user(id: ID!): User
+    users(schoolId: ID): [User!]!
     polls: [Poll!]!
     pollLibrary: [PollLibItem!]!
     votes(limit: Int): [Vote!]!
@@ -225,6 +238,11 @@ const typeDefs = /* GraphQL */ `
     deletePoll(id: ID!): Boolean!
     deleteVote(id: ID!): Boolean!
     resolveReport(id: ID!): Report
+    adminUpdateUser(
+      id: ID!, schoolId: ID, grade: String, coins: Int, godMode: Boolean,
+      firstName: String, lastName: String, username: String
+    ): User
+    adminDeleteUser(id: ID!): Boolean!
 
     updateMe(
       firstName: String, lastName: String, username: String, gender: String, grade: String,
@@ -246,6 +264,7 @@ const typeDefs = /* GraphQL */ `
     boostCrush(targetId: ID!): CoinResult!
     shopBoost(cost: Int!): CoinResult!
     legacyGodMode: Boolean!
+    validateIap(signedTransaction: String!): IapResult!
   }
 `;
 
@@ -263,6 +282,7 @@ const resolvers = {
     school: (_: unknown, args: { id: string }, ctx: GraphQLContext) => ctx.db.getSchool(args.id),
     // No public "look up any student" endpoint exists in server.js — this was open since Phase 1 and shouldn't have been.
     user: (_: unknown, args: { id: string }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getUserById(args.id); },
+    users: (_: unknown, args: { schoolId?: string }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getAllUsers(args.schoolId); },
     // server.js only exposes poll listing via the admin-gated /api/admin/polls — matching that here.
     polls: (_: unknown, __: unknown, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getPolls(); },
     pollLibrary: () => POLL_LIB.map(([emoji, text, color]) => ({ emoji, text, color })),
@@ -329,6 +349,35 @@ const resolvers = {
     deletePoll: (_: unknown, args: { id: string }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.deletePoll(args.id); },
     deleteVote: (_: unknown, args: { id: string }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.deleteVote(args.id); },
     resolveReport: (_: unknown, args: { id: string }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.resolveReport(args.id); },
+
+    // Thin wrappers over db.updateUser/deleteUser — those already do everything needed (generic
+    // JSONB merge covers coins/godMode/grade/names; deleteUser already cascades votes via FKs).
+    // Prefixed "admin" (unlike updateSchool/deletePoll etc.) specifically so this doesn't read like
+    // a self-service pair with updateMe/deleteMe — it edits/deletes *any* user, admin-gated.
+    adminUpdateUser: (
+      _: unknown,
+      args: {
+        id: string; schoolId?: string; grade?: string; coins?: number; godMode?: boolean;
+        firstName?: string; lastName?: string; username?: string;
+      },
+      ctx: GraphQLContext
+    ) => {
+      requireAdmin(ctx);
+      const fields: Record<string, unknown> = {};
+      if (args.schoolId !== undefined) fields.schoolId = args.schoolId || null;
+      if (args.grade !== undefined) fields.grade = args.grade;
+      if (args.coins !== undefined) fields.coins = args.coins;
+      if (args.godMode !== undefined) fields.godMode = args.godMode;
+      if (args.firstName !== undefined) fields.firstName = args.firstName;
+      if (args.lastName !== undefined) fields.lastName = args.lastName;
+      if (args.username !== undefined) fields.username = args.username;
+      return ctx.db.updateUser(args.id, fields);
+    },
+    adminDeleteUser: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
+      requireAdmin(ctx);
+      await ctx.db.deleteUser(args.id);
+      return true;
+    },
 
     updateMe: async (
       _: unknown,
@@ -538,11 +587,45 @@ const resolvers = {
       if (newCoins === null) throw new Error('not enough coins');
       return { coins: newCoins, message: null };
     },
-    // Legacy/dev instant unlock — kept for the web demo. Real iOS uses IAP validation (a later phase).
+    // Legacy/dev instant unlock — kept for the web demo. Real iOS uses validateIap below.
     legacyGodMode: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
       await ctx.db.updateUser(me.id, { godMode: true, godModeExpires: null });
       return true;
+    },
+
+    // Real Apple In-App Purchase: verify the StoreKit2 signed transaction, then grant God Mode.
+    // Mirrors server.js's /api/iap/validate exactly — same replay protection (each StoreKit
+    // transactionId is single-use; renewals get new ids) and expiry handling.
+    validateIap: async (_: unknown, args: { signedTransaction: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      let tx;
+      try {
+        tx = verifySignedTransaction(args.signedTransaction, ctx.env.APPLE_ROOT_CA);
+      } catch (e: any) {
+        throw new Error('Invalid receipt: ' + e.message);
+      }
+      const godmodeProducts = (ctx.env.GODMODE_PRODUCT_IDS || DEFAULT_GODMODE_PRODUCTS).split(',');
+      if (!godmodeProducts.includes(tx.productId)) throw new Error('Unknown product ' + tx.productId);
+
+      const iapTransactions = (me.iapTransactions as string[]) || [];
+      const txId = String(tx.transactionId);
+      const already = iapTransactions.includes(txId);
+      const newIapTransactions = already ? iapTransactions : [...iapTransactions, txId];
+
+      const expMs = tx.expiresDate ? Number(tx.expiresDate) : null;
+      if (expMs && expMs <= Date.now()) {
+        await ctx.db.updateUser(me.id, { iapTransactions: newIapTransactions });
+        return { godMode: false, expired: true, expires: new Date(expMs).toISOString() };
+      }
+      const godModeExpires = expMs ? new Date(expMs).toISOString() : null;
+      await ctx.db.updateUser(me.id, { iapTransactions: newIapTransactions, godModeExpires, godMode: true });
+      return {
+        godMode: true,
+        expires: godModeExpires,
+        environment: tx.environment || null,
+        renewed: !already && newIapTransactions.length > 1
+      };
     }
   }
 };

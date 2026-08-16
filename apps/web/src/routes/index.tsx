@@ -1,12 +1,14 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { Show, UserButton } from '@clerk/tanstack-react-start';
+import { useEffect } from 'react';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { Show } from '@clerk/tanstack-react-start';
 import { useMe } from '../hooks/useMe';
+import { useAdminStats } from '../hooks/useAdminStats';
 
 export const Route = createFileRoute('/')({
   component: Home
 });
 
-function Home() {
+export function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-8">
       <h1 className="text-2xl font-semibold">Aura</h1>
@@ -16,28 +18,29 @@ function Home() {
         </Link>
       </Show>
       <Show when="signed-in">
-        <UserButton />
-        <Me />
+        <SignedInGate />
       </Show>
     </main>
   );
 }
 
-function Me() {
-  const { data, isLoading, error } = useMe();
+/* Signed in has nothing to show at `/` itself — just routes on to wherever they actually belong.
+   Admins never get a `me` row (see getOrCreateUserByClerkId — deliberately skipped for admin
+   claims), so `useMe()` always errors for them; without also trying `useAdminStats()` (itself
+   admin-gated, so success = admin) an admin sign-in would sit on "Loading…" forever. Whichever
+   query actually succeeds decides where to go. */
+function SignedInGate() {
+  const me = useMe();
+  const adminStats = useAdminStats();
+  const navigate = useNavigate();
 
-  if (isLoading) return <p>Loading…</p>;
-  if (error) return <p className="text-red-600">{(error as Error).message}</p>;
-  if (!data) return null;
+  useEffect(() => {
+    if (me.data) {
+      navigate({ to: me.data.onboarded === false ? '/onboarding' : '/gas' });
+    } else if (adminStats.data) {
+      navigate({ to: '/admin' });
+    }
+  }, [me.data, adminStats.data, navigate]);
 
-  return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-      <dt className="font-medium">id</dt>
-      <dd>{data.id}</dd>
-      <dt className="font-medium">coins</dt>
-      <dd>{data.coins}</dd>
-      <dt className="font-medium">onboarded</dt>
-      <dd>{String(data.onboarded)}</dd>
-    </dl>
-  );
+  return <p>Loading…</p>;
 }

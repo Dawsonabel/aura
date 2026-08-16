@@ -231,6 +231,15 @@ export function makeDb(databaseUrl: string) {
       return rows.map(rowToUser);
     },
 
+    /** Admin listing — every user, optionally scoped to a school. Mirrors the old REST admin
+        endpoint's `?schoolId=` filter. No pagination, matching that endpoint's own behavior. */
+    async getAllUsers(schoolId?: string): Promise<User[]> {
+      const rows = schoolId
+        ? await sql`SELECT id, school_id, clerk_user_id, data FROM users WHERE school_id = ${schoolId}`
+        : await sql`SELECT id, school_id, clerk_user_id, data FROM users`;
+      return rows.map(rowToUser);
+    },
+
     async getUserByClerkId(clerkUserId: string): Promise<User | null> {
       const rows = await sql`SELECT id, school_id, clerk_user_id, data FROM users WHERE clerk_user_id = ${clerkUserId}`;
       return rows.length ? rowToUser(rows[0]) : null;

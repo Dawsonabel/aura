@@ -27,6 +27,11 @@ const yoga = createYoga<{ req: Request; env: Env; ip: string }>({
   schema,
   graphqlEndpoint: '/graphql',
   cors: false, // handled by hand in fetch() below, see corsHeaders
+  // Every resolver throws plain `Error`s with deliberately user-facing messages ("Not logged in",
+  // "Admin only", age/eligibility validation, ...) — the same convention server.js used, returning
+  // `e.message` directly in its JSON error responses. Yoga's default error masking would otherwise
+  // flatten all of these to a generic "Unexpected error." before they reach the client.
+  maskedErrors: { maskError: (error, message) => (error instanceof Error ? error : new Error(message)) },
   context: async ({ req, env, ip }): Promise<GraphQLContext> => {
     const db = makeDb(env.DATABASE_URL);
 

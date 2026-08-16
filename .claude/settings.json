@@ -35,7 +35,10 @@
       "WebFetch(domain:tanstack.com)",
       "Bash(pnpm -v)",
       "Bash(direnv status *)",
-      "WebFetch(domain:clerk.com)"
+      "WebFetch(domain:clerk.com)",
+      "Bash(grep -n 'taskId\\\\|\"//\"' /tmp/turbo_dry.json)",
+      "Read(//private/tmp/**)",
+      "Bash(xargs cat)"
     ]
   }
 }
