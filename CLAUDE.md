@@ -63,7 +63,7 @@ House rule, from an audit against https://react.dev/learn/you-might-not-need-an-
   race-condition/cleanup problem for free. If you see a bare `useEffect` doing a fetch or
   mutation on mount, ask *why it isn't a query* before "fixing" it.
   - But check whether the action is idempotent before converting it to `useQuery`. Example:
-    `apps/web/src/routes/_app.gas.tsx`'s `useEffect(() => start(), [])` looks like a fetch-on-mount
+    `apps/web/src/routes/_app.aura.tsx`'s `useEffect(() => start(), [])` looks like a fetch-on-mount
     smell, but `startRound` (`apps/api/src/rounds.ts`) creates a brand-new non-idempotent round
     server-side — moving it to `useQuery` would cause duplicate rounds on window
     refocus/reconnect. Left as a raw Effect deliberately; this is correct, not an oversight.
@@ -95,4 +95,4 @@ House rule, from an audit against https://react.dev/learn/you-might-not-need-an-
 - **Admin dashboard is web-only by design.** `apps/web`'s `/admin` covers it; there's no plan to
   build a mobile admin UI (not a real need for a phone-sized screen).
 - **Mobile roadmap** (approved, phase-by-phase): 1) Foundation ✅ 2) Onboarding ✅
-  3) Main app shell + Gas (core voting loop) 4) Inbox/Flames 5) Add+/Profile/Shop+God Mode.
+  3) Main app shell + Aura (core voting loop) ✅ 4) Inbox/Flames 5) Add+/Profile/Shop+God Mode.

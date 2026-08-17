@@ -5,8 +5,8 @@ import { useVote } from '../hooks/useVote';
 import { useCompleteRound } from '../hooks/useCompleteRound';
 import { useMe } from '../hooks/useMe';
 
-export const Route = createFileRoute('/_app/gas')({
-  component: Gas
+export const Route = createFileRoute('/_app/aura')({
+  component: Aura
 });
 
 type Mode = 'loading' | 'poll' | 'congrats' | 'playagain';
@@ -20,7 +20,7 @@ function shuffled<T>(items: T[]): T[] {
   return copy;
 }
 
-export function Gas() {
+export function Aura() {
   const startRound = useStartRound();
   const vote = useVote();
   const completeRound = useCompleteRound();
@@ -113,7 +113,7 @@ export function Gas() {
 function LoadingView() {
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2">
-      <div className="text-2xl font-bold">GAS</div>
+      <div className="text-2xl font-bold">AURA</div>
       <p className="text-gray-500">Loading Polls</p>
     </div>
   );

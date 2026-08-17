@@ -39,11 +39,11 @@ describe('Home', () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  test('signed in and onboarded: redirects to /gas', () => {
+  test('signed in and onboarded: redirects to /aura', () => {
     showMock.mockImplementation(({ when, children }) => (when === 'signed-in' ? children : null));
     useMeMock.mockReturnValue({ data: { id: 'usr_123', onboarded: true }, isLoading: false, error: null });
     render(<Home />);
-    expect(navigateMock).toHaveBeenCalledWith({ to: '/gas' });
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/aura' });
   });
 
   test('signed in but not onboarded: redirects to /onboarding', () => {

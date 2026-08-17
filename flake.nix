@@ -1,5 +1,5 @@
 {
-  description = "gas-clone dev environment";
+  description = "aura-app dev environment";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

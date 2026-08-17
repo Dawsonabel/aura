@@ -1,13 +1,13 @@
 import { useNavigate } from '@tanstack/react-router';
 
-// Fixed order from the old app's PAGES array — `gas` is the default landing tab.
-export const TABS = ['add', 'inbox', 'gas', 'profile', 'about'] as const;
+// Fixed order from the old app's PAGES array — `aura` is the default landing tab.
+export const TABS = ['add', 'inbox', 'aura', 'profile', 'about'] as const;
 export type Tab = (typeof TABS)[number];
 
-const LABELS: Record<Tab, string> = { add: 'Add+', inbox: 'Inbox', gas: 'Gas', profile: 'Profile', about: 'About' };
+const LABELS: Record<Tab, string> = { add: 'Add+', inbox: 'Inbox', aura: 'Aura', profile: 'Profile', about: 'About' };
 // Keeps `to` a literal template-union type (matching the generated route tree) instead of a bare
 // `string` from concatenation, which the typed router's `navigate` would otherwise reject.
-const PATHS: Record<Tab, `/${Tab}`> = { add: '/add', inbox: '/inbox', gas: '/gas', profile: '/profile', about: '/about' };
+const PATHS: Record<Tab, `/${Tab}`> = { add: '/add', inbox: '/inbox', aura: '/aura', profile: '/profile', about: '/about' };
 
 /* Not generic chrome — this bar IS the primary nav: it shows the previous/next tab names as tap
    targets either side of the current one, mirroring the old app's HEADERS breadcrumb pattern

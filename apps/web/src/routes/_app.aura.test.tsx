@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Gas } from './_app.gas';
+import { Aura } from './_app.aura';
 
 const { startRoundMock, voteMock, completeRoundMock, useMeMock } = vi.hoisted(() => ({
   startRoundMock: vi.fn(),
@@ -34,16 +34,16 @@ beforeEach(() => {
   completeRoundMock.mockImplementation((_roundId, { onSuccess }) => onSuccess({ coins: 6, earned: 2, already: false }));
 });
 
-describe('Gas screen', () => {
+describe('Aura screen', () => {
   test('starts a round on mount and renders the first poll', () => {
-    render(<Gas />);
+    render(<Aura />);
     expect(startRoundMock).toHaveBeenCalled();
     expect(screen.getByText('Best smile')).toBeInTheDocument();
     expect(screen.getByText('1 of 2')).toBeInTheDocument();
   });
 
   test('picking a name locks the choices and fires the vote', () => {
-    render(<Gas />);
+    render(<Aura />);
     fireEvent.click(screen.getByText('Alex'));
 
     expect(voteMock).toHaveBeenCalledWith({ questionId: 'pol_1', targetId: 'usr_a', roundId: 'rnd_1' });
@@ -52,7 +52,7 @@ describe('Gas screen', () => {
   });
 
   test('finishing the last poll completes the round and shows congrats with the real earned amount', () => {
-    render(<Gas />);
+    render(<Aura />);
     fireEvent.click(screen.getByText('⏩ Skip')); // poll 1 -> poll 2, no vote fired
     fireEvent.click(screen.getByText('⏩ Skip')); // poll 2 -> round finished
 
@@ -62,7 +62,7 @@ describe('Gas screen', () => {
   });
 
   test('Cash Out then Play Again Now restarts the loop', () => {
-    render(<Gas />);
+    render(<Aura />);
     // Skip through both polls to reach congrats
     fireEvent.click(screen.getByText('⏩ Skip'));
     fireEvent.click(screen.getByText('⏩ Skip'));

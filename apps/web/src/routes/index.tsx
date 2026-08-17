@@ -36,7 +36,7 @@ function SignedInGate() {
 
   useEffect(() => {
     if (me.data) {
-      navigate({ to: me.data.onboarded === false ? '/onboarding' : '/gas' });
+      navigate({ to: me.data.onboarded === false ? '/onboarding' : '/aura' });
     } else if (adminStats.data) {
       navigate({ to: '/admin' });
     }

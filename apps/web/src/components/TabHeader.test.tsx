@@ -9,9 +9,9 @@ beforeEach(() => navigateMock.mockReset());
 
 describe('TabHeader', () => {
   test('middle tab shows both neighbors, current tab centered', () => {
-    render(<TabHeader current="gas" />);
+    render(<TabHeader current="aura" />);
     expect(screen.getByText('Inbox')).toBeInTheDocument();
-    expect(screen.getByText('Gas')).toBeInTheDocument();
+    expect(screen.getByText('Aura')).toBeInTheDocument();
     expect(screen.getByText('Profile')).toBeInTheDocument();
   });
 
@@ -22,18 +22,18 @@ describe('TabHeader', () => {
   });
 
   test('tapping a neighbor navigates to its route', () => {
-    render(<TabHeader current="gas" />);
+    render(<TabHeader current="aura" />);
     fireEvent.click(screen.getByText('Inbox'));
     expect(navigateMock).toHaveBeenCalledWith({ to: '/inbox' });
   });
 
   test('shows the unread count badge on the Inbox slot when Inbox is a neighbor', () => {
-    render(<TabHeader current="gas" unreadCount={3} />);
+    render(<TabHeader current="aura" unreadCount={3} />);
     expect(screen.getByText('3')).toBeInTheDocument();
   });
 
   test('no badge when unread count is zero', () => {
-    render(<TabHeader current="gas" unreadCount={0} />);
+    render(<TabHeader current="aura" unreadCount={0} />);
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
 

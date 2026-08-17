@@ -14,29 +14,21 @@ export default function Home() {
         </Link>
       </Show>
       <Show when="signed-in">
-        <MeProof />
+        <SignedInGate />
       </Show>
     </View>
   );
 }
 
-function MeProof() {
-  const { data, isLoading, isError } = useMe();
+// Signed in has nothing to show at `/` itself — just routes on to wherever the user actually
+// belongs. Matches apps/web's index.tsx SignedInGate.
+function SignedInGate() {
+  const { data } = useMe();
   const router = useRouter();
 
   useEffect(() => {
-    if (data && data.onboarded === false) router.replace('/onboarding');
+    if (data) router.replace(data.onboarded === false ? '/onboarding' : '/aura');
   }, [data, router]);
 
-  if (isLoading) return <Text>Loading…</Text>;
-  if (isError || !data) return <Text>Could not load account.</Text>;
-  if (data.onboarded === false) return <Text>Loading…</Text>;
-
-  return (
-    <View className="items-center gap-1">
-      <Text>id: {data.id}</Text>
-      <Text>coins: {data.coins}</Text>
-      <Text>onboarded: {String(data.onboarded)}</Text>
-    </View>
-  );
+  return <Text>Loading…</Text>;
 }

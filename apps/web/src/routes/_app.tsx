@@ -19,9 +19,9 @@ function AppLayout() {
     else if (me && me.onboarded === false) navigate({ to: '/onboarding' });
   }, [isSignedIn, me, navigate]);
 
-  // The URL's last path segment (e.g. /gas -> "gas") tells us which tab is active.
+  // The URL's last path segment (e.g. /aura -> "aura") tells us which tab is active.
   const { pathname } = useLocation();
-  const current = (pathname.split('/').pop() || 'gas') as Tab;
+  const current = (pathname.split('/').pop() || 'aura') as Tab;
 
   // Fetched here (not just inside the Inbox route) so the header badge shows from any tab.
   const { data: flames } = useFlames();
