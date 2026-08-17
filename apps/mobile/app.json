@@ -9,7 +9,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.aura.app"
+      "bundleIdentifier": "com.aura.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.aura.app",
@@ -33,6 +36,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3e8f428b-abf0-4239-8271-385f17f9fa5e"
+      }
+    },
+    "owner": "tonyhawklover"
   }
 }

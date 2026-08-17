@@ -16,6 +16,7 @@ const FLAMES_QUERY = /* GraphQL */ `
         gender
         grade
         revealed
+        gradeRevealed
         godMode
         unread
         anonymous
@@ -36,8 +37,12 @@ export type Flame = {
   q: string;
   color: string;
   gender: string;
+  /** Empty until the grade tile is bought — 16A made it a paid clue. See gradeRevealed. */
   grade: string;
+  /** The initial tile. */
   revealed: boolean;
+  /** The grade tile, bought separately from the initial. */
+  gradeRevealed: boolean;
   godMode: boolean;
   unread: boolean;
   anonymous: boolean;
