@@ -23,12 +23,13 @@ export default function Home() {
 // Signed in has nothing to show at `/` itself — just routes on to wherever the user actually
 // belongs. Matches apps/web's index.tsx SignedInGate.
 function SignedInGate() {
-  const { data } = useMe();
+  const { data, isError } = useMe();
   const router = useRouter();
 
   useEffect(() => {
     if (data) router.replace(data.onboarded === false ? '/onboarding' : '/aura');
   }, [data, router]);
 
+  if (isError) return <Text>Could not load account.</Text>;
   return <Text>Loading…</Text>;
 }

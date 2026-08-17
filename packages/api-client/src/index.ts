@@ -5,6 +5,7 @@ export { useSchools, type School, type UseSchoolsParams } from './hooks/useSchoo
 export { useStartRound, type PollRound, type RoundPoll, type RoundChoice, type UseStartRoundParams } from './hooks/useStartRound';
 export { useVote, type VoteInput, type UseVoteParams } from './hooks/useVote';
 export { useCompleteRound, type UseCompleteRoundParams } from './hooks/useCompleteRound';
+export { useAuraRound, type AuraMode, type UseAuraRoundParams } from './hooks/useAuraRound';
 export { useFlames, type Flame, type FlamesResult, type UseFlamesParams } from './hooks/useFlames';
 export { useMarkFlamesRead, type UseMarkFlamesReadParams } from './hooks/useMarkFlamesRead';
 export { useNotifications, type Notification, type UseNotificationsParams } from './hooks/useNotifications';

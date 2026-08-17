@@ -63,10 +63,13 @@ House rule, from an audit against https://react.dev/learn/you-might-not-need-an-
   race-condition/cleanup problem for free. If you see a bare `useEffect` doing a fetch or
   mutation on mount, ask *why it isn't a query* before "fixing" it.
   - But check whether the action is idempotent before converting it to `useQuery`. Example:
-    `apps/web/src/routes/_app.aura.tsx`'s `useEffect(() => start(), [])` looks like a fetch-on-mount
-    smell, but `startRound` (`apps/api/src/rounds.ts`) creates a brand-new non-idempotent round
-    server-side — moving it to `useQuery` would cause duplicate rounds on window
-    refocus/reconnect. Left as a raw Effect deliberately; this is correct, not an oversight.
+    `packages/api-client/src/hooks/useAuraRound.ts`'s `useEffect(() => { if (enabled) start() }, [enabled])`
+    looks like a fetch-on-mount smell, but `startRound` (`apps/api/src/rounds.ts`) creates a
+    brand-new non-idempotent round server-side — moving it to `useQuery` would cause duplicate
+    rounds on window refocus/reconnect. Left as a raw Effect deliberately; this is correct, not an
+    oversight. (The `enabled` gate itself exists so the round doesn't start before Clerk's auth
+    state is actually ready — a cold-start deep link straight into `/aura` can otherwise fire this
+    with a not-yet-resolved token.)
   - When you need to *freeze* a value derived from async data (e.g. "the notifications that
     were unread when the Inbox opened," even after they get marked read and the query
     refetches), don't do the freeze in an Effect — use the render-time "compare to a `prev`

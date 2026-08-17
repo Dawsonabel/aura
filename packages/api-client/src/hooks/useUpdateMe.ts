@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { GqlFetch } from '../client';
+import type { Me } from './useMe';
 
 const UPDATE_ME_MUTATION = /* GraphQL */ `
   mutation UpdateMe(
@@ -52,6 +53,14 @@ export function useUpdateMe({ gqlFetch, getToken }: UseUpdateMeParams) {
       const { updateMe } = await gqlFetch<UpdateMeResult>(UPDATE_ME_MUTATION, input, token);
       return updateMe;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['me'] })
+    onSuccess: updated => {
+      // Patches the cache with the mutation's own response *before* invalidating, so a
+      // component that (re)mounts a useMe() observer right after this (e.g. navigating away
+      // on onboarding's last step) reads the fresh value immediately instead of whatever was
+      // cached pre-mutation — invalidateQueries alone only refetches *active* observers, and
+      // there isn't necessarily one mounted at the moment this fires.
+      queryClient.setQueryData<Me>(['me'], old => (old ? { ...old, ...updated } : old));
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+    }
   });
 }

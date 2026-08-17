@@ -1,105 +1,27 @@
-import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { useStartRound, type RoundChoice, type RoundPoll } from '../../src/hooks/useStartRound';
-import { useVote } from '../../src/hooks/useVote';
-import { useCompleteRound } from '../../src/hooks/useCompleteRound';
+import type { RoundChoice, RoundPoll } from '@aura/api-client';
+import { useAuraRound } from '../../src/hooks/useAuraRound';
 import { useMe } from '../../src/hooks/useMe';
 
-type Mode = 'loading' | 'poll' | 'congrats' | 'playagain';
-
-function shuffled<T>(items: T[]): T[] {
-  const copy = items.slice();
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
 export default function Aura() {
-  const startRound = useStartRound();
-  const vote = useVote();
-  const completeRound = useCompleteRound();
+  const { mode, poll, choices, count, total, answered, shuffleUsed, earned, pick, shuffle, advance, cashOut, playAgain } = useAuraRound();
   const { data: me } = useMe();
 
-  const [mode, setMode] = useState<Mode>('loading');
-  const [polls, setPolls] = useState<RoundPoll[]>([]);
-  const [roundId, setRoundId] = useState('');
-  const [index, setIndex] = useState(0);
-  const [answered, setAnswered] = useState(false);
-  const [shuffleUsed, setShuffleUsed] = useState(false);
-  const [choices, setChoices] = useState<RoundChoice[]>([]);
-  const [earned, setEarned] = useState(0);
-
-  function start() {
-    setMode('loading');
-    startRound.mutate(undefined, {
-      onSuccess: round => {
-        setRoundId(round.roundId);
-        setPolls(round.polls);
-        setIndex(0);
-        setAnswered(false);
-        setShuffleUsed(false);
-        setChoices(round.polls[0]?.choices ?? []);
-        setMode('poll');
-      }
-    });
-  }
-
-  // Runs once on mount only — start() itself is stable enough for this screen's purposes, and
-  // re-running it on every render identity change would restart the round unexpectedly.
-  useEffect(() => {
-    start();
-  }, []);
-
-  function pickName(targetId: string) {
-    if (answered) return;
-    setAnswered(true);
-    const q = polls[index];
-    // Fire-and-forget, matching the web app's optimistic UI — the grid locks immediately rather
-    // than waiting on the round trip.
-    vote.mutate({ questionId: q.questionId, targetId, roundId });
-  }
-
-  function shuffle() {
-    if (answered || shuffleUsed) return;
-    setShuffleUsed(true);
-    setChoices(shuffled(choices));
-  }
-
-  function advance() {
-    const nextIndex = index + 1;
-    if (nextIndex >= polls.length) {
-      completeRound.mutate(roundId, {
-        onSuccess: result => {
-          setEarned(result.earned);
-          setMode('congrats');
-        }
-      });
-      return;
-    }
-    setIndex(nextIndex);
-    setAnswered(false);
-    setShuffleUsed(false);
-    setChoices(polls[nextIndex].choices);
-  }
-
   if (mode === 'loading') return <LoadingView />;
-  if (mode === 'congrats') return <CongratsView earned={earned} godMode={!!me?.godMode} onCashOut={() => setMode('playagain')} />;
-  if (mode === 'playagain') return <PlayAgainView onPlayAgain={start} />;
+  if (mode === 'congrats') return <CongratsView earned={earned} godMode={!!me?.godMode} onCashOut={cashOut} />;
+  if (mode === 'playagain') return <PlayAgainView onPlayAgain={playAgain} />;
 
-  const q = polls[index];
-  if (!q) return <LoadingView />;
+  if (!poll) return <LoadingView />;
 
   return (
     <PollView
-      poll={q}
+      poll={poll}
       choices={choices}
-      count={index + 1}
-      total={polls.length}
+      count={count}
+      total={total}
       answered={answered}
       shuffleUsed={shuffleUsed}
-      onPick={pickName}
+      onPick={pick}
       onShuffle={shuffle}
       onAdvance={advance}
     />

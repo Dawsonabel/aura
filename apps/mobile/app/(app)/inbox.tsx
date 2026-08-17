@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useAuth } from '@clerk/expo';
 import { useFlames, type Flame } from '../../src/hooks/useFlames';
 import { useMarkFlamesRead } from '../../src/hooks/useMarkFlamesRead';
 import { useNotifications, type Notification } from '../../src/hooks/useNotifications';
@@ -19,6 +20,7 @@ function flameSubtitle(f: Flame): string {
 }
 
 export default function Inbox() {
+  const { isSignedIn } = useAuth();
   const { data, isLoading } = useFlames();
   const markFlamesRead = useMarkFlamesRead();
   const { data: notifications } = useNotifications();
@@ -41,20 +43,29 @@ export default function Inbox() {
   const [godModeOpen, setGodModeOpen] = useState(false);
 
   // Opening the Inbox marks everything read immediately, same as apps/web — not gated behind
-  // any user action. Runs once on mount only.
+  // any user action. Fires once auth is actually ready (not on raw mount) — a cold-start deep
+  // link straight into this screen can render before @clerk/expo's async token cache resolves,
+  // and this mutation needs a real token.
   useEffect(() => {
-    markFlamesRead.mutate();
-  }, []);
+    if (isSignedIn) markFlamesRead.mutate();
+  }, [isSignedIn]);
 
   // Consequence of the frozen unread list appearing — mirrors the mount-only mark-read Effect
   // above, just triggered once shownNotifications settles instead of on mount.
+  // Depends on `.mutate` (stable across renders — see @tanstack/react-query's useMutation source:
+  // it's wrapped in useCallback) rather than the whole `markNotificationsRead` object, which
+  // useMutation() recreates on every render — depending on the object would re-fire this Effect,
+  // and thus re-call the mutation, every time the mutation's own pending/success transitions
+  // caused a re-render, looping indefinitely.
   useEffect(() => {
     if (shownNotifications?.length) markNotificationsRead.mutate();
-  }, [shownNotifications, markNotificationsRead]);
+  }, [shownNotifications, markNotificationsRead.mutate]);
 
   if (isLoading || !data) return <Text>Loading…</Text>;
 
-  const secretAdmirer = data.flames.some(f => f.repeatAdmirer && !f.name);
+  // Excludes anonymous flames — FlameDetailAction always shows the "anonymous (God Mode)" dead
+  // end for those, never the bonus name-reveal this banner promises.
+  const secretAdmirer = data.flames.some(f => f.repeatAdmirer && !f.name && !f.anonymous);
   const selectedFlame = data.flames.find(f => f.id === selectedFlameId) || null;
 
   return (

@@ -53,13 +53,20 @@ export function Inbox() {
 
   // Consequence of the frozen unread list appearing — mirrors the mount-only mark-read Effect
   // above, just triggered once shownNotifications settles instead of on mount.
+  // Depends on `.mutate` (stable across renders — see @tanstack/react-query's useMutation source:
+  // it's wrapped in useCallback) rather than the whole `markNotificationsRead` object, which
+  // useMutation() recreates on every render — depending on the object would re-fire this Effect,
+  // and thus re-call the mutation, every time the mutation's own pending/success transitions
+  // caused a re-render, looping indefinitely.
   useEffect(() => {
     if (shownNotifications?.length) markNotificationsRead.mutate();
-  }, [shownNotifications, markNotificationsRead]);
+  }, [shownNotifications, markNotificationsRead.mutate]);
 
   if (isLoading || !data) return <p>Loading…</p>;
 
-  const secretAdmirer = data.flames.some(f => f.repeatAdmirer && !f.name);
+  // Excludes anonymous flames — FlameDetailAction always shows the "anonymous (God Mode)" dead
+  // end for those, never the bonus name-reveal this banner promises.
+  const secretAdmirer = data.flames.some(f => f.repeatAdmirer && !f.name && !f.anonymous);
   const selectedFlame = data.flames.find(f => f.id === selectedFlameId) || null;
 
   return (

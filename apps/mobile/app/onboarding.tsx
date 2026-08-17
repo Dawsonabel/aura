@@ -29,6 +29,12 @@ export default function Onboarding() {
 
   const step: Step = STEPS[stepIndex];
 
+  // TextInput has no min/max concept (unlike web's <input type="number" min={13} max={99}>), and
+  // the server rejects ages outside 13-99 — validate client-side so "Next" isn't just silently
+  // inert, and surface the server's own message below if a mutation still fails for any reason.
+  const ageNum = Number(age);
+  const ageValid = age !== '' && Number.isInteger(ageNum) && ageNum >= 13 && ageNum <= 99;
+
   async function next(fields: Record<string, unknown>) {
     await updateMe.mutateAsync(fields);
     if (stepIndex === STEPS.length - 1) {
@@ -49,7 +55,7 @@ export default function Onboarding() {
             value={age}
             onChangeText={setAge}
           />
-          <NextButton disabled={!age} onPress={() => next({ age: Number(age) })} />
+          <NextButton disabled={!ageValid} onPress={() => next({ age: ageNum })} />
         </StepView>
       )}
 
@@ -118,6 +124,8 @@ export default function Onboarding() {
           <NextButton disabled={!gender} onPress={() => next({ gender })} label="Finish" />
         </StepView>
       )}
+
+      {updateMe.isError && <Text className="text-sm text-red-600">{(updateMe.error as Error).message}</Text>}
     </View>
   );
 }
