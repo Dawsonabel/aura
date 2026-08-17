@@ -28,7 +28,19 @@ export function Inbox() {
   const { data: notifications } = useNotifications();
   const markNotificationsRead = useMarkNotificationsRead();
 
+  // Freezes the unread list the moment `notifications` first loads, so marking them read below
+  // (which invalidates and refetches the query) doesn't make the banner disappear out from under
+  // the user. Computed during render — see https://react.dev/learn/you-might-not-need-an-effect —
+  // rather than in an Effect, so it doesn't cost an extra render pass.
+  const [prevNotifications, setPrevNotifications] = useState(notifications);
   const [shownNotifications, setShownNotifications] = useState<Notification[] | null>(null);
+  if (notifications !== prevNotifications) {
+    setPrevNotifications(notifications);
+    if (notifications && shownNotifications === null) {
+      setShownNotifications(notifications.filter(n => !n.read));
+    }
+  }
+
   const [selectedFlameId, setSelectedFlameId] = useState<string | null>(null);
   const [godModeOpen, setGodModeOpen] = useState(false);
 
@@ -39,13 +51,11 @@ export function Inbox() {
     markFlamesRead.mutate();
   }, []);
 
+  // Consequence of the frozen unread list appearing — mirrors the mount-only mark-read Effect
+  // above, just triggered once shownNotifications settles instead of on mount.
   useEffect(() => {
-    if (notifications && shownNotifications === null) {
-      const unread = notifications.filter(n => !n.read);
-      setShownNotifications(unread);
-      if (unread.length) markNotificationsRead.mutate();
-    }
-  }, [notifications, shownNotifications, markNotificationsRead]);
+    if (shownNotifications?.length) markNotificationsRead.mutate();
+  }, [shownNotifications, markNotificationsRead]);
 
   if (isLoading || !data) return <p>Loading…</p>;
 

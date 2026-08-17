@@ -1,4 +1,5 @@
-import { Link } from 'expo-router';
+import { useEffect } from 'react';
+import { Link, useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import { Show } from '@clerk/expo';
 import { useMe } from '../src/hooks/useMe';
@@ -21,9 +22,15 @@ export default function Home() {
 
 function MeProof() {
   const { data, isLoading, isError } = useMe();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (data && data.onboarded === false) router.replace('/onboarding');
+  }, [data, router]);
 
   if (isLoading) return <Text>Loading…</Text>;
   if (isError || !data) return <Text>Could not load account.</Text>;
+  if (data.onboarded === false) return <Text>Loading…</Text>;
 
   return (
     <View className="items-center gap-1">

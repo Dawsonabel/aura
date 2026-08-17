@@ -6,6 +6,9 @@ The tension that drives engagement is curiosity about the "who": every flame is 
 
 Technically: a GraphQL backend on Cloudflare Workers (`apps/api`), a TanStack Start web app (`apps/web`) for students and admins, and a native Expo/React Native app (`apps/mobile`) for students, sharing a common GraphQL data layer (`packages/api-client`). Clerk handles auth (phone-number + SMS code), Neon Postgres is the database, and Upstash Redis backs rate limiting and ephemeral poll-round state.
 
+> Working in here with Claude Code? See [CLAUDE.md](CLAUDE.md) for environment gotchas (running
+> commands via `nix develop --command`), standing collaboration rules, and house conventions.
+
 ## Run it
 
 Requires [Nix](https://nixos.org/) (the flake provides Node 24 + pnpm) or Node 24 + pnpm 11 installed some other way.
