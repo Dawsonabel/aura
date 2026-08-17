@@ -1,4 +1,4 @@
-import { useAuth } from '@clerk/tanstack-react-start';
+import { useAuth } from '@clerk/expo';
 import { useNotifications as useSharedNotifications, type Notification } from '@aura/api-client';
 import { gqlFetch } from '../lib/graphql';
 

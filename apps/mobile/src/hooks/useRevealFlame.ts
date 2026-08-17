@@ -1,4 +1,4 @@
-import { useAuth } from '@clerk/tanstack-react-start';
+import { useAuth } from '@clerk/expo';
 import { useRevealFlame as useSharedRevealFlame } from '@aura/api-client';
 import { gqlFetch } from '../lib/graphql';
 
