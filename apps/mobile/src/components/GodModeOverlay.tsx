@@ -2,6 +2,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useFlames } from '../hooks/useFlames';
 import { useActivateGodMode } from '../hooks/useActivateGodMode';
 import { Overlay } from './Overlay';
+import { AuraIcon } from './AuraIcon';
 
 const BENEFITS = [
   { emoji: '🔓', title: 'Reveal Two Names Per Week', sub: 'Unmask anyone who picks you twice' },
@@ -20,14 +21,14 @@ export function GodModeOverlay({ onClose }: { onClose: () => void }) {
   return (
     <Overlay onClose={onClose}>
       <View className="items-center">
-        <Text className="text-4xl">👑</Text>
+        <AuraIcon name="crown" size={40} color="#FFD84D" />
         <Text className="text-2xl font-bold">GOD MODE</Text>
         <Text className="text-sm text-gray-500">See who likes you on Aura</Text>
       </View>
 
       {lockedCount > 0 && (
         <Text className="mt-4 text-center text-sm">
-          🔥 {lockedCount} {lockedCount === 1 ? 'person likes' : 'people like'} you
+          ✨ {lockedCount} {lockedCount === 1 ? 'person likes' : 'people like'} you
         </Text>
       )}
 

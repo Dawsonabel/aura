@@ -14,6 +14,8 @@ import {
   AuthShell
 } from '../src/components/authKit';
 import { ToyShadow } from '../src/components/ToyShadow';
+import { EmptyState, SkeletonRows } from '../src/components/stateKit';
+import { AuraIcon } from '../src/components/AuraIcon';
 
 /* Order matches 6A's seven-segment bar exactly. */
 const STEPS = ['rules', 'age', 'grade', 'school', 'name', 'username', 'gender'] as const;
@@ -33,7 +35,7 @@ const GENDERS: { value: string; emoji: string; label: string; sub?: string }[] =
   { value: 'girl', emoji: '👧', label: 'Girl' },
   { value: 'boy', emoji: '👦', label: 'Boy' },
   { value: 'nonbinary', emoji: '🧑', label: 'Nonbinary' },
-  { value: 'private', emoji: '🤐', label: 'Rather not say', sub: 'Your flames just say "someone in 11th"' }
+  { value: 'private', emoji: '🤐', label: 'Rather not say', sub: 'Your picks just say "someone in 11th"' }
 ];
 
 /** Whole years between a birthday and today. */
@@ -71,7 +73,11 @@ export default function Onboarding() {
     if (fields) await updateMe.mutateAsync(fields);
     if (stepIndex === STEPS.length - 1) {
       await updateMe.mutateAsync({ onboarded: true });
-      router.replace('/');
+      /* Straight to the push ask, not to `/`. 7A places it after step 7 rather than inside the seven
+         — it isn't a profile field, and folding it in would make the progress bar lie — and this is
+         the moment it's most persuasive, right after the gender step explains what a pick reveals.
+         /push finishes by replacing itself with /aura either way. */
+      router.replace('/push');
     } else {
       setStepIndex(stepIndex + 1);
     }
@@ -97,15 +103,15 @@ export default function Onboarding() {
         <View className="mt-[22px] gap-[10px]">
           {/* 6A removed the old "We check your grade with your school" line — the product doesn't
               do that, so the claim is gone rather than left as an unbacked promise. */}
-          <AuthRule emoji="🔒" lead="Aura is 13+.">Your number stays private — it's only how you get back in.</AuthRule>
-          <AuthRule emoji="🙈" lead="Votes are anonymous.">
+          <AuthRule icon="lock" lead="Aura is 13+.">Your number stays private — it's only how you get back in.</AuthRule>
+          <AuthRule icon="eyeOff" lead="Votes are anonymous.">
             Nobody ever sees who you picked — not even the person you picked.
           </AuthRule>
-          <AuthRule emoji="🏫" lead="One school, one you.">
+          <AuthRule icon="school" lead="One school, one you.">
             You only ever see people from your school, and only they can see you.
           </AuthRule>
         </View>
-        <AuthHint emoji="🚫">
+        <AuthHint icon="block">
           Prompts are compliments only. Anything cruel gets the person who sent it removed.
         </AuthHint>
         <AuthFooter>
@@ -163,7 +169,7 @@ export default function Onboarding() {
         <AuthHeading
           marginTop={30}
           title="What grade are you in?"
-          subtitle={'This is how your flames get labelled — "someone in 11th picked you."'}
+          subtitle={'This is how your picks get labelled — "someone in 11th picked you."'}
         />
         <View className="mt-[22px] flex-row flex-wrap gap-[11px]">
           {GRADES.map(g => (
@@ -172,7 +178,7 @@ export default function Onboarding() {
             </View>
           ))}
         </View>
-        <AuthHint emoji="🔁">
+        <AuthHint icon="reroll">
           You can move up a grade each August. Ask an admin if you need it changed sooner.
         </AuthHint>
         <AuthFooter>
@@ -470,7 +476,7 @@ function SchoolStep({
         subtitle="You'll only ever see people from your school, and only they can see you."
       />
       <View className="mt-[22px] flex-row items-center gap-[11px] rounded-20 bg-surface px-[17px] py-[15px]">
-        <Text style={{ fontSize: 17 }}>🔍</Text>
+        <AuraIcon name="search" size={18} color="#848286" />
         <TextInput
           className="font-nunito-800 flex-1 text-[16px] text-white"
           placeholder="Search schools"
@@ -481,18 +487,23 @@ function SchoolStep({
         />
       </View>
       {isLoading ? (
-        <Text className="font-nunito-800 mt-3 text-[13.5px] text-ink-muted">Loading…</Text>
+        <View className="mt-3">
+          <SkeletonRows n={4} height={72} radius={20} avatarSize={44} avatarRadius={15} />
+        </View>
       ) : filtered.length === 0 ? (
-        /* Placeholder, not a designed state — an empty search previously rendered nothing at all,
-           which reads as a broken screen. Flagged in DESIGN-REQUESTS.md; pairs with the
-           "Request your school" link below, which is the actual answer to "mine isn't listed". */
-        <View className="mt-3 rounded-20 bg-surface px-4 py-[15px]">
-          <Text className="font-nunito-800 text-[13.5px] text-ink-secondary">
-            {query.trim() ? `No schools matching "${query.trim()}".` : 'No schools yet.'}
-          </Text>
-          <Text className="font-nunito-700 mt-[2px] text-[12.5px] text-ink-dim">
-            Check the spelling, or ask us to add it below.
-          </Text>
+        /* Now 10A's real empty state instead of the placeholder this used to be: the query is quoted
+           back, and it points at the "Request your school" link below, which is the actual answer to
+           "mine isn't listed". */
+        <View className="mt-3">
+          <EmptyState
+            icon="search"
+            title={query.trim() ? `No schools matching "${query.trim()}"` : 'No schools yet'}
+            body={
+              query.trim()
+                ? "Check the spelling — or if yours genuinely isn't listed, ask us to add it below."
+                : 'Schools get added as students join. Ask us to add yours below.'
+            }
+          />
         </View>
       ) : (
         <ScrollView className="mt-3 max-h-[300px]">
@@ -558,7 +569,7 @@ function SchoolRow({
         className="h-[44px] w-[44px] items-center justify-center"
         style={{ borderRadius: 15, backgroundColor: selected ? '#6BF2C2' : '#4A474B' }}
       >
-        <Text style={{ fontSize: 21 }}>🏫</Text>
+        <AuraIcon name="school" size={22} color="#C1C0C0" />
       </View>
       <View className="flex-1">
         <Text className="font-nunito-900 text-[15.5px]" style={{ color: selected ? '#2D2A2E' : '#FFFFFF' }}>

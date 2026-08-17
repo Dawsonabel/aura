@@ -3,6 +3,50 @@ main = "src/index.ts"
 compatibility_date = "2025-07-18"
 compatibility_flags = ["nodejs_compat"]
 
+# ---------------------------------------------------------------------------
+# Gameplay / economy dials. Every one is OPTIONAL — src/tuning.ts holds the defaults, and anything
+# unset here just uses them. Values are read per request, so changing one takes effect on the next
+# call: edit it in the Cloudflare dashboard (Workers > aura-api > Settings > Variables) and it's live
+# with no deploy, no app release, no App Store review.
+#
+# Uncomment to override. A non-numeric or negative value is ignored rather than applied, so a typo
+# can't take the game down.
+#
+# [vars]
+# AURA_DAILY_ROUND_LIMIT = "3"        # rounds per day — the biggest dial in the product
+# AURA_REROLL_COST = "3"              # candy to swap one question's four candidates
+# AURA_ROUND_PAYOUT = "10"            # coins for finishing a round — the Shop advertises this
+# AURA_ROUND_PAYOUT_GODMODE = "10"    # level on purpose: the sub sells clues, not a coin multiplier
+# AURA_CLUE_GRADE_COST = "1"          # clue 2 of 4 — their grade
+# AURA_CLUE_INITIAL_COST = "1"        # clue 3 of 4 — their first initial
+# AURA_FREE_CLUE_HOUR_UTC = "20"      # one free clue a day lands at this UTC hour; 24 disables it
+# AURA_STREAK_BONUS = "5"             # coins for keeping the streak alive
+# AURA_INVITE_BONUS = "25"            # advertised in the Shop; NOT paid out — no invite attribution yet
+# AURA_COIN_PACK_SMALL = "25"         # pack sizes only — prices come from StoreKit, localized
+# AURA_COIN_PACK_MEDIUM = "100"
+# AURA_COIN_PACK_LARGE = "300"
+# AURA_BOOST_RANDOM_COST = "100"
+# AURA_BOOST_RANDOM_USES = "3"
+# AURA_BOOST_CRUSH_COST = "300"
+# AURA_BOOST_CRUSH_USES = "6"
+# AURA_MAX_BOOST_PER_ROUND = "4"
+# AURA_QUESTIONS_PER_ROUND = "12"
+# AURA_WEIGHT_FOLLOWING = "3"         # how many times likelier a followed classmate is than a stranger
+# AURA_WEIGHT_FOLLOWER = "2"          # someone who follows you, but you don't follow back
+# AURA_WEIGHT_SCHOOLMATE = "1"        # the baseline everything else is a multiple of
+# AURA_FLAME_LIFETIME_DAYS = "30"
+# AURA_COHORT_FLOOR = "5"             # anonymity floor — lowering trades away privacy, not a growth lever
+# AURA_SCHOOL_UNLOCK_THRESHOLD = "20" # people before the Ranks board unlocks
+# AURA_BOARD_LIMIT = "25"
+# AURA_BOARD_TOP_TIER = "10"
+# ---------------------------------------------------------------------------
+
+# 7A's daily "round is live" push. 20:15 UTC on school days — mid-afternoon US Eastern, which is the
+# design's 3:15pm. It's one fixed UTC time for everyone, so the hour drifts by timezone; each user's
+# own quiet hours are still honoured per their stored offset (see inQuietHours in src/push.ts).
+[triggers]
+crons = ["15 20 * * 1-5"]
+
 # Secrets (DATABASE_URL, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN) are supplied via
 # .dev.vars locally (gitignored, same idea as the root .env) and `wrangler secret put` in production —
 # never committed here.

@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { resetDb, callApi, createTestUser, joinSchool, seedPolls, type TestUser } from './helpers';
+import { resetDb, callApi, cleanupAll, createTestUser, joinSchool, seedPolls, type TestUser } from './helpers';
 
 let admin: TestUser, me: TestUser, mate: TestUser;
 
@@ -15,11 +15,7 @@ before(async () => {
   await joinSchool(mate.token, schoolId);
   await seedPolls(admin.token, 4);
 });
-after(async () => {
-  await admin.cleanup();
-  await me.cleanup();
-  await mate.cleanup();
-});
+after(() => cleanupAll(admin, me, mate));
 
 test('boostRandom is rejected when the user cannot afford it', async () => {
   // fresh users start with 2 coins; boostRandom costs 100
@@ -33,8 +29,11 @@ test('boostCrush is rejected for an invalid target', async () => {
 });
 
 test('completing a round pays out coins exactly once (no double-claim)', async () => {
-  const roundRes = await callApi('{ pollRound { roundId polls { questionId } } }', undefined, me.token);
-  const { roundId, polls } = roundRes.body.data.pollRound;
+  /* Asserted against `roundPayout` rather than a literal, so raising the dial doesn't break the test —
+     and so the test actually checks the invariant that matters: the number the Shop advertises ("+10")
+     is the number completeRound pays. A literal 2 here silently encoded the old payout. */
+  const roundRes = await callApi('{ pollRound { roundId roundPayout polls { questionId } } }', undefined, me.token);
+  const { roundId, roundPayout, polls } = roundRes.body.data.pollRound;
 
   const vote = await callApi(
     'mutation($q:ID!,$t:ID!,$r:ID!){ vote(questionId:$q, targetId:$t, roundId:$r){ ok } }',
@@ -45,8 +44,8 @@ test('completing a round pays out coins exactly once (no double-claim)', async (
 
   const before1 = await callApi('{ me { coins } }', undefined, me.token);
   const first = await callApi('mutation($r:ID!){ completeRound(roundId:$r){ coins earned already } }', { r: roundId }, me.token);
-  assert.equal(first.body.data.completeRound.earned, 2); // non-God-Mode payout
-  assert.equal(first.body.data.completeRound.coins, before1.body.data.me.coins + 2);
+  assert.equal(first.body.data.completeRound.earned, roundPayout);
+  assert.equal(first.body.data.completeRound.coins, before1.body.data.me.coins + roundPayout);
 
   const second = await callApi('mutation($r:ID!){ completeRound(roundId:$r){ coins earned already } }', { r: roundId }, me.token);
   assert.equal(second.body.data.completeRound.already, true);

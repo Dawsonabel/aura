@@ -16,6 +16,8 @@ export const Route = createFileRoute('/_app/inbox')({
 
 function flameSubtitle(f: Flame): string {
   if (f.anonymous) return `🔒 Anonymous · ${f.grade}`;
+  // Mirrors mobile: the sender's cohort is too small for gender/grade to be anonymous.
+  if (f.detailHidden) return f.name ? `From ${f.name}` : 'Someone at your school picked you';
   let base = f.name ? `From ${f.name} · ${f.grade}` : f.initial ? `From ${f.initial}••• · ${f.grade}` : `Someone in ${f.grade} picked you`;
   if (f.repeatAdmirer) base += ` · 🔥×${f.pickCount}`;
   return base;
@@ -151,8 +153,13 @@ function FlameDetail({ flame, bonusRevealsLeft, onClose }: { flame: Flame; bonus
             <dd>{genderLabel}</dd>
           </>
         )}
-        <dt>Grade</dt>
-        <dd>{flame.grade}</dd>
+        {/* Withheld along with gender when the sender's cohort is too small — see COHORT_FLOOR. */}
+        {!flame.detailHidden && (
+          <>
+            <dt>Grade</dt>
+            <dd>{flame.grade}</dd>
+          </>
+        )}
         <dt>First initial</dt>
         <dd>{flame.anonymous ? '🔒' : shown ? flame.initial || '?' : 'X'}</dd>
         {flame.name && (

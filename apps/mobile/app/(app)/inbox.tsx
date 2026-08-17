@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@clerk/expo';
 import { useFlames, type Flame } from '../../src/hooks/useFlames';
 import { useMarkFlamesRead } from '../../src/hooks/useMarkFlamesRead';
@@ -10,17 +12,30 @@ import { useRevealFlameName } from '../../src/hooks/useRevealFlameName';
 import { Overlay } from '../../src/components/Overlay';
 import { GodModeOverlay } from '../../src/components/GodModeOverlay';
 import { flameGenderLabel } from '@aura/api-client';
+import { EmptyState, InlineFailure, SkeletonBlock, SkeletonRows } from '../../src/components/stateKit';
+import { InfoCard } from '../../src/components/settingsKit';
+import { ToyShadow } from '../../src/components/ToyShadow';
 
+/* 12A's row subtitles: "Girl · 11th grade · 🔒 name hidden" / "… · starts with J" /
+   "✅ Revealed: Maya R." / "… · already opened". Gender is omitted when the voter chose not to say
+   (flameGenderLabel returns null), so the line just starts with the grade. */
 function flameSubtitle(f: Flame): string {
   if (f.anonymous) return `🔒 Anonymous · ${f.grade}`;
-  let base = f.name ? `From ${f.name} · ${f.grade}` : f.initial ? `From ${f.initial}••• · ${f.grade}` : `Someone in ${f.grade} picked you`;
-  if (f.repeatAdmirer) base += ` · 🔥×${f.pickCount}`;
-  return base;
+  if (f.name) return `✅ Revealed: ${f.name}`;
+  /* Too few people share this sender's gender+grade for those to be anonymous, so the server withheld
+     them — see COHORT_FLOOR. The row still says whether it's been opened. */
+  if (f.detailHidden) return f.initial ? `Someone at your school · starts with ${f.initial}` : f.unread ? 'Someone at your school · 🔒 name hidden' : 'Someone at your school · already opened';
+
+  const gradeLabel = /^\d+$/.test(f.grade) ? `${f.grade}th grade` : f.grade;
+  const parts = [flameGenderLabel(f.gender), gradeLabel].filter(Boolean) as string[];
+  parts.push(f.initial ? `starts with ${f.initial}` : f.unread ? '🔒 name hidden' : 'already opened');
+  return parts.join(' · ');
 }
 
 export default function Inbox() {
   const { isSignedIn } = useAuth();
-  const { data, isLoading } = useFlames();
+  const router = useRouter();
+  const { data, isLoading, isError, refetch } = useFlames();
   const markFlamesRead = useMarkFlamesRead();
   const { data: notifications } = useNotifications();
   const markNotificationsRead = useMarkNotificationsRead();
@@ -60,77 +75,237 @@ export default function Inbox() {
     if (shownNotifications?.length) markNotificationsRead.mutate();
   }, [shownNotifications, markNotificationsRead.mutate]);
 
-  if (isLoading || !data) return <Text>Loading…</Text>;
+  /* 10A: the real title renders immediately and only the data-dependent regions block out — the
+     banner at its true height, then four staggered rows. A failure gets an inline retry instead,
+     since the header above it is perfectly fine. This screen is still pre-redesign otherwise, so the
+     skeleton mirrors the layout it has today. */
+  if (isError) {
+    return (
+      <InboxShell subtitle={null}>
+        <View className="mt-5">
+          <InlineFailure
+            icon="aura"
+            title="Your aura didn't load"
+            body="They're safe — we just couldn't fetch them. Nothing is lost."
+            onRetry={() => refetch()}
+          />
+        </View>
+      </InboxShell>
+    );
+  }
+  if (isLoading || !data) {
+    // 10A: real title immediately, only the data-dependent regions blocked out.
+    return (
+      <InboxShell subtitle={null}>
+        <View className="mt-5">
+          <SkeletonBlock height={72} radius={24} />
+        </View>
+        <View className="mt-5">
+          <SkeletonRows n={4} />
+        </View>
+      </InboxShell>
+    );
+  }
 
   // Excludes anonymous flames — FlameDetailAction always shows the "anonymous (God Mode)" dead
   // end for those, never the bonus name-reveal this banner promises.
   const secretAdmirer = data.flames.some(f => f.repeatAdmirer && !f.name && !f.anonymous);
   const selectedFlame = data.flames.find(f => f.id === selectedFlameId) || null;
 
+  const maxPickCount = data.flames.reduce((max, f) => (f.repeatAdmirer ? Math.max(max, f.pickCount) : max), 0);
+
+  /* 12A's subtitle. `admirerCount` is the last 7 days and the list is the last 30, so a user with
+     older-but-not-expired flames would otherwise read "Nobody's picked you yet this week" above a
+     full list. Three cases, each true of the data actually on screen. */
+  const subtitle =
+    data.admirerCount > 0
+      ? `${data.admirerCount} ${data.admirerCount === 1 ? 'person' : 'people'} picked you this week 👀`
+      : data.flames.length > 0
+        ? `+${data.flames.length} aura in the last 30 days`
+        : "Nobody's picked you yet this week";
+
   return (
-    <ScrollView>
-      <View className="gap-3">
-        {data.godMode ? (
-          <View className="rounded bg-purple-100 p-3">
-            <Text className="text-sm">👑 God Mode active — hints unlocked</Text>
-          </View>
-        ) : (
-          <Pressable onPress={() => setGodModeOpen(true)} className="rounded bg-gray-100 p-3">
-            <Text className="text-sm">👀 See Who Likes You</Text>
-          </Pressable>
-        )}
-
-        {secretAdmirer && (
-          <View className="rounded bg-orange-100 p-3">
-            <Text className="text-sm">
-              🔥 <Text className="font-bold">You have a secret admirer!</Text>{' '}
-              {data.godMode ? (
-                'Open their flame to use a bonus name reveal.'
-              ) : (
-                <Text className="underline" onPress={() => setGodModeOpen(true)}>
-                  Unlock God Mode to reveal them.
-                </Text>
-              )}
-            </Text>
-          </View>
-        )}
-
-        {shownNotifications?.map(n => (
-          <View key={n.id} className="flex-row items-center gap-2 rounded bg-blue-50 p-2">
-            <Text>{n.emoji || '🔔'}</Text>
-            <Text className="text-sm">{n.text}</Text>
-          </View>
-        ))}
-
-        {data.flames.length === 0 ? (
-          <Text className="text-gray-500">No flames yet.{'\n'}Answer polls so friends can flame you up! 🔥</Text>
-        ) : (
-          data.flames.map(f => (
-            <Pressable
-              key={f.id}
-              onPress={() => setSelectedFlameId(f.id)}
-              className="flex-row items-center justify-between rounded border border-gray-300 p-3"
-            >
+    <InboxShell subtitle={subtitle}>
+      {data.flames.length === 0 ? (
+        <FlamesEmpty onVote={() => router.replace('/aura')} />
+      ) : (
+        <>
+          {/* Mint God Mode card. The design's "free for 3 days" is dropped — there is no trial
+              configured in StoreKit, and this is the second time that banner has promised something
+              the purchase flow doesn't do. */}
+          {data.godMode ? (
+            <View className="mt-5 flex-row items-center gap-3 rounded-24 bg-raised px-[19px] py-[17px]">
               <View className="flex-1">
-                <View className="flex-row items-center">
-                  <Text className="font-medium">{f.q}</Text>
-                  {f.repeatAdmirer && !f.name && (
-                    <Text className="ml-2 rounded bg-orange-200 px-1 text-xs">🔥 secret admirer</Text>
-                  )}
-                </View>
-                <Text className="text-sm text-gray-500">{flameSubtitle(f)}</Text>
+                <Text className="font-fredoka-700 text-[20px] text-white">God Mode is on</Text>
+                <Text className="font-nunito-800 mt-[2px] text-[12.5px] text-ink-muted">
+                  Every hint unlocked, no coins needed
+                </Text>
               </View>
-              <Text>{f.anonymous ? '🔒' : f.revealed || f.godMode ? '›' : '🔒'}</Text>
-            </Pressable>
-          ))
-        )}
-      </View>
+              <Text style={{ fontSize: 26 }}>👑</Text>
+            </View>
+          ) : (
+            <View className="mt-5">
+              <ToyShadow depth={5} shadowColor="#3FBF95" backgroundColor="#6BF2C2" radius={24} onPress={() => setGodModeOpen(true)}>
+                <View className="flex-row items-center gap-3 px-[19px] py-[17px]">
+                  <View className="flex-1">
+                    <Text className="font-fredoka-700 text-[20px]" style={{ color: '#0A3B2C' }}>
+                      See who picked you
+                    </Text>
+                    <Text className="font-nunito-800 mt-[2px] text-[12.5px]" style={{ color: '#12664C' }}>
+                      God Mode · unlocks every name
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 26 }}>😈</Text>
+                </View>
+              </ToyShadow>
+            </View>
+          )}
+
+          {/* Repeat admirer. Count only — naming them is what God Mode is for. */}
+          {maxPickCount >= 2 && (
+            <View className="mt-[14px] flex-row items-center gap-[11px] rounded-20 bg-raised px-4 py-[14px]">
+              <Text style={{ fontSize: 19 }}>🫣</Text>
+              <Text className="font-nunito-800 flex-1 text-[13.5px] leading-[19px]" style={{ color: '#FFC9E4' }}>
+                Somebody picked you {maxPickCount} times. Bold of them.
+              </Text>
+            </View>
+          )}
+
+          {shownNotifications?.map(n => (
+            <View key={n.id} className="mt-[14px] flex-row items-center gap-[11px] rounded-20 bg-surface px-4 py-[14px]">
+              <Text style={{ fontSize: 17 }}>{n.emoji || '🔔'}</Text>
+              <Text className="font-nunito-700 flex-1 text-[13px] leading-[18.5px] text-ink-secondary">{n.text}</Text>
+            </View>
+          ))}
+
+          <View className="mt-5 gap-[10px]">
+            {data.flames.map(f => (
+              <FlameRow key={f.id} flame={f} onPress={() => setSelectedFlameId(f.id)} />
+            ))}
+          </View>
+
+          <Text className="font-nunito-800 py-4 text-center text-[12.5px] text-ink-faint">
+            aura fades after 30 days ✨
+          </Text>
+        </>
+      )}
 
       {selectedFlame && (
         <FlameDetail flame={selectedFlame} bonusRevealsLeft={data.bonusRevealsLeft} onClose={() => setSelectedFlameId(null)} />
       )}
       {godModeOpen && <GodModeOverlay onClose={() => setGodModeOpen(false)} />}
+    </InboxShell>
+  );
+}
+
+/* Shared frame so the title and subtitle render identically across the loading, failed, empty and
+   populated states — 10A's rule that real headers appear immediately depends on there being one. */
+function InboxShell({ subtitle, children }: { subtitle: string | null; children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <ScrollView
+      className="flex-1 bg-ground"
+      contentContainerStyle={{ paddingTop: insets.top + 14, paddingHorizontal: 21, paddingBottom: 8 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text className="font-fredoka-700 text-[36px] leading-[38px] text-white">Your aura</Text>
+      {subtitle ? (
+        <Text className="font-nunito-700 mt-[6px] text-[14px] text-ink-muted">{subtitle}</Text>
+      ) : (
+        <View className="mt-[6px]">
+          <SkeletonBlock height={14} width={190} />
+        </View>
+      )}
+      {children}
     </ScrollView>
+  );
+}
+
+/* 12A's four row states, driven entirely by data that already existed:
+     unread            → cream card + NEW pill
+     partly revealed   → cream card, subtitle carries the initial hint
+     revealed by name  → cream card, mint "✅ Revealed: <name>"
+     already opened    → dark `surface` card, muted text
+   The emoji tile takes the poll's own colour, which is why it differs per row. */
+function FlameRow({ flame, onPress }: { flame: Flame; onPress: () => void }) {
+  const opened = !flame.unread;
+  const body = (
+    <View className="flex-row items-center gap-[13px] p-[15px]">
+      <View
+        className="h-[46px] w-[46px] items-center justify-center"
+        style={{ borderRadius: 16, backgroundColor: opened ? '#4A474B' : flame.color || '#FF5CA8' }}
+      >
+        <Text style={{ fontSize: 23 }}>{flame.emoji}</Text>
+      </View>
+      <View className="flex-1">
+        <Text
+          className="font-nunito-900 text-[15px] leading-[19px]"
+          style={{ color: opened ? '#C1C0C0' : '#2D2A2E' }}
+        >
+          {flame.q}
+        </Text>
+        <Text className="font-nunito-700 mt-[3px] text-[12.5px]" style={{ color: rowSubtitleColor(flame, opened) }}>
+          {flameSubtitle(flame)}
+        </Text>
+      </View>
+      {flame.unread ? (
+        <View className="rounded-pill px-[10px] py-[5px]" style={{ backgroundColor: '#FF5CA8' }}>
+          <Text className="font-nunito-900 text-[11px] text-white">NEW</Text>
+        </View>
+      ) : (
+        <Text className="text-[20px]" style={{ color: opened ? '#727074' : '#B0AEB2' }}>
+          ›
+        </Text>
+      )}
+    </View>
+  );
+
+  // Opened rows drop the cream card and the toy shadow — the design's way of saying "spent".
+  if (opened) {
+    return (
+      <Pressable onPress={onPress} className="rounded-22 bg-surface">
+        {body}
+      </Pressable>
+    );
+  }
+  return (
+    <ToyShadow depth={4} shadowColor="#D9C7AF" backgroundColor="#FFF6E8" radius={22} onPress={onPress}>
+      {body}
+    </ToyShadow>
+  );
+}
+
+/** Mint for a resolved name, otherwise the muted grey of whichever card it sits on. */
+function rowSubtitleColor(flame: Flame, opened: boolean): string {
+  if (flame.name && !flame.anonymous) return '#2E8F6E';
+  return opened ? '#848286' : '#8B888D';
+}
+
+/* Empty state, per the design's note: no God Mode banner when there is nothing to unlock — the ask
+   is voting, not paying. */
+function FlamesEmpty({ onVote }: { onVote: () => void }) {
+  return (
+    <>
+      <View className="mt-5">
+        <EmptyState
+          icon="aura"
+          iconColor="#7C5CFF"
+          title="No aura in here yet"
+          body="People who pick you stay anonymous, so this fills up without warning. Voting puts you in more rounds."
+          wobble
+          ctaLabel="Vote in today's round"
+          onCta={onVote}
+        />
+      </View>
+      <View className="mt-4 gap-[9px]">
+        <InfoCard icon="bell">
+          We'll notify you the second someone picks you — a pick never says who until you scratch it.
+        </InfoCard>
+        <InfoCard icon="mail">
+          More classmates at your school means more people who can pick you.
+        </InfoCard>
+      </View>
+    </>
   );
 }
 
@@ -144,13 +319,14 @@ function FlameDetail({ flame, bonusRevealsLeft, onClose }: { flame: Flame; bonus
     <Overlay onClose={onClose} style={{ borderTopWidth: 8, borderTopColor: flame.color }}>
       <Text className="text-3xl">{flame.emoji}</Text>
       <Text className="text-lg font-semibold">{flame.q}</Text>
-      {flame.repeatAdmirer && <Text className="text-sm text-orange-600">🔥 This person flamed you {flame.pickCount}×</Text>}
+      {flame.repeatAdmirer && <Text className="text-sm text-orange-600">✨ This person picked you {flame.pickCount}×</Text>}
 
       <View className="my-4 flex-row flex-wrap gap-y-1">
         {/* Omitted entirely when the voter chose "Rather not say" — printing "Rather not say" as
             their gender would hand out the one thing they declined to share. */}
         {genderLabel && <DetailRow label="Gender" value={genderLabel} />}
-        <DetailRow label="Grade" value={flame.grade} />
+        {/* Both are withheld together when the sender's cohort is too small — see COHORT_FLOOR. */}
+        {!flame.detailHidden && <DetailRow label="Grade" value={flame.grade} />}
         <DetailRow label="First initial" value={flame.anonymous ? '🔒' : shown ? flame.initial || '?' : 'X'} />
         {flame.name && <DetailRow label="Name" value={flame.name} />}
       </View>

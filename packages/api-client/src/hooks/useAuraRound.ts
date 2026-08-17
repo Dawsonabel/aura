@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useStartRound, type RoundChoice, type RoundPoll } from './useStartRound';
 import { useVote } from './useVote';
+import { useRerollQuestion } from './useRerollQuestion';
 import { useCompleteRound } from './useCompleteRound';
 import type { GqlFetch } from '../client';
 
-export type AuraMode = 'loading' | 'poll' | 'congrats' | 'playagain';
-
-function shuffled<T>(items: T[]): T[] {
-  const copy = items.slice();
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
+/* 'failed' and 'empty' exist because startRound previously had an onSuccess and no onError: a
+   failed round left mode at 'loading' forever, so both apps sat on a loading skeleton with no
+   retry and no explanation. 'empty' is the other silent dead end — a round that comes back with
+   no polls (a school with none enabled, or too few candidates to fill a grid) also left `poll`
+   null against mode 'poll'. 10A names both states, so the hook now distinguishes them. */
+/* 'out' is the rationing state: the daily allowance is spent, so there is nothing to play until
+   nextRoundAt. Distinct from 'empty' (the school has no polls configured at all) because the two need
+   opposite messages — one is "come back later", the other is "nothing exists yet". */
+export type AuraMode = 'loading' | 'poll' | 'congrats' | 'playagain' | 'failed' | 'empty' | 'out';
 
 export type UseAuraRoundParams = {
   gqlFetch: GqlFetch;
@@ -30,6 +30,7 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
   const startRound = useStartRound({ gqlFetch, getToken });
   const vote = useVote({ gqlFetch, getToken });
   const completeRound = useCompleteRound({ gqlFetch, getToken });
+  const rerollQuestion = useRerollQuestion({ gqlFetch, getToken });
 
   const [mode, setMode] = useState<AuraMode>('loading');
   const [polls, setPolls] = useState<RoundPoll[]>([]);
@@ -39,6 +40,14 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
   const [shuffleUsed, setShuffleUsed] = useState(false);
   const [choices, setChoices] = useState<RoundChoice[]>([]);
   const [earned, setEarned] = useState(0);
+  const [roundsLeft, setRoundsLeft] = useState(0);
+  const [dailyLimit, setDailyLimit] = useState(0);
+  const [nextRoundAt, setNextRoundAt] = useState<string | null>(null);
+  // Priced by the server, never hardcoded here — see DESIGN-REQUESTS §7.2 on prices drifting.
+  const [rerollCost, setRerollCost] = useState(0);
+  const [roundPayout, setRoundPayout] = useState(0);
+  const [votesToday, setVotesToday] = useState(0);
+  const [followWeightFactor, setFollowWeightFactor] = useState(0);
 
   function start() {
     setMode('loading');
@@ -50,8 +59,20 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
         setAnswered(false);
         setShuffleUsed(false);
         setChoices(round.polls[0]?.choices ?? []);
-        setMode('poll');
-      }
+        setRoundsLeft(round.roundsLeft);
+        setDailyLimit(round.dailyLimit);
+        setNextRoundAt(round.nextRoundAt);
+        setRerollCost(round.rerollCost);
+        setRoundPayout(round.roundPayout);
+        setVotesToday(round.votesToday);
+        setFollowWeightFactor(round.followWeightFactor);
+        /* Three no-poll cases, and they are not the same thing: the allowance is spent ('out'), or the
+           school has no polls at all ('empty'). Reading roundsLeft first keeps them apart. */
+        if (round.polls.length > 0) setMode('poll');
+        else if (round.roundsLeft <= 0) setMode('out');
+        else setMode('empty');
+      },
+      onError: () => setMode('failed')
     });
   }
 
@@ -73,10 +94,20 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
     vote.mutate({ questionId: q.questionId, targetId, roundId });
   }
 
-  function shuffle() {
-    if (answered || shuffleUsed) return;
+  /* The paid reroll, replacing what used to be a free client-side reshuffle of the same four people —
+     a button labelled "new four" that never fetched anybody new. Still capped at one per question, so
+     coins can't buy an unlimited hunt through the school for one prompt. */
+  function reroll() {
+    if (answered || shuffleUsed || !polls[index]) return;
     setShuffleUsed(true);
-    setChoices(shuffled(choices));
+    rerollQuestion.mutate(
+      { roundId, questionId: polls[index].questionId },
+      {
+        onSuccess: result => setChoices(result.choices),
+        // Re-enable on failure (not enough coins, nobody new) so the attempt isn't silently spent.
+        onError: () => setShuffleUsed(false)
+      }
+    );
   }
 
   function advance() {
@@ -106,9 +137,25 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
     shuffleUsed,
     earned,
     pick,
-    shuffle,
+    reroll,
+    /** Alias kept so apps/web's existing Vote screen keeps compiling; same paid reroll underneath. */
+    shuffle: reroll,
+    rerollPending: rerollQuestion.isPending,
+    rerollError: rerollQuestion.error instanceof Error ? rerollQuestion.error.message : null,
+    roundsLeft,
+    dailyLimit,
+    rerollCost,
+    roundPayout,
+    votesToday,
+    followWeightFactor,
+    nextRoundAt,
+    /** Which round of the daily allowance this is — the 1-of-3 the pips render. */
+    roundNumber: Math.max(1, dailyLimit - roundsLeft),
     advance,
     cashOut: () => setMode('playagain'),
-    playAgain: start
+    playAgain: start,
+    /** Retry after 'failed' (or 'empty' — polls may have been enabled since). */
+    retry: start,
+    error: startRound.error instanceof Error ? startRound.error.message : null
   };
 }

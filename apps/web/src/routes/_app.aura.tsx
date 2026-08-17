@@ -8,10 +8,17 @@ export const Route = createFileRoute('/_app/aura')({
 });
 
 export function Aura() {
-  const { mode, poll, choices, count, total, answered, shuffleUsed, earned, pick, shuffle, advance, cashOut, playAgain } = useAuraRound();
+  const { mode, poll, choices, count, total, answered, shuffleUsed, earned, pick, shuffle, advance, cashOut, playAgain, retry } =
+    useAuraRound();
   const { data: me } = useMe();
 
   if (mode === 'loading') return <LoadingView />;
+  /* Before the shared hook gained these, a failed startRound left mode at 'loading' and this screen
+     showed "Loading…" forever. Plain treatment here — apps/web has no design pass for state screens
+     (10A is the mobile set) — but a dead end with a retry beats a dead end without one. */
+  if (mode === 'failed') return <RoundProblemView title="Today's round didn't load." onRetry={retry} />;
+  if (mode === 'empty')
+    return <RoundProblemView title="No questions are set up for your school yet." onRetry={retry} />;
   if (mode === 'congrats') return <CongratsView earned={earned} godMode={!!me?.godMode} onCashOut={cashOut} />;
   if (mode === 'playagain') return <PlayAgainView onPlayAgain={playAgain} />;
 
@@ -29,6 +36,17 @@ export function Aura() {
       onShuffle={shuffle}
       onAdvance={advance}
     />
+  );
+}
+
+function RoundProblemView({ title, onRetry }: { title: string; onRetry: () => void }) {
+  return (
+    <main className="p-4">
+      <p className="mb-3">{title}</p>
+      <button type="button" onClick={onRetry} className="rounded border px-3 py-2">
+        Try again
+      </button>
+    </main>
   );
 }
 

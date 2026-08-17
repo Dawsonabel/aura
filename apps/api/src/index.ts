@@ -4,6 +4,8 @@ import { makeDb } from './db';
 import { makeRateLimiter } from './ratelimit';
 import { makeRoundStore } from './rounds';
 import { verifyClerkRequest } from './auth';
+import { sendRoundAnnouncement } from './push';
+import { resolveTuning } from './tuning';
 
 const DEV_ORIGIN = 'http://localhost:3000'; // apps/web's Vite dev server, see apps/web/vite.config.ts
 
@@ -23,7 +25,7 @@ function corsHeaders(origin: string | null, env: Env): HeadersInit {
 // Yoga merges the initial context ({req, env, ip}, below) with whatever `context` returns — the
 // schema's resolvers see that full merge, so GraphQLContext (schema.ts) has to describe the whole
 // thing, not just the new db/ratelimit/rounds/me fields, or the two generics fight each other.
-const yoga = createYoga<{ req: Request; env: Env; ip: string }>({
+const yoga = createYoga<{ req: Request; env: Env; ip: string; waitUntil: (p: Promise<unknown>) => void }>({
   schema,
   graphqlEndpoint: '/graphql',
   cors: false, // handled by hand in fetch() below, see corsHeaders
@@ -32,7 +34,7 @@ const yoga = createYoga<{ req: Request; env: Env; ip: string }>({
   // `e.message` directly in its JSON error responses. Yoga's default error masking would otherwise
   // flatten all of these to a generic "Unexpected error." before they reach the client.
   maskedErrors: { maskError: (error, message) => (error instanceof Error ? error : new Error(message)) },
-  context: async ({ req, env, ip }): Promise<GraphQLContext> => {
+  context: async ({ req, env, ip, waitUntil }): Promise<GraphQLContext> => {
     const db = makeDb(env.DATABASE_URL);
 
     const claims = await verifyClerkRequest(req, env.CLERK_SECRET_KEY);
@@ -57,22 +59,37 @@ const yoga = createYoga<{ req: Request; env: Env; ip: string }>({
       ratelimit: makeRateLimiter(env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN),
       rounds: makeRoundStore(env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN),
       me,
-      isAdmin
+      isAdmin,
+      waitUntil,
+      /* Resolved per request so a dashboard variable change takes effect on the next call — no deploy,
+         no restart. Cheap: it's a handful of Number() casts over an object already in memory. */
+      tuning: resolveTuning(env as unknown as Record<string, unknown>)
     };
   }
 });
 
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  /* `ctx` is threaded through purely for `waitUntil`: push sends (src/push.ts) must not add their
+     network latency to a vote, and must not be able to fail one either. An unawaited promise in a
+     Worker is cancelled the moment the response returns, so fire-and-forget only actually works via
+     waitUntil — which is why the context carries it rather than resolvers calling fetch loosely. */
+  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const origin = req.headers.get('origin');
     const headers = corsHeaders(origin, env);
 
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
 
     const ip = req.headers.get('cf-connecting-ip') || 'unknown';
-    const res = await yoga.fetch(req, { req, env, ip });
+    const res = await yoga.fetch(req, { req, env, ip, waitUntil: p => ctx.waitUntil(p) });
     const merged = new Headers(res.headers);
     for (const [key, value] of Object.entries(headers)) merged.set(key, value as string);
     return new Response(res.body, { status: res.status, headers: merged });
+  },
+
+  /* The daily "round is live" push (7A). Schedule lives in wrangler.toml; locally you can fire it
+     without waiting for the clock:
+       curl "http://127.0.0.1:8787/cdn-cgi/handler/scheduled"  */
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(sendRoundAnnouncement(makeDb(env.DATABASE_URL)));
   }
 };

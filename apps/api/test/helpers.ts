@@ -47,6 +47,16 @@ export async function resetDb(): Promise<void> {
   await runMigrations(sql);
 }
 
+/* The Worker's fetch handler takes Cloudflare's ExecutionContext so push sends can run through
+   waitUntil (see src/index.ts). Under node:test there's no runtime to provide one, so this stands in
+   and simply awaits nothing: a push send fired during a test would be a no-op rather than an
+   unhandled rejection, and no test asserts on delivery. */
+const TEST_EXECUTION_CTX = {
+  waitUntil: (_p: Promise<unknown>) => {},
+  passThroughOnException: () => {},
+  props: {}
+} as unknown as ExecutionContext;
+
 export async function callApi(query: string, variables?: Record<string, unknown>, token?: string) {
   const res = await worker.fetch(
     new Request('http://localhost/graphql', {
@@ -58,7 +68,8 @@ export async function callApi(query: string, variables?: Record<string, unknown>
       },
       body: JSON.stringify({ query, variables })
     }),
-    env
+    env,
+    TEST_EXECUTION_CTX
   );
   const body = await res.json();
   return { status: res.status, body: body as any };
@@ -66,12 +77,51 @@ export async function callApi(query: string, variables?: Record<string, unknown>
 
 export type TestUser = { userId: string; token: string; cleanup: () => Promise<void> };
 
-/** Creates a real Clerk user + session server-side (no OTP) and mints a real, verifiable JWT. */
+/* Deletes whatever test users actually exist, and never throws.
+
+   Use this in `after()` instead of bare `await user.cleanup()`. When a `before()` hook fails partway —
+   a Clerk hiccup, a Neon timeout — the later users are still `undefined`, and `undefined.cleanup()`
+   throws inside the teardown. That second error masks the first *and* abandons every remaining cleanup,
+   so the run leaks Clerk users. Leaked users are what eventually collide on the fixed phone-number
+   space and start failing whole files, so a fragile teardown quietly poisons future runs. */
+export async function cleanupAll(...users: (TestUser | undefined | null)[]): Promise<void> {
+  for (const u of users) {
+    if (!u) continue;
+    try {
+      await u.cleanup();
+    } catch {
+      // Best effort: one undeletable user must not strand the rest.
+    }
+  }
+}
+
+/* Creates a real Clerk user + session server-side (no OTP) and mints a real, verifiable JWT.
+
+   **The token is short-lived.** Clerk's default session token expires after about a minute, so a token
+   minted in a file's `before()` is unusable by any test that runs more than a minute later — and these
+   files take minutes. An expired token surfaces as `body.data === null` with the failure only visible
+   as "[auth] token rejected" in the log, not as a thrown error, so it reads like a broken query.
+
+   Rule of thumb: create the user (or admin) inside the test that uses it. */
 export async function createTestUser(opts: { admin?: boolean } = {}): Promise<TestUser> {
-  // NANP fictional-number convention: a real area code + reserved 555 exchange + random subscriber
-  // — Clerk validates phone format against real NANP rules, so a plain random 10-digit string
-  // (or "555" used as the area code, which isn't a real one) gets rejected as malformed.
-  const phone = '+1212555' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+  /* NANP fictional-number convention: a real area code + the reserved 555 exchange + a subscriber
+     number. Clerk validates against real NANP rules, so a plain random 10-digit string (or "555" as the
+     *area* code, which isn't a real one) is rejected as malformed.
+
+     The area code is randomised across a list of real ones rather than pinned to 212. With 212 alone the
+     whole space was the 4-digit subscriber — 10,000 numbers — and Clerk test users are never deleted, so
+     after enough runs a collision is likely rather than rare. It surfaces as `form_identifier_exists`
+     from createUser, which fails the *file* rather than a test, so it reads like a broken suite.
+
+     This widens the space ~30x, which buys time; it does not fix the underlying leak. Old test users
+     still accumulate in the Clerk instance forever and eventually need purging. */
+  const AREA_CODES = [
+    '212', '213', '312', '313', '404', '415', '469', '503', '512', '602',
+    '617', '619', '646', '702', '713', '714', '718', '773', '801', '804',
+    '817', '858', '901', '917', '925', '954', '972', '303', '206', '305'
+  ];
+  const area = AREA_CODES[Math.floor(Math.random() * AREA_CODES.length)];
+  const phone = `+1${area}555` + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
   const user = await clerk.users.createUser({
     phoneNumber: [phone], // this apps/api's pinned @clerk/backend (^1.21.0) creates admin-added numbers pre-verified by default, no explicit status param available
     skipPasswordRequirement: true, // real sign-in is phone-OTP via Clerk's UI — tests mint sessions directly, no password needed

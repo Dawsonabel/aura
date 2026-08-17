@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { resetDb, callApi, createTestUser, joinSchool, seedPolls, type TestUser } from './helpers';
+import { resetDb, callApi, cleanupAll, createTestUser, joinSchool, seedPolls, type TestUser } from './helpers';
 
 let admin: TestUser, me: TestUser, schoolmate: TestUser, outsider: TestUser;
 let schoolId: string;
@@ -26,12 +26,9 @@ before(async () => {
   round = r.body.data.pollRound;
   assert.ok(round.polls.length >= 3, 'need a few poll slots for the tests below');
 });
-after(async () => {
-  await admin.cleanup();
-  await me.cleanup();
-  await schoolmate.cleanup();
-  await outsider.cleanup();
-});
+// cleanupAll, not four bare awaits: a failed before() leaves some of these undefined, and the throw
+// would abandon the rest — see the note on cleanupAll.
+after(() => cleanupAll(admin, me, schoolmate, outsider));
 
 const VOTE = 'mutation($q:ID!,$t:ID!,$r:ID!){ vote(questionId:$q, targetId:$t, roundId:$r){ ok dup } }';
 

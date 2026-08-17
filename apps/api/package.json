@@ -7,7 +7,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "migrate": "node scripts/migrate.ts",
+    "migrate": "tsx scripts/migrate.ts",
     "test": "tsx --test --test-concurrency=1 test/*.test.ts"
   },
   "dependencies": {

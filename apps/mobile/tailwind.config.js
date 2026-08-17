@@ -35,7 +35,11 @@ module.exports = {
         yellow: { DEFAULT: '#FFD84D', shadow: '#D4AC17', ink: '#3A2A00', 'ink-soft': '#7A5A00' },
         purple: { DEFAULT: '#7C5CFF', shadow: '#5334D6' },
         orange: { DEFAULT: '#FF7A3D', shadow: '#C4501E', soft: '#FFE0CE' },
-        green: { revealed: '#2E8F6E' }
+        green: { revealed: '#2E8F6E' },
+        /* 15A's currency. Same yellow as the `yellow` family on purpose — nothing else in the app owns
+           yellow outright, so a coin is recognisable before it's read. Named separately so a future
+           change to the currency doesn't drag every superlative chip with it. */
+        coin: { DEFAULT: '#FFD84D', shadow: '#D4AC17', ink: '#3A2A00' }
       },
       fontFamily: {
         'fredoka-500': 'Fredoka_500Medium',
@@ -48,6 +52,7 @@ module.exports = {
       },
       borderRadius: {
         16: '16px',
+        18: '18px',
         20: '20px',
         22: '22px',
         24: '24px',

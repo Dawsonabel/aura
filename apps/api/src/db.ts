@@ -21,6 +21,8 @@ export type Boost = { id: string; byUserId: string; targetId: string | null; rem
 export type RawVote = {
   id: string; voterId: string; targetId: string; questionId: string | null;
   emoji: string; text: string; color: string; revealed: boolean; unread: boolean; ts: string;
+  /** 16A: the grade tile is paid now. `revealed` is its sibling and covers the first initial. */
+  gradeRevealed: boolean;
 };
 
 function rowToSchool(row: any): School {
@@ -62,7 +64,8 @@ function rowToRawVote(row: any): RawVote {
   return {
     id: row.id, voterId: row.voter_id, targetId: row.target_id, questionId: row.question_id,
     emoji: row.emoji, text: row.text, color: row.color, revealed: row.revealed, unread: row.unread,
-    ts: new Date(row.ts).toISOString()
+    ts: new Date(row.ts).toISOString(),
+    gradeRevealed: !!row.grade_revealed
   };
 }
 
@@ -181,6 +184,22 @@ export function makeDb(databaseUrl: string) {
       return rows.map(rowToReport);
     },
 
+    /* Reports *filed by* one user. Same shape as getReports, scoped by by_user_id — this is the
+       reporter's own data, so it isn't admin-gated (see the myReports resolver). */
+    async getReportsByUser(byUserId: string): Promise<Report[]> {
+      const rows = await sql`
+        SELECT r.id, r.by_user_id, r.target_id, r.reason, r.status, r.ts,
+               byu.data->>'firstName' AS by_first, byu.data->>'lastName' AS by_last,
+               tgt.data->>'firstName' AS target_first, tgt.data->>'lastName' AS target_last
+        FROM reports r
+        LEFT JOIN users byu ON byu.id = r.by_user_id
+        LEFT JOIN users tgt ON tgt.id = r.target_id
+        WHERE r.by_user_id = ${byUserId}
+        ORDER BY r.ts DESC
+      `;
+      return rows.map(rowToReport);
+    },
+
     async resolveReport(id: string): Promise<Report | null> {
       const rows = await sql`UPDATE reports SET status = 'resolved' WHERE id = ${id} RETURNING id`;
       if (!rows.length) return null;
@@ -211,6 +230,101 @@ export function makeDb(databaseUrl: string) {
         schools: schools[0].n, users: users[0].n, polls: polls[0].n,
         votes: votes[0].n, godMode: godMode[0].n, reports: reports[0].n
       };
+    },
+
+    /* ---------- profile ---------- */
+
+    /* Which prompts a person has been picked for, and how many times each — 13A's "what you've won"
+       chips. Grouped in SQL by the poll's own emoji/text/colour rather than by question_id, because
+       question_id is nullable (ON DELETE SET NULL) and a deleted poll would otherwise split into
+       untitled buckets. */
+    async getFlameCountsByPoll(
+      targetId: string,
+      sinceIso: string
+    ): Promise<{ emoji: string; text: string; color: string; n: number }[]> {
+      const rows = await sql`
+        SELECT emoji, text, color, COUNT(*)::int AS n
+        FROM votes
+        WHERE target_id = ${targetId} AND ts >= ${sinceIso}
+        GROUP BY emoji, text, color
+        ORDER BY n DESC, text
+      `;
+      return rows.map((r: any) => ({ emoji: r.emoji, text: r.text, color: r.color, n: r.n }));
+    },
+
+    /** Case-insensitive handle lookup — usernames have no DB constraint, so uniqueness is enforced here. */
+    async findByUsername(username: string): Promise<User | null> {
+      const rows = await sql`
+        SELECT id, school_id, clerk_user_id, data FROM users
+        WHERE lower(data->>'username') = ${username.toLowerCase()}
+        LIMIT 1
+      `;
+      return rows.length ? rowToUser(rows[0]) : null;
+    },
+
+    /* ---------- privacy / school size ---------- */
+
+    /* How many people at a school share each (gender, grade) pair.
+
+       This is the denominator for the anonymity floor in flames.ts: a flame that says "a girl in 11th
+       grade picked you" is only anonymous if there are enough girls in 11th to hide in. Counted in SQL
+       because it's a whole-school aggregate that would otherwise mean loading every roster row on
+       every Inbox open. */
+    async getCohortCounts(schoolId: string): Promise<{ gender: string | null; grade: string | null; n: number }[]> {
+      const rows = await sql`
+        SELECT data->>'gender' AS gender, data->>'grade' AS grade, COUNT(*)::int AS n
+        FROM users
+        WHERE school_id = ${schoolId}
+        GROUP BY gender, grade
+      `;
+      return rows.map((r: any) => ({ gender: r.gender, grade: r.grade, n: r.n }));
+    },
+
+    async countSchoolUsers(schoolId: string): Promise<number> {
+      const rows = await sql`SELECT COUNT(*)::int AS n FROM users WHERE school_id = ${schoolId}`;
+      return rows[0]?.n ?? 0;
+    },
+
+    /* ---------- ranks board ---------- */
+
+    /* Flames received per person at one school inside a time window, highest first.
+
+       Deliberately counts *every* vote in the window with no viewer-relative filtering: 8A's
+       "Blocked on the board" screen keeps rank and score truthful and masks only identity, so the
+       blocked check belongs in the resolver, not here. Aggregating in SQL rather than in JS because
+       this reads the whole school's vote history — the alternative is pulling every row per request.
+
+       Ties break on target_id so the ordering is stable between requests; without it two people on
+       the same score can swap places on a refresh and the board looks broken. */
+    async getBoard(
+      schoolId: string,
+      sinceIso: string,
+      grade?: string
+    ): Promise<{ userId: string; firstName: string | null; lastName: string | null; grade: string | null; flames: number }[]> {
+      const rows = grade
+        ? await sql`
+            SELECT v.target_id AS user_id, u.data->>'firstName' AS first, u.data->>'lastName' AS last,
+                   u.data->>'grade' AS grade, COUNT(*)::int AS flames
+            FROM votes v JOIN users u ON u.id = v.target_id
+            WHERE u.school_id = ${schoolId} AND v.ts >= ${sinceIso} AND u.data->>'grade' = ${grade}
+            GROUP BY v.target_id, first, last, grade
+            ORDER BY flames DESC, v.target_id
+          `
+        : await sql`
+            SELECT v.target_id AS user_id, u.data->>'firstName' AS first, u.data->>'lastName' AS last,
+                   u.data->>'grade' AS grade, COUNT(*)::int AS flames
+            FROM votes v JOIN users u ON u.id = v.target_id
+            WHERE u.school_id = ${schoolId} AND v.ts >= ${sinceIso}
+            GROUP BY v.target_id, first, last, grade
+            ORDER BY flames DESC, v.target_id
+          `;
+      return rows.map((r: any) => ({
+        userId: r.user_id,
+        firstName: r.first,
+        lastName: r.last,
+        grade: r.grade,
+        flames: r.flames
+      }));
     },
 
     /* ---------- users: batch/scoped lookups, mutation, identity ---------- */
@@ -300,6 +414,10 @@ export function makeDb(databaseUrl: string) {
      */
     async deleteUser(id: string): Promise<void> {
       await sql.transaction(tx => [
+        /* `following` has to be scrubbed here like every other id list, or a deleted account leaves a
+           dangling id in the rows of everyone who followed them — which inflates "Following N" on
+           Profile forever and can never be cleaned up by the user, since the person is gone. */
+        tx`UPDATE users SET data = jsonb_set(data, '{following}', COALESCE(data->'following','[]'::jsonb) - ${id}) WHERE data->'following' ? ${id}`,
         tx`UPDATE users SET data = jsonb_set(data, '{friendIds}', COALESCE(data->'friendIds','[]'::jsonb) - ${id}) WHERE data->'friendIds' ? ${id}`,
         tx`UPDATE users SET data = jsonb_set(data, '{blocked}', COALESCE(data->'blocked','[]'::jsonb) - ${id}) WHERE data->'blocked' ? ${id}`,
         tx`UPDATE users SET data = jsonb_set(data, '{revealedVoters}', COALESCE(data->'revealedVoters','[]'::jsonb) - ${id}) WHERE data->'revealedVoters' ? ${id}`,
@@ -350,14 +468,19 @@ export function makeDb(databaseUrl: string) {
 
     /** Raw votes for a target, newest first — flames.ts resolves the anonymous/hint/name logic against these. */
     async getRawVotesForTarget(targetId: string): Promise<RawVote[]> {
-      const rows = await sql`SELECT id, voter_id, target_id, question_id, emoji, text, color, revealed, unread, ts FROM votes WHERE target_id = ${targetId} ORDER BY ts DESC`;
+      const rows = await sql`SELECT id, voter_id, target_id, question_id, emoji, text, color, revealed, grade_revealed, unread, ts FROM votes WHERE target_id = ${targetId} ORDER BY ts DESC`;
       return rows.map(rowToRawVote);
     },
 
     /** Scoped by targetId so a user can only reveal/mark their own flames, mirroring server.js's `x.targetId===me.id` checks. */
     async getVoteForTarget(voteId: string, targetId: string): Promise<RawVote | null> {
-      const rows = await sql`SELECT id, voter_id, target_id, question_id, emoji, text, color, revealed, unread, ts FROM votes WHERE id = ${voteId} AND target_id = ${targetId}`;
+      const rows = await sql`SELECT id, voter_id, target_id, question_id, emoji, text, color, revealed, grade_revealed, unread, ts FROM votes WHERE id = ${voteId} AND target_id = ${targetId}`;
       return rows.length ? rowToRawVote(rows[0]) : null;
+    },
+
+    /** The grade tile. Separate column from `revealed` so the two clues are bought independently. */
+    async markVoteGradeRevealed(voteId: string): Promise<void> {
+      await sql`UPDATE votes SET grade_revealed = true WHERE id = ${voteId}`;
     },
 
     async markVoteRevealed(voteId: string): Promise<void> {
@@ -366,6 +489,72 @@ export function makeDb(databaseUrl: string) {
 
     async markAllVotesReadForTarget(targetId: string): Promise<void> {
       await sql`UPDATE votes SET unread = false WHERE target_id = ${targetId}`;
+    },
+
+    /* ---------- follow list (atomic) ---------- */
+
+    /* Add to / remove from `following` in SQL, against the row as it is *now*.
+
+       `updateUser` merges a whole `following` array that the resolver computed from a row read at the
+       start of its request. Two follows landing inside one round trip therefore each write their own
+       copy of the list, and one of them is silently lost. The People screen makes that easy to reach —
+       rows are individually tappable and people rapid-fire down the list — so these do the edit in the
+       database instead of read-modify-write.
+
+       `following` is read as a set everywhere (see followingOf), so deduplicating here is free and a
+       double-tap can't double-insert. The jsonb_typeof guard is for rows where the key is missing or
+       holds a JSON null rather than an array; coalesce alone doesn't catch the latter. */
+    async addFollowing(id: string, addIds: string[]): Promise<string[]> {
+      if (addIds.length === 0) return (await this.getUserById(id))?.following as string[] ?? [];
+      const rows = await sql`
+        UPDATE users SET data = jsonb_set(
+          data, '{following}',
+          (SELECT coalesce(jsonb_agg(DISTINCT elem), '[]'::jsonb)
+           FROM jsonb_array_elements(
+             CASE WHEN jsonb_typeof(data->'following') = 'array' THEN data->'following' ELSE '[]'::jsonb END
+             || ${JSON.stringify(addIds)}::jsonb
+           ) AS elem)
+        )
+        WHERE id = ${id}
+        RETURNING data->'following' AS following
+      `;
+      return (rows[0]?.following as string[]) ?? [];
+    },
+
+    /* How many people follow this user. JSONB containment (`@>`) against each row's `following` array,
+       which is the only direction the edge is stored in — there is no follower list, by design.
+
+       Counted rather than listed on purpose: the number is shown to you about yourself, and nothing
+       anywhere returns *who* follows you. */
+    async countFollowers(userId: string): Promise<number> {
+      const rows = await sql`
+        SELECT COUNT(*)::int AS n FROM users
+        WHERE id <> ${userId} AND data->'following' @> ${JSON.stringify([userId])}::jsonb
+      `;
+      return rows[0].n;
+    },
+
+    async removeFollowing(id: string, removeId: string): Promise<string[]> {
+      const rows = await sql`
+        UPDATE users SET data = jsonb_set(
+          data, '{following}',
+          (SELECT coalesce(jsonb_agg(elem), '[]'::jsonb)
+           FROM jsonb_array_elements(
+             CASE WHEN jsonb_typeof(data->'following') = 'array' THEN data->'following' ELSE '[]'::jsonb END
+           ) AS elem
+           WHERE elem <> to_jsonb(${removeId}::text))
+        )
+        WHERE id = ${id}
+        RETURNING data->'following' AS following
+      `;
+      return (rows[0]?.following as string[]) ?? [];
+    },
+
+    /* Votes this person has cast since an instant — the out-of-rounds screen's "24 votes cast today",
+       passed UTC midnight. Uses idx_votes_voter_id. */
+    async countVotesByVoterSince(voterId: string, sinceIso: string): Promise<number> {
+      const rows = await sql`SELECT COUNT(*)::int AS n FROM votes WHERE voter_id = ${voterId} AND ts >= ${sinceIso}`;
+      return rows[0].n;
     },
 
     async countVotesFromVoterToTarget(voterId: string, targetId: string): Promise<number> {

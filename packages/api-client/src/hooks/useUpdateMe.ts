@@ -1,15 +1,20 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { GqlFetch } from '../client';
 import type { Me } from './useMe';
+import type { SocialKey } from '../socials';
 
 const UPDATE_ME_MUTATION = /* GraphQL */ `
   mutation UpdateMe(
     $firstName: String, $lastName: String, $username: String, $gender: String, $grade: String,
-    $age: Int, $schoolId: ID, $onboarded: Boolean, $hideTopFlames: Boolean
+    $age: Int, $schoolId: ID, $onboarded: Boolean, $hideTopFlames: Boolean,
+    $notifyFlames: Boolean, $notifyRound: Boolean, $notifyFriendJoined: Boolean, $quietHours: Boolean,
+    $socials: SocialsInput
   ) {
     updateMe(
       firstName: $firstName, lastName: $lastName, username: $username, gender: $gender, grade: $grade,
-      age: $age, schoolId: $schoolId, onboarded: $onboarded, hideTopFlames: $hideTopFlames
+      age: $age, schoolId: $schoolId, onboarded: $onboarded, hideTopFlames: $hideTopFlames,
+      notifyFlames: $notifyFlames, notifyRound: $notifyRound, notifyFriendJoined: $notifyFriendJoined,
+      quietHours: $quietHours, socials: $socials
     ) {
       id
       firstName
@@ -21,6 +26,10 @@ const UPDATE_ME_MUTATION = /* GraphQL */ `
       schoolId
       onboarded
       hideTopFlames
+      notifyFlames
+      notifyRound
+      notifyFriendJoined
+      quietHours
     }
   }
 `;
@@ -35,6 +44,13 @@ export type UpdateMeInput = {
   schoolId?: string;
   onboarded?: boolean;
   hideTopFlames?: boolean;
+  notifyFlames?: boolean;
+  notifyRound?: boolean;
+  notifyFriendJoined?: boolean;
+  quietHours?: boolean;
+  /* Only the platform being edited needs sending — the server merges rather than replaces. An
+     explicit null clears one. */
+  socials?: Partial<Record<SocialKey, string | null>>;
 };
 
 type UpdateMeResult = { updateMe: { id: string; onboarded: boolean; [key: string]: unknown } };

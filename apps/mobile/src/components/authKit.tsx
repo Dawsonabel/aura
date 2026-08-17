@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { Animated, Pressable, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ToyShadow } from './ToyShadow';
+import { AuraIcon, type AuraIconName } from './AuraIcon';
 
 /* Building blocks for the auth flow, per the "Aura Auth · phone + code" (4A) design.
 
@@ -15,12 +16,19 @@ import { ToyShadow } from './ToyShadow';
    the Dynamic Island ends at 48px — so 56px is the design deliberately clearing it by 8px. That
    is the same thing the real safe-area inset expresses (~59px here), so we take whichever is
    larger: the design's intent on devices without an island, the true inset on devices with one. */
-export function AuthShell({ children }: { children: ReactNode }) {
+export function AuthShell({ children, aboveTabBar = false }: { children: ReactNode; aboveTabBar?: boolean }) {
   const insets = useSafeAreaInsets();
+  /* `aboveTabBar` is for the screens inside the (app) group. The tab bar below them already carries
+     the home-indicator inset and its own 12px of breathing room, so adding the shell's bottom inset
+     on top of that stacks two paddings and leaves the CTA floating well clear of the tab bar. The
+     auth screens have no tab bar and do need it, hence the flag rather than dropping it outright. */
   return (
     <View
       className="flex-1 bg-ground px-[21px]"
-      style={{ paddingTop: Math.max(insets.top, 56), paddingBottom: Math.max(insets.bottom, 32) }}
+      style={{
+        paddingTop: Math.max(insets.top, 56),
+        paddingBottom: aboveTabBar ? 0 : Math.max(insets.bottom, 32)
+      }}
     >
       {children}
     </View>
@@ -95,6 +103,8 @@ export function AuthHero({ badge, title, body }: { badge: string; title: string;
 }
 
 /** Cream sample-prompt pill with the 3px toy shadow. */
+/* Keeps its emoji on purpose: this shows a sample *poll prompt*, and 15A's rule is that polls are
+   content — they're rows in a table and new ones ship without a design pass. */
 export function PromptPill({ emoji, label }: { emoji: string; label: string }) {
   return (
     <ToyShadow depth={3} shadowColor="#D9C7AF" backgroundColor="#FFF6E8" radius={9999}>
@@ -114,10 +124,10 @@ export function AuthLabel({ children }: { children: string }) {
 }
 
 /** Ground-rules card: bold white lead-in, then the explanation. */
-export function AuthRule({ emoji, lead, children }: { emoji: string; lead: string; children: string }) {
+export function AuthRule({ icon, lead, children }: { icon: AuraIconName; lead: string; children: string }) {
   return (
     <View className="flex-row gap-[11px] rounded-20 bg-raised px-4 py-[15px]">
-      <Text style={{ fontSize: 18 }}>{emoji}</Text>
+      <Text style={{ fontSize: 18 }}>{icon}</Text>
       <Text className="font-nunito-700 flex-1 text-[13px] leading-[18.5px] text-ink-secondary">
         <Text className="font-nunito-900 text-white">{lead}</Text> {children}
       </Text>
@@ -174,7 +184,7 @@ export function PhoneField({ value, onChangeText }: { value: string; onChangeTex
       <View className="flex-row items-center gap-[7px] rounded-20 bg-surface px-[15px] py-[15px]">
         <Text style={{ fontSize: 17 }}>🇺🇸</Text>
         <Text className="font-nunito-800 text-[16px] text-white">+1</Text>
-        <Text className="text-[11px] text-ink-dim">▾</Text>
+        <AuraIcon name="chevronRight" size={11} color="#848286" />
       </View>
       <TextInput
         className="font-nunito-800 flex-1 rounded-20 bg-surface px-[17px] py-[15px] text-[16px] text-white"
@@ -258,12 +268,12 @@ export function OtpField({
   );
 }
 
-/** Pink is the alert accent per the token table; the design pairs it with 😬. */
+/** Pink is the alert accent per the token table. */
 export function AuthError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
     <View className="mt-3 flex-row items-start gap-2">
-      <Text style={{ fontSize: 14 }}>😬</Text>
+      <AuraIcon name="close" size={15} color="#FFFFFF" />
       <Text className="font-nunito-800 flex-1 text-[13.5px] leading-[19px]" style={{ color: '#FF5CA8' }}>
         {message}
       </Text>
@@ -271,34 +281,34 @@ export function AuthError({ message }: { message: string | null }) {
   );
 }
 
-/** `raised` privacy note (🔒). */
-export function AuthNote({ emoji, children }: { emoji: string; children: string }) {
+/** `raised` privacy note. */
+export function AuthNote({ icon, children }: { icon: AuraIconName; children: string }) {
   return (
     <View className="mt-[20px] flex-row gap-[11px] rounded-20 bg-raised px-4 py-[15px]">
-      <Text style={{ fontSize: 18 }}>{emoji}</Text>
+      <AuraIcon name={icon} size={19} color="#9A989B" />
       <Text className="font-nunito-700 flex-1 text-[13px] leading-[18.5px] text-ink-secondary">{children}</Text>
     </View>
   );
 }
 
 /** Quieter `surface` note — the sign-up screen's "next up: school, grade" line. */
-export function AuthHint({ emoji, children }: { emoji: string; children: string }) {
+export function AuthHint({ icon, children }: { icon: AuraIconName; children: string }) {
   return (
     <View className="mt-[18px] flex-row gap-[11px] rounded-20 bg-surface px-4 py-[14px]">
-      <Text style={{ fontSize: 17 }}>{emoji}</Text>
+      <Text style={{ fontSize: 17 }}>{icon}</Text>
       <Text className="font-nunito-800 flex-1 text-[13px] leading-[18px] text-ink-muted">{children}</Text>
     </View>
   );
 }
 
 /** Centered pill action — "🔄 Send a new code". */
-export function AuthChip({ emoji, label, onPress }: { emoji: string; label: string; onPress: () => void }) {
+export function AuthChip({ icon, label, onPress }: { icon: AuraIconName; label: string; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
       className="mt-[18px] flex-row items-center gap-[7px] self-center rounded-pill bg-surface px-[18px] py-[11px]"
     >
-      <Text style={{ fontSize: 14 }}>{emoji}</Text>
+      <AuraIcon name={icon} size={15} color="#C1C0C0" />
       <Text className="font-nunito-800 text-[13.5px] text-ink-secondary">{label}</Text>
     </Pressable>
   );

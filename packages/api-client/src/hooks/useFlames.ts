@@ -7,6 +7,7 @@ const FLAMES_QUERY = /* GraphQL */ `
       coins
       godMode
       bonusRevealsLeft
+      admirerCount
       flames {
         id
         emoji
@@ -23,6 +24,7 @@ const FLAMES_QUERY = /* GraphQL */ `
         repeatAdmirer
         pickCount
         ts
+        detailHidden
       }
     }
   }
@@ -44,8 +46,18 @@ export type Flame = {
   repeatAdmirer: boolean;
   pickCount: number;
   ts: string;
+  /* Gender and grade were withheld because too few people at the school share that cohort — the
+     flame should read "someone at your school". Both fields are blanked server-side as well. */
+  detailHidden: boolean;
 };
-export type FlamesResult = { flames: Flame[]; coins: number; godMode: boolean; bonusRevealsLeft: number };
+export type FlamesResult = {
+  flames: Flame[];
+  coins: number;
+  godMode: boolean;
+  bonusRevealsLeft: number;
+  /** Distinct people who picked you in the last 7 days — server-derived, see FlamesResult in the API. */
+  admirerCount: number;
+};
 
 type Response = { flames: FlamesResult };
 

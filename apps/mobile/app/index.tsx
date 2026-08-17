@@ -21,6 +21,9 @@ import {
 } from '../src/components/authKit';
 import { ToyShadow } from '../src/components/ToyShadow';
 import { LoadingGate } from '../src/components/LoadingScreen';
+import { FullScreenFailure } from '../src/components/stateKit';
+import { InfoCard, Strong } from '../src/components/settingsKit';
+import { AuraIcon } from '../src/components/AuraIcon';
 
 const SAMPLE_PROMPTS = [
   { emoji: '🥵', label: 'Hottest in 11th' },
@@ -34,13 +37,13 @@ export default function Home() {
   /* Same query key as SignedInGate's own useMe, so this is a second observer rather than a second
      request. Signed out it can't report loading: the hook is `enabled: isSignedIn === true`, and a
      disabled query is pending-but-not-fetching, which React Query reports as isLoading false. */
-  const { isLoading: meLoading } = useMe();
+  const { isLoading: meLoading, refetch: refetchMe } = useMe();
 
   // 9A: the breathing wordmark covers exactly the two waits it names — the session resolving
   // (Clerk's isLoaded) and `me` fetching. Neither <Show> renders while Clerk is still deciding,
   // so without this the app opened on an empty ground-coloured screen.
   return (
-    <LoadingGate loading={!isLoaded || meLoading}>
+    <LoadingGate loading={!isLoaded || meLoading} onRetry={() => refetchMe()}>
       <AuthShell>
         <Show when="signed-out">
           <Welcome />
@@ -170,7 +173,7 @@ function Welcome() {
 /* Signed in: route on to wherever the user belongs. Onboarded users get the returning handoff
    first (it's the design's landing beat, not a spinner); everyone else goes to onboarding. */
 function SignedInGate() {
-  const { data, isError } = useMe();
+  const { data, isError, refetch } = useMe();
   const { signOut } = useClerk();
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -187,14 +190,26 @@ function SignedInGate() {
     if (data && data.onboarded === false) router.replace('/onboarding');
   }, [data, isFocused, router]);
 
-  // A valid session pointing at an account the app can't load is otherwise a dead end — there's
-  // no other sign-out entry point until Profile is built.
+  /* 10A's one full-screen failure. It earns that because nothing else on this screen can render
+     without `me` — and the sign-out escape is mandatory, since a valid session pointing at an
+     unloadable profile is otherwise a dead end. The error code is there so a support conversation
+     can start with a fact instead of "it doesn't work". */
   if (isError) {
     return (
-      <View className="mt-auto items-center gap-3 pt-6">
-        <Text className="font-nunito-800 text-center text-[13.5px] text-ink-muted">Could not load your account.</Text>
-        <AuthButton label="Sign out" onPress={() => signOut()} disabled={false} />
-      </View>
+      <FullScreenFailure
+        title="We can't load your account"
+        body="You're still signed in — we just can't reach your profile right now. Nothing has been lost."
+        primaryLabel="Try again"
+        onPrimary={() => refetch()}
+        secondaryLabel="Sign out instead"
+        onSecondary={() => signOut()}
+        footer={
+          <InfoCard icon="shield">
+            If it keeps happening, signing out and back in with your number fixes it. Error{' '}
+            <Strong>ME_UNAVAILABLE</Strong>.
+          </InfoCard>
+        }
+      />
     );
   }
 
@@ -202,12 +217,10 @@ function SignedInGate() {
     return <ReturningHandoff name={data.firstName} grade={data.grade} school={data.school?.name ?? null} />;
   }
 
-  return (
-    <View className="mt-auto items-center gap-3 pt-6">
-      <Text className="font-nunito-800 text-[13.5px] text-ink-muted">Loading…</Text>
-      <AuthFooterLink action="Sign out" onPress={() => signOut()} />
-    </View>
-  );
+  /* Reached only in the window before `me` resolves, which LoadingGate is already covering — so this
+     renders nothing rather than a competing "Loading…" underneath it. The 15s give-up reveals it, and
+     by then either data or isError above has won. */
+  return null;
 }
 
 function ReturningHandoff({
@@ -221,7 +234,7 @@ function ReturningHandoff({
 }) {
   const router = useRouter();
   const { data: flames } = useFlames();
-  const newFlames = flames?.flames.filter(f => f.unread).length ?? 0;
+  const newAura = flames?.flames.filter(f => f.unread).length ?? 0;
   const first = (name || '').trim().split(/\s+/)[0] || 'you';
   /* Design shows "11th · Lakeview High". Grade is free-form on the server and includes
      non-numeric values ("Not in High School", "Already Graduated"), so only numeric grades get
@@ -246,11 +259,11 @@ function ReturningHandoff({
           {meta}
         </Text>
       )}
-      {newFlames > 0 && (
+      {newAura > 0 && (
         <View className="mt-[24px] flex-row items-center gap-[11px] rounded-20 bg-raised px-[17px] py-[15px]">
-          <Text style={{ fontSize: 19 }}>🔥</Text>
+          <AuraIcon name="aura" size={20} color="#FFC9E4" />
           <Text className="font-nunito-800 text-[13.5px] leading-[19px]" style={{ color: '#FFC9E4' }}>
-            {newFlames} new {newFlames === 1 ? 'flame' : 'flames'} while you were gone.
+            +{newAura} aura while you were gone.
           </Text>
         </View>
       )}

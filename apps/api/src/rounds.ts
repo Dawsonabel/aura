@@ -3,7 +3,29 @@
    TTL-bound state; Redis (already provisioned for rate limiting) gives native expiry for free. */
 import { Redis } from '@upstash/redis';
 
-export type Round = { userId: string; ts: string; answered: number; votedQ: string[]; claimed: boolean };
+/* The built round is stored alongside its progress, which it didn't used to be.
+
+   Without the polls in here, `pollRound` had to rebuild them on every call — so remounting the Vote
+   screen silently minted a brand-new round with brand-new candidates, and a "round" was whatever the
+   last render happened to produce. Storing the snapshot makes a round a real object you can resume,
+   which is what lets the daily limit be counted honestly and lets a reroll replace one question
+   without disturbing the rest. Structural types (not imports from pollRound) to avoid a cycle. */
+export type RoundChoiceSnapshot = { id: string; name: string; boosted?: boolean };
+export type RoundPollSnapshot = {
+  questionId: string;
+  emoji: string;
+  text: string;
+  color: string;
+  choices: RoundChoiceSnapshot[];
+};
+export type Round = {
+  userId: string;
+  ts: string;
+  answered: number;
+  votedQ: string[];
+  claimed: boolean;
+  polls: RoundPollSnapshot[];
+};
 
 const ROUND_TTL_SECONDS = 6 * 3600; // matches server.js's 6h prune window
 
@@ -12,8 +34,8 @@ export function makeRoundStore(url: string, token: string) {
   const key = (roundId: string) => `round:${roundId}`;
 
   return {
-    async create(roundId: string, userId: string): Promise<Round> {
-      const round: Round = { userId, ts: new Date().toISOString(), answered: 0, votedQ: [], claimed: false };
+    async create(roundId: string, userId: string, polls: RoundPollSnapshot[] = []): Promise<Round> {
+      const round: Round = { userId, ts: new Date().toISOString(), answered: 0, votedQ: [], claimed: false, polls };
       await redis.set(key(roundId), round, { ex: ROUND_TTL_SECONDS });
       return round;
     },

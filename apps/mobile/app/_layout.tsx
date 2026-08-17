@@ -8,6 +8,11 @@ import { tokenCache } from '@clerk/expo/token-cache';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { queryClient } from '../src/lib/queryClient';
+import { configureNotificationHandler } from '../src/lib/push';
+
+/* Module scope, not an Effect: this registers a handler with expo-notifications rather than doing
+   anything per-render, and it has to be in place before any notification can arrive. */
+configureNotificationHandler();
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY as string;
 

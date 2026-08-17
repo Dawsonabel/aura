@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { resetDb, callApi, createTestUser, type TestUser } from './helpers';
+import { resetDb, callApi, createTestUser, joinSchool, type TestUser } from './helpers';
 
 let user: TestUser;
 before(async () => {
@@ -51,19 +51,35 @@ test('onboarding cannot complete without a valid 13+ age on file', async () => {
   await fresh.cleanup();
 });
 
-test('deleteMe removes the account and cascades off friends’ friend lists', async () => {
+test('deleteMe removes the account and cascades off other people’s follow lists', async () => {
+  /* Follows are one-directional now (see §9.3), so this can't rely on one addFriend creating a mutual
+     edge the way it used to — B has to follow A explicitly for A's deletion to have anything to
+     cascade off. Both users need to be at the same school, since follow is school-scoped. */
+  const admin = await createTestUser({ admin: true });
+  const school = await callApi(
+    'mutation($name:String!){ createSchool(name:$name){ id } }',
+    { name: 'Cascade High ' + Date.now() },
+    admin.token
+  );
+  const schoolId = school.body.data.createSchool.id;
+
   const a = await createTestUser();
   const b = await createTestUser();
+  await joinSchool(a.token, schoolId);
+  await joinSchool(b.token, schoolId);
 
-  await callApi('mutation($id:ID!){ addFriend(userId:$id) }', { id: b.userId }, a.token);
-  const meBBefore = await callApi('{ me { friendIds } }', undefined, b.token);
-  assert.ok(meBBefore.body.data.me.friendIds.includes(a.userId));
+  await callApi('mutation($id:ID!){ follow(userId:$id) }', { id: a.userId }, b.token);
+  const meBBefore = await callApi('{ me { following } }', undefined, b.token);
+  assert.ok(meBBefore.body.data.me.following.includes(a.userId), 'B follows A to begin with');
 
   const del = await callApi('mutation{ deleteMe }', undefined, a.token);
   assert.equal(del.body.data.deleteMe, true);
 
-  const meBAfter = await callApi('{ me { friendIds } }', undefined, b.token);
-  assert.ok(!meBAfter.body.data.me.friendIds.includes(a.userId)); // cascaded off B's friend list
+  /* The cascade that matters: a dangling follow id would inflate B's "Following N" forever, and B
+     could never clear it because the person no longer exists to unfollow. */
+  const meBAfter = await callApi('{ me { following } }', undefined, b.token);
+  assert.ok(!meBAfter.body.data.me.following.includes(a.userId), 'cascaded off B’s follow list');
+  await admin.cleanup();
 
   // Unlike the old REST session model, Clerk owns the session independently of the app-side row —
   // deleting your profile doesn't invalidate your Clerk token. The next authenticated request just

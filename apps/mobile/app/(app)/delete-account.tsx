@@ -40,10 +40,10 @@ export default function DeleteAccount() {
 
   const { data: flamesData } = useFlames();
   const flameCount = flamesData?.flames.length ?? 0;
-  const candy = me?.coins ?? 0;
+  const coins = me?.coins ?? 0;
 
   return (
-    <AuthShell>
+    <AuthShell aboveTabBar>
       <AuthBack onPress={() => router.back()} />
       <AuthHeading
         marginTop={14}
@@ -52,16 +52,16 @@ export default function DeleteAccount() {
       />
 
       <View className="mt-5 gap-[9px]">
-        <InfoCard emoji="🔥">
+        <InfoCard icon="aura">
           <>
-            Your <Strong>{flameCount === 1 ? '1 flame' : `${flameCount} flames`}</Strong>, your streak and your{' '}
-            <Strong>🍬 {candy}</Strong> are deleted. None of it comes back if you rejoin.
+            Your <Strong>{flameCount} aura</Strong>, your streak and your{' '}
+            <Strong>{coins} coins</Strong> are deleted. None of it comes back if you rejoin.
           </>
         </InfoCard>
-        <InfoCard emoji="👻">
+        <InfoCard icon="eyeOff">
           <>You disappear from everyone's voting grid{me?.school?.name ? ` and off the ${me.school.name} board` : ''}.</>
         </InfoCard>
-        <InfoCard emoji="💳">
+        <InfoCard icon="coin">
           <>
             God Mode bills through the App Store — <Strong>cancel there too</Strong>, or it keeps charging.
           </>
