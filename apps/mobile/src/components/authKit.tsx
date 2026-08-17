@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ToyShadow } from './ToyShadow';
-import { Wobble } from './Wobble';
 
 /* Building blocks for the auth flow, per the "Aura Auth · phone + code" (4A) design.
 
@@ -28,19 +27,51 @@ export function AuthShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** 😎 aura. The one-door welcome centers it and runs slightly larger than inner screens do. */
-export function AuthBrand({ centered = false }: { centered?: boolean }) {
+/* AURA wordmark. The one-door welcome centers it and runs slightly larger than inner screens do.
+   The design paired this with a wobbling 😎, dropped per direction — the wordmark stands alone, so
+   the tighter negative letterSpacing that balanced it against the emoji is relaxed slightly.
+
+   Carries the toy shadow via `textShadow` rather than the ToyShadow component: ToyShadow stacks
+   two Views, so its slab would be a rectangle behind the type instead of following the letters.
+   `textShadowRadius: 0` is what keeps it the design's hard, un-blurred offset rather than a soft
+   glow — the same rule as everywhere else, expressed in the one API that works on glyphs.
+
+   Pink's dark pair (#C43A7C) offset straight down, matching the direction of every other toy
+   shadow in the app.
+
+   `fontSize`/`letterSpacing`/`shadowHeight` exist for 9A's loading screen, which shows this same
+   wordmark at 64px with a *breathing* shadow. `shadowHeight` therefore accepts an Animated node as
+   well as a number, which is why the glyph is an `Animated.Text` even when nothing is animating —
+   the alternative was a second copy of the wordmark drifting out of step with this one. Styles are
+   spelled out instead of NativeWind classes for the same reason: `Animated.Text` isn't one of the
+   components NativeWind interops `className` on, so the classes would silently do nothing.
+   `Fredoka_700Bold`/#FFFFFF are exactly what `font-fredoka-700 text-white` resolved to. */
+export function AuthBrand({
+  centered = false,
+  fontSize,
+  letterSpacing = -0.25,
+  shadowHeight
+}: {
+  centered?: boolean;
+  fontSize?: number;
+  letterSpacing?: number;
+  shadowHeight?: number | Animated.AnimatedInterpolation<number>;
+}) {
   return (
-    <View className={`flex-row items-center gap-[9px] ${centered ? 'self-center' : ''}`}>
-      <Wobble>
-        <Text style={{ fontSize: centered ? 32 : 30 }}>😎</Text>
-      </Wobble>
-      <Text
-        className="font-fredoka-700 text-white"
-        style={{ fontSize: centered ? 30 : 27, letterSpacing: -0.5 }}
+    <View className={`flex-row items-center ${centered ? 'self-center' : ''}`}>
+      <Animated.Text
+        style={{
+          fontFamily: 'Fredoka_700Bold',
+          color: '#FFFFFF',
+          fontSize: fontSize ?? (centered ? 30 : 27),
+          letterSpacing,
+          textShadowColor: '#C43A7C',
+          textShadowOffset: { width: 0, height: shadowHeight ?? (centered ? 4 : 3) },
+          textShadowRadius: 0
+        }}
       >
-        aura
-      </Text>
+        AURA
+      </Animated.Text>
     </View>
   );
 }
@@ -104,10 +135,11 @@ export function AuthStatus({ children }: { children: string }) {
   );
 }
 
-/** Four-step wizard bars; sign-up is step 1 of 4 (school and grade come later). */
-export function AuthProgress({ step, total = 4 }: { step: number; total?: number }) {
+/* Onboarding wizard bars. Seven segments, gap 4 — 6A widened this from four deliberately, to
+   match the seven steps the code actually collects rather than making the bar lie. */
+export function AuthProgress({ step, total = 7 }: { step: number; total?: number }) {
   return (
-    <View className="flex-row gap-[5px]">
+    <View className="flex-row gap-[4px]">
       {Array.from({ length: total }, (_, i) => (
         <View key={i} className="h-[8px] flex-1 rounded-pill" style={{ backgroundColor: i < step ? '#6BF2C2' : '#403E41' }} />
       ))}

@@ -7,11 +7,15 @@ const SCHOOLS_QUERY = /* GraphQL */ `
       id
       name
       city
+      userCount
     }
   }
 `;
 
-export type School = { id: string; name: string; city: string };
+/* `userCount` backs the school picker's "312 kids already here" line — README §8 calls that
+   deliberate social proof, so it's part of the query rather than an optional extra. The resolver
+   (getSchoolsWithUserCounts) already computes it. */
+export type School = { id: string; name: string; city: string; userCount: number };
 type SchoolsResult = { schools: School[] };
 
 export type UseSchoolsParams = {

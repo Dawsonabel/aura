@@ -12,6 +12,7 @@ import { useUnblockUser } from '../hooks/useUnblockUser';
 import { useReportUser } from '../hooks/useReportUser';
 import { useDeleteMe } from '../hooks/useDeleteMe';
 import { Overlay } from '../components/Overlay';
+import { GENDER_LABEL, GENDER_VALUES, type Gender } from '@aura/api-client';
 import { ShopOverlay } from '../components/ShopOverlay';
 import { GodModeOverlay } from '../components/GodModeOverlay';
 
@@ -138,12 +139,11 @@ function EditProfileOverlay({ onClose, onManageAccount }: { onClose: () => void;
   const [firstName, setFirstName] = useState(me?.firstName || '');
   const [lastName, setLastName] = useState(me?.lastName || '');
   const [username, setUsername] = useState(me?.username || '');
-  const genders = ['boy', 'girl', 'nonbinary'] as const;
-  const genderLabel: Record<string, string> = { boy: 'Boy', girl: 'Girl', nonbinary: 'Non-binary' };
-
+  /* Cycles the full server-side list, "Rather not say" included — leaving it out meant a mobile
+     user who picked it couldn't see their own answer here, and one tap silently overwrote it. */
   function cycleGender() {
-    const current = genders.indexOf((me?.gender as (typeof genders)[number]) || 'boy');
-    updateMe.mutate({ gender: genders[(current + 1) % genders.length] });
+    const current = GENDER_VALUES.indexOf(me?.gender as Gender);
+    updateMe.mutate({ gender: GENDER_VALUES[(current + 1) % GENDER_VALUES.length] });
   }
 
   async function logout() {
@@ -183,7 +183,7 @@ function EditProfileOverlay({ onClose, onManageAccount }: { onClose: () => void;
           className="rounded border px-3 py-2"
         />
         <button type="button" onClick={cycleGender} className="rounded border px-3 py-2 text-left">
-          Gender: {genderLabel[me?.gender || 'boy']}
+          Gender: {(me?.gender && GENDER_LABEL[me.gender]) || 'Not set'}
         </button>
       </div>
       <div className="mt-4 flex flex-col gap-2">

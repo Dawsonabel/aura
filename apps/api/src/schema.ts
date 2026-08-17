@@ -20,6 +20,11 @@ const DEFAULT_GODMODE_PRODUCTS = 'aura.godmode.weekly,aura.godmode.lifetime';
 
 const MIN_AGE = 13; // COPPA-safe floor — mirrors server.js's MIN_AGE exactly, same reasoning
 
+/* `private` is a real stored value, not the absence of one: onboarding's "Rather not say" option
+   has to persist, or the pickers come back blank and the user gets asked again. Clients label it
+   from GENDER_LABEL in @aura/api-client — keep the two lists in step. */
+const GENDERS = ['boy', 'girl', 'nonbinary', 'private'];
+
 // The full context Yoga hands resolvers — the initial per-request fields (req/env/ip, set in
 // index.ts's context factory) plus the derived ones (db/ratelimit/rounds/me). Yoga merges the
 // initial context with whatever the `context` factory returns, so this has to describe that
@@ -401,7 +406,13 @@ const resolvers = {
       if (args.firstName !== undefined) fields.firstName = str(args.firstName, 40).trim();
       if (args.lastName !== undefined) fields.lastName = str(args.lastName, 40).trim();
       if (args.username !== undefined) fields.username = str(args.username, 30).replace(/[^a-zA-Z0-9_.]/g, '');
-      if (args.gender !== undefined && ['boy', 'girl', 'nonbinary'].includes(args.gender)) fields.gender = args.gender;
+      /* Throws rather than dropping silently. The old silent drop is exactly why mobile's "Rather
+         not say" looked like it saved for weeks — the mutation returned 200 with the field quietly
+         missing. A client sending an unknown gender is a bug, so it should say so. */
+      if (args.gender !== undefined) {
+        if (!GENDERS.includes(args.gender)) throw new Error(`Unknown gender: ${args.gender}`);
+        fields.gender = args.gender;
+      }
       if (args.grade !== undefined) fields.grade = str(args.grade, 30);
       if (args.age !== undefined) {
         if (!(args.age >= MIN_AGE && args.age <= 99)) throw new Error(`You must be at least ${MIN_AGE} to use Aura.`);

@@ -3,17 +3,19 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '@clerk/tanstack-react-start';
 import { useUpdateMe } from '../hooks/useUpdateMe';
 import { useSchools } from '../hooks/useSchools';
+import { GENDER_LABEL, GENDER_VALUES } from '@aura/api-client';
 
 export const Route = createFileRoute('/onboarding')({
   component: Onboarding
 });
 
 const GRADES = ['9', '10', '11', '12', 'Not in High School', 'Already Graduated'];
-const GENDERS: { value: string; label: string }[] = [
-  { value: 'girl', label: 'Girl' },
-  { value: 'boy', label: 'Boy' },
-  { value: 'nonbinary', label: 'Non-binary' }
-];
+// Derived from the shared list so this can't drift out of step with mobile's own gender step or
+// with the server's allowlist, which now rejects (rather than silently drops) anything unknown.
+const GENDERS: { value: string; label: string }[] = GENDER_VALUES.map(value => ({
+  value,
+  label: GENDER_LABEL[value]
+}));
 
 const STEPS = ['age', 'grade', 'school', 'name', 'username', 'gender'] as const;
 type Step = (typeof STEPS)[number];

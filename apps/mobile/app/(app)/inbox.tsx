@@ -9,8 +9,7 @@ import { useRevealFlame } from '../../src/hooks/useRevealFlame';
 import { useRevealFlameName } from '../../src/hooks/useRevealFlameName';
 import { Overlay } from '../../src/components/Overlay';
 import { GodModeOverlay } from '../../src/components/GodModeOverlay';
-
-const GENDER_LABEL: Record<string, string> = { boy: 'Boy', girl: 'Girl', nonbinary: 'Non-binary' };
+import { flameGenderLabel } from '@aura/api-client';
 
 function flameSubtitle(f: Flame): string {
   if (f.anonymous) return `🔒 Anonymous · ${f.grade}`;
@@ -139,6 +138,7 @@ function FlameDetail({ flame, bonusRevealsLeft, onClose }: { flame: Flame; bonus
   const revealFlame = useRevealFlame();
   const revealFlameName = useRevealFlameName();
   const shown = flame.revealed || flame.godMode;
+  const genderLabel = flameGenderLabel(flame.gender);
 
   return (
     <Overlay onClose={onClose} style={{ borderTopWidth: 8, borderTopColor: flame.color }}>
@@ -147,7 +147,9 @@ function FlameDetail({ flame, bonusRevealsLeft, onClose }: { flame: Flame; bonus
       {flame.repeatAdmirer && <Text className="text-sm text-orange-600">🔥 This person flamed you {flame.pickCount}×</Text>}
 
       <View className="my-4 flex-row flex-wrap gap-y-1">
-        <DetailRow label="Gender" value={GENDER_LABEL[flame.gender] || flame.gender} />
+        {/* Omitted entirely when the voter chose "Rather not say" — printing "Rather not say" as
+            their gender would hand out the one thing they declined to share. */}
+        {genderLabel && <DetailRow label="Gender" value={genderLabel} />}
         <DetailRow label="Grade" value={flame.grade} />
         <DetailRow label="First initial" value={flame.anonymous ? '🔒' : shown ? flame.initial || '?' : 'X'} />
         {flame.name && <DetailRow label="Name" value={flame.name} />}

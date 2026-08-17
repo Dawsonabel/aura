@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Show, useClerk, useSignIn, useSignUp } from '@clerk/expo';
+import { useIsFocused, useRouter } from 'expo-router';
+import { Show, useAuth, useClerk, useSignIn, useSignUp } from '@clerk/expo';
 import { useMe } from '../src/hooks/useMe';
 import { useFlames } from '../src/hooks/useFlames';
 import { callClerk } from '../src/lib/clerkCall';
 import { toE164 } from '../src/lib/phone';
+import { CODE_COOLDOWN_SECONDS, isRateLimited, useCooldown } from '../src/hooks/useCooldown';
 import {
   AuthBrand,
   AuthButton,
@@ -19,24 +20,36 @@ import {
   PromptPill
 } from '../src/components/authKit';
 import { ToyShadow } from '../src/components/ToyShadow';
+import { LoadingGate } from '../src/components/LoadingScreen';
 
 const SAMPLE_PROMPTS = [
   { emoji: '🥵', label: 'Hottest in 11th' },
   { emoji: '💅', label: 'Best dressed' },
-  { emoji: '🎤', label: 'Would go viral first' },
+  { emoji: '🎤', label: 'Will go viral next' },
   { emoji: '😏', label: 'Biggest flirt' }
 ];
 
 export default function Home() {
+  const { isLoaded } = useAuth();
+  /* Same query key as SignedInGate's own useMe, so this is a second observer rather than a second
+     request. Signed out it can't report loading: the hook is `enabled: isSignedIn === true`, and a
+     disabled query is pending-but-not-fetching, which React Query reports as isLoading false. */
+  const { isLoading: meLoading } = useMe();
+
+  // 9A: the breathing wordmark covers exactly the two waits it names — the session resolving
+  // (Clerk's isLoaded) and `me` fetching. Neither <Show> renders while Clerk is still deciding,
+  // so without this the app opened on an empty ground-coloured screen.
   return (
-    <AuthShell>
-      <Show when="signed-out">
-        <Welcome />
-      </Show>
-      <Show when="signed-in">
-        <SignedInGate />
-      </Show>
-    </AuthShell>
+    <LoadingGate loading={!isLoaded || meLoading}>
+      <AuthShell>
+        <Show when="signed-out">
+          <Welcome />
+        </Show>
+        <Show when="signed-in">
+          <SignedInGate />
+        </Show>
+      </AuthShell>
+    </LoadingGate>
   );
 }
 
@@ -48,6 +61,7 @@ function Welcome() {
   const [phone, setPhone] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const cooldown = useCooldown();
 
   /* Clerk still needs to know up front whether this is a sign-in or a sign-up, but the design
      deliberately never asks — "the number tells us which they are". So we try to sign in first,
@@ -61,13 +75,33 @@ function Welcome() {
     const signInError = await callClerk(() => signIn.phoneCode.sendCode({ phoneNumber: e164 }));
     if (!signInError) {
       setBusy(false);
+      // Clerk rate-limits per number, so a successful send locks the next one out too. Starting
+      // the cooldown here means coming back to this screen shows the wait instead of a failure.
+      cooldown.start(CODE_COOLDOWN_SECONDS);
       router.push({ pathname: '/verify', params: { phone, mode: 'signIn' } });
       return;
     }
 
-    const createError = await callClerk(() => signUp.create({ phoneNumber: e164, strategy: 'phone_code' }));
+    /* A rate-limit is NOT "this number has no account" — falling through to signUp.create would
+       report a misleading error. It also means a code went out on an earlier attempt and is
+       probably sitting in the user's messages, so send them to the code screen rather than
+       stranding them here: the screen's own resend timer covers retrying. */
+    if (isRateLimited(signInError)) {
+      setBusy(false);
+      cooldown.start(CODE_COOLDOWN_SECONDS);
+      router.push({ pathname: '/verify', params: { phone, mode: 'signIn' } });
+      return;
+    }
+
+    /* No `strategy: 'phone_code'` here on purpose. Passing it makes Clerk dispatch the code as part
+       of create, and the explicit sendPhoneCode below then sends a SECOND one — which trips the
+       per-number rate limit, so the user saw "too many requests" while still receiving the text
+       from the first send, and never got forwarded to the code screen. Create the resource only;
+       sending stays the one explicit step below. */
+    const createError = await callClerk(() => signUp.create({ phoneNumber: e164 }));
     if (createError) {
       setBusy(false);
+      if (isRateLimited(createError)) cooldown.start(CODE_COOLDOWN_SECONDS);
       setFormError(createError);
       return;
     }
@@ -81,9 +115,17 @@ function Welcome() {
     const sendError = await callClerk(() => signUp.verifications.sendPhoneCode());
     setBusy(false);
     if (sendError) {
+      // Same reasoning as above: the sign-up resource is live and a code may already have gone
+      // out, so a rate-limit here shouldn't be a dead end either.
+      if (isRateLimited(sendError)) {
+        cooldown.start(CODE_COOLDOWN_SECONDS);
+        router.push({ pathname: '/verify', params: { phone, mode: 'signUp' } });
+        return;
+      }
       setFormError(sendError);
       return;
     }
+    cooldown.start(CODE_COOLDOWN_SECONDS);
     router.push({ pathname: '/verify', params: { phone, mode: 'signUp' } });
   }
 
@@ -109,10 +151,13 @@ function Welcome() {
           <PhoneField value={phone} onChangeText={setPhone} />
         </View>
         <AuthError message={formError} />
+        {/* Disabled *and* counting down while Clerk's per-number window is open — otherwise the
+            server's "wait 30 seconds" is a dead end: no timer, button still tappable, every tap
+            fails again. */}
         <AuthButton
-          label={busy ? 'Sending…' : 'Text me a code'}
+          label={cooldown.active ? `Try again in ${cooldown.label}` : busy ? 'Sending…' : 'Text me a code'}
           onPress={start}
-          disabled={phone.trim().length === 0 || busy}
+          disabled={phone.trim().length === 0 || busy || cooldown.active}
         />
         <Text className="font-nunito-800 text-center text-[12.5px] leading-[18px] text-ink-faint">
           New or coming back — same button. Standard rates apply.
@@ -128,10 +173,19 @@ function SignedInGate() {
   const { data, isError } = useMe();
   const { signOut } = useClerk();
   const router = useRouter();
+  const isFocused = useIsFocused();
 
+  /* The focus guard is load-bearing, not defensive. A stack keeps every route below the top one
+     mounted, so this screen goes on observing `me` after it has sent the user to /onboarding.
+     Without the guard, the first onboarding step that saves a field (age) invalidates `me`, this
+     Effect sees fresh `data` with `onboarded` still false, and fires replace('/onboarding') a
+     second time — REPLACE builds a *new* route object, so onboarding remounts with fresh state and
+     the user lands back on step 1. It only bites on the sign-up path, where verify.tsx used to
+     leave a second copy of this screen in the stack, which is why it looked intermittent. */
   useEffect(() => {
+    if (!isFocused) return;
     if (data && data.onboarded === false) router.replace('/onboarding');
-  }, [data, router]);
+  }, [data, isFocused, router]);
 
   // A valid session pointing at an account the app can't load is otherwise a dead end — there's
   // no other sign-out entry point until Profile is built.

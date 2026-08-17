@@ -87,14 +87,24 @@ House rule, from an audit against https://react.dev/learn/you-might-not-need-an-
   sign-in/sign-up, so those screens are hand-built against Clerk's newer "Future" signals API
   (`@clerk/expo`'s `useSignIn`/`useSignUp` returning `{ signIn }`/`{ signUp }` resources with
   methods like `signIn.phoneCode.sendCode()`, `signUp.password()`, `.finalize()`).
-  - This Clerk instance requires password + Smart CAPTCHA bot-protection at sign-up.
-    `@clerk/expo` ships no native CAPTCHA widget (checked the SDK source directly, not just
-    docs). Native sign-up (`apps/mobile/app/sign-up.tsx`) surfaces a clear in-app error if a
-    `protectCheck` challenge comes back instead of hanging. The actual fix is a Clerk Dashboard
-    setting only the account owner can flip: enable **Native API** at
-    dashboard.clerk.com/~/native-applications (register the bundle ID/package name) — this is a
-    deliberate security tradeoff (it opens a public bypass pathway) that the user has to choose
-    consciously, not something to toggle silently.
+  - **Sign-up blocker is bot protection, NOT password.** Verified against this instance's
+    `/v1/environment` (the Frontend API host is base64-encoded inside the publishable key):
+    `phone_number` is the only *required* attribute, `password` is not enabled, and
+    `sign_up.captcha_enabled: true` with `captcha_widget_type: smart` / provider `turnstile`.
+    An earlier note here claimed a password was required — that was wrong; don't re-derive plans
+    from it. Re-check `/v1/environment` rather than guessing if this seems to change.
+  - `@clerk/expo` ships no native CAPTCHA widget (checked the SDK source, not just docs), so the
+    Turnstile challenge can never be satisfied in-app. The symptom is confusing: `create` and the
+    SMS code both succeed, then `finalize()` fails with "Cannot finalize sign-up without a created
+    session". `apps/mobile/app/verify.tsx` names the real cause instead of echoing that.
+  - Two dashboard fixes, and **which one works depends on the bundle ID**: `apps/mobile/app.json`
+    sets no `ios.bundleIdentifier`/`android.package`, so in Expo Go the app runs as
+    `host.exp.Exponent`. Registering your own bundle ID under **Native API**
+    (dashboard.clerk.com/~/native-applications) therefore does nothing until there's a dev build —
+    under Expo Go it's Expo's identifier, not Aura's. For Expo Go testing the working switch is
+    turning **Bot sign-up protection** off (Configure → Protect → Rules). Native API is the
+    production answer, and it's a deliberate security tradeoff (it opens a public bypass pathway)
+    for the account owner to choose consciously, not something to toggle silently.
 - **Admin dashboard is web-only by design.** `apps/web`'s `/admin` covers it; there's no plan to
   build a mobile admin UI (not a real need for a phone-sized screen).
 - **Mobile roadmap** (approved, phase-by-phase): 1) Foundation ✅ 2) Onboarding ✅

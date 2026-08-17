@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Slot, usePathname, useRouter } from 'expo-router';
+import { Slot, useIsFocused, usePathname, useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { useAuth } from '@clerk/expo';
 import { useMe } from '../../src/hooks/useMe';
@@ -11,11 +11,16 @@ export default function AppLayout() {
   const { data: me } = useMe();
   const router = useRouter();
   const pathname = usePathname();
+  const isFocused = useIsFocused();
 
+  // Same focus guard as index.tsx, for the same reason: this layout stays mounted underneath
+  // whatever it redirected to, and a second replace() from here remounts that screen from scratch.
+  // `dismissTo` reuses the `/` already below this group rather than stacking another copy.
   useEffect(() => {
-    if (isSignedIn === false) router.replace('/');
+    if (!isFocused) return;
+    if (isSignedIn === false) router.dismissTo('/');
     else if (me && me.onboarded === false) router.replace('/onboarding');
-  }, [isSignedIn, me, router]);
+  }, [isFocused, isSignedIn, me, router]);
 
   // The URL's last path segment (e.g. /aura -> "aura") tells us which tab is active — matches
   // apps/web's _app.tsx. `(app)` is a route group, so it never shows up in the pathname.

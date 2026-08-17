@@ -1,4 +1,5 @@
 export { createGqlFetch, type GqlFetch } from './client';
+export { GENDER_LABEL, GENDER_VALUES, flameGenderLabel, type Gender } from './gender';
 export { useMe, type Me, type UseMeParams } from './hooks/useMe';
 export { useUpdateMe, type UpdateMeInput, type UseUpdateMeParams } from './hooks/useUpdateMe';
 export { useSchools, type School, type UseSchoolsParams } from './hooks/useSchools';
@@ -13,3 +14,4 @@ export { useMarkNotificationsRead, type UseMarkNotificationsReadParams } from '.
 export { useRevealFlame, type UseRevealFlameParams } from './hooks/useRevealFlame';
 export { useRevealFlameName, type UseRevealFlameNameParams } from './hooks/useRevealFlameName';
 export { useActivateGodMode, type UseActivateGodModeParams } from './hooks/useActivateGodMode';
+export { useDeleteMe, type UseDeleteMeParams } from './hooks/useDeleteMe';
