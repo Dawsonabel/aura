@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;500;600;700;800&family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@600;700;800&family=Outfit:wght@300;400;500;600;700&family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #E7E4DD; }
+  a { color: #14120F; text-decoration: none; }
+  a:hover { color: #FF2D95; }
+  @keyframes reelspin { 0% { transform: translateY(0); } 100% { transform: translateY(-66.66%); } }
+  @keyframes pulsering { 0%,100% { opacity: .35; transform: scale(1); } 50% { opacity: .9; transform: scale(1.06); } }
+  @keyframes wobble { 0%,100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
+</style>
+</helmet>
+<section style="padding:56px 48px 40px; display:flex; flex-direction:column; gap:40px; font-family:'Manrope',system-ui">
+  <div style="display:flex; flex-direction:column; gap:10px; max-width:900px">
+    <div style="font-size:13px; letter-spacing:.16em; text-transform:uppercase; color:#8A8578; font-weight:700">Turn 3 · Monokai ground</div>
+    <div style="font-family:'Anton',sans-serif; font-size:52px; line-height:1; text-transform:uppercase; color:#14120F">Same candy, grey room</div>
+    <div style="font-size:16px; line-height:1.5; color:#4A463D; max-width:660px; text-wrap:pretty"><a href="#2a">2a</a> with the plum swapped for Monokai Pro greys (#221F22 ground, #403E41 surfaces). Every accent, cream card, shadow and sticker is untouched — <a href="#3a">3a</a>.</div>
+  </div>
+
+  <div id="3a" style="display:flex; flex-direction:column; gap:24px">
+    <div style="display:flex; align-items:baseline; gap:14px">
+      <div style="background:#FF5CA8; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:20px; padding:5px 15px; border-radius:100px">3A</div>
+      <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:34px; color:#14120F">Lights Out · Monokai</div>
+    </div>
+
+    <div style="display:flex; gap:32px; flex-wrap:wrap">
+
+      <!-- vote -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#221F22; padding:56px 20px 0; box-sizing:border-box; font-family:'Nunito',system-ui">
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <div style="display:flex; align-items:center; gap:7px; background:#FF7A3D; border-radius:100px; padding:7px 14px; box-shadow:0 3px 0 #C4501E">
+              <span style="font-size:15px">🔥</span>
+              <span style="color:#fff; font-weight:900; font-size:15px">12</span>
+              <span style="color:#FFE0CE; font-weight:800; font-size:13px">days</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:7px; background:#403E41; border-radius:100px; padding:7px 14px">
+              <span style="font-size:14px">🍬</span>
+              <span style="color:#fff; font-weight:900; font-size:15px">48</span>
+            </div>
+          </div>
+
+          <div style="margin-top:24px; display:flex; gap:6px; align-items:center">
+            <div style="flex:1; height:10px; border-radius:100px; background:#403E41; overflow:hidden; display:flex">
+              <div style="width:37.5%; background:#6BF2C2; border-radius:100px"></div>
+            </div>
+            <div style="color:#9A989B; font-weight:800; font-size:13px">3/8</div>
+          </div>
+
+          <div style="margin-top:26px; background:#403E41; border-radius:26px; padding:20px; position:relative">
+            <div style="position:absolute; top:-14px; left:20px; background:#FFD84D; color:#3A2A00; font-weight:900; font-size:12px; border-radius:100px; padding:5px 12px; transform:rotate(-3deg)">EVERYONE'S VOTING ON THIS</div>
+            <div style="margin-top:6px; font-size:40px; line-height:1; animation:wobble 3s ease-in-out infinite; display:inline-block">🥵</div>
+            <div style="margin-top:8px; font-family:'Fredoka',sans-serif; font-weight:700; font-size:31px; line-height:1.08; color:#fff; text-wrap:balance">Hottest in the junior class?</div>
+            <div style="margin-top:8px; font-size:13.5px; font-weight:700; color:#9A989B">They'll know they got picked. Never that it was you.</div>
+          </div>
+
+          <div style="margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:12px">
+            <div style="background:#FFF6E8; border-radius:24px; padding:16px 14px; display:flex; flex-direction:column; gap:11px; box-shadow:0 5px 0 #D9C7AF">
+              <div style="width:54px; height:54px; border-radius:100px; background:#FF5CA8; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:21px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #C43A7C">MR</div>
+              <div style="display:flex; flex-direction:column; gap:1px">
+                <div style="color:#2D2A2E; font-weight:900; font-size:17px">Maya R.</div>
+                <div style="color:#8B888D; font-weight:700; font-size:13px">11th · Lakeview</div>
+              </div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:24px; padding:16px 14px; display:flex; flex-direction:column; gap:11px; box-shadow:0 5px 0 #D9C7AF">
+              <div style="width:54px; height:54px; border-radius:100px; background:#6BF2C2; color:#0A3B2C; font-family:'Fredoka',sans-serif; font-weight:700; font-size:21px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #3FBF95">DK</div>
+              <div style="display:flex; flex-direction:column; gap:1px">
+                <div style="color:#2D2A2E; font-weight:900; font-size:17px">Deven K.</div>
+                <div style="color:#8B888D; font-weight:700; font-size:13px">11th · Lakeview</div>
+              </div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:24px; padding:16px 14px; display:flex; flex-direction:column; gap:11px; box-shadow:0 5px 0 #D9C7AF">
+              <div style="width:54px; height:54px; border-radius:100px; background:#7C5CFF; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:21px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #5334D6">SO</div>
+              <div style="display:flex; flex-direction:column; gap:1px">
+                <div style="color:#2D2A2E; font-weight:900; font-size:17px">Sofia O.</div>
+                <div style="color:#8B888D; font-weight:700; font-size:13px">11th · Lakeview</div>
+              </div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:24px; padding:16px 14px; display:flex; flex-direction:column; gap:11px; box-shadow:0 5px 0 #D9C7AF">
+              <div style="width:54px; height:54px; border-radius:100px; background:#FFD84D; color:#3A2A00; font-family:'Fredoka',sans-serif; font-weight:700; font-size:21px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #D4AC17">TL</div>
+              <div style="display:flex; flex-direction:column; gap:1px">
+                <div style="color:#2D2A2E; font-weight:900; font-size:17px">Tyler L.</div>
+                <div style="color:#8B888D; font-weight:700; font-size:13px">12th · Lakeview</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px; display:flex; gap:10px">
+            <div style="flex:1; background:#403E41; border-radius:100px; padding:13px; text-align:center; color:#C1C0C0; font-weight:800; font-size:15px">🔄 New four</div>
+            <div style="flex:1; background:#403E41; border-radius:100px; padding:13px; text-align:center; color:#C1C0C0; font-weight:800; font-size:15px">Skip ⏭</div>
+          </div>
+
+          <div style="margin-top:auto; display:flex; justify-content:space-between; align-items:center; background:#403E41; border-radius:26px; margin-bottom:28px; padding:12px 6px">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px; width:78px">
+              <div style="background:#6BF2C2; border-radius:100px; padding:6px 14px; font-size:19px">🗳</div>
+              <div style="color:#6BF2C2; font-size:11px; font-weight:900">VOTE</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px; width:78px; position:relative">
+              <div style="padding:6px 14px; font-size:19px">🔥</div>
+              <div style="color:#848286; font-size:11px; font-weight:900">FLAMES</div>
+              <div style="position:absolute; top:-2px; right:14px; background:#FF5CA8; color:#fff; font-size:11px; font-weight:900; border-radius:100px; min-width:20px; height:20px; display:flex; align-items:center; justify-content:center; padding:0 5px; border:2px solid #403E41">7</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px; width:78px">
+              <div style="padding:6px 14px; font-size:19px">🏆</div>
+              <div style="color:#848286; font-size:11px; font-weight:900">RANKS</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px; width:78px">
+              <div style="padding:6px 14px; font-size:19px">😎</div>
+              <div style="color:#848286; font-size:11px; font-weight:900">ME</div>
+            </div>
+          </div>
+        </div>
+      </x-import>
+
+      <!-- inbox -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#221F22; padding:56px 20px 0; box-sizing:border-box; font-family:'Nunito',system-ui; overflow:hidden">
+          <div style="display:flex; flex-direction:column; gap:3px">
+            <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:36px; line-height:1; color:#fff">Your flames</div>
+            <div style="color:#9A989B; font-weight:700; font-size:14px">7 people picked you this week 👀</div>
+          </div>
+
+          <div style="margin-top:20px; background:#6BF2C2; border-radius:24px; padding:17px 19px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 5px 0 #3FBF95">
+            <div style="display:flex; flex-direction:column; gap:2px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:20px; color:#0A3B2C">See who picked you</div>
+              <div style="font-size:12.5px; font-weight:800; color:#12664C">God Mode · free for 3 days</div>
+            </div>
+            <div style="font-size:26px">😈</div>
+          </div>
+
+          <div style="margin-top:14px; display:flex; align-items:center; gap:11px; background:#4A474B; border-radius:20px; padding:14px 16px">
+            <div style="font-size:19px">🫣</div>
+            <div style="font-size:13.5px; font-weight:800; color:#FFC9E4; line-height:1.35">Somebody picked you 4 times this week. Bold of them.</div>
+          </div>
+
+          <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px">
+            <div style="background:#FFF6E8; border-radius:22px; padding:15px; display:flex; gap:13px; align-items:center; box-shadow:0 4px 0 #D9C7AF">
+              <div style="width:46px; height:46px; border-radius:16px; background:#FF5CA8; display:flex; align-items:center; justify-content:center; font-size:23px">🥵</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="color:#2D2A2E; font-weight:900; font-size:15px; line-height:1.25">Hottest in the junior class</div>
+                <div style="color:#8B888D; font-weight:700; font-size:12.5px">Girl · 11th grade · 🔒 name hidden</div>
+              </div>
+              <div style="background:#FF5CA8; color:#fff; font-size:11px; font-weight:900; border-radius:100px; padding:5px 10px">NEW</div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:22px; padding:15px; display:flex; gap:13px; align-items:center; box-shadow:0 4px 0 #D9C7AF">
+              <div style="width:46px; height:46px; border-radius:16px; background:#FFD84D; display:flex; align-items:center; justify-content:center; font-size:23px">😏</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="color:#2D2A2E; font-weight:900; font-size:15px; line-height:1.25">Biggest flirt in 3rd period</div>
+                <div style="color:#8B888D; font-weight:700; font-size:12.5px">Boy · 12th grade · starts with J</div>
+              </div>
+              <div style="color:#B0AEB2; font-size:20px">›</div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:22px; padding:15px; display:flex; gap:13px; align-items:center; box-shadow:0 4px 0 #D9C7AF">
+              <div style="width:46px; height:46px; border-radius:16px; background:#7C5CFF; display:flex; align-items:center; justify-content:center; font-size:23px">💅</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="color:#2D2A2E; font-weight:900; font-size:15px; line-height:1.25">Best dressed, no competition</div>
+                <div style="color:#2E8F6E; font-weight:800; font-size:12.5px">✅ Revealed: Maya R.</div>
+              </div>
+              <div style="color:#B0AEB2; font-size:20px">›</div>
+            </div>
+            <div style="background:#403E41; border-radius:22px; padding:15px; display:flex; gap:13px; align-items:center">
+              <div style="width:46px; height:46px; border-radius:16px; background:#4A474B; display:flex; align-items:center; justify-content:center; font-size:23px">🎤</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="color:#C1C0C0; font-weight:900; font-size:15px; line-height:1.25">Would go viral first</div>
+                <div style="color:#848286; font-weight:700; font-size:12.5px">Boy · 10th grade · already opened</div>
+              </div>
+              <div style="color:#727074; font-size:20px">›</div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto; padding:16px 0 32px; text-align:center; color:#727074; font-size:12.5px; font-weight:800">flames disappear after 30 days ✨</div>
+        </div>
+      </x-import>
+
+      <!-- scratch reveal -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#221F22; padding:60px 34px 0; box-sizing:border-box; font-family:'Nunito',system-ui; align-items:center">
+          <div style="color:#9A989B; font-weight:900; font-size:13px">SCRATCH TO REVEAL</div>
+          <div style="margin-top:8px; font-family:'Fredoka',sans-serif; font-weight:700; font-size:31px; line-height:1.08; color:#fff; text-align:center; text-wrap:balance">Who thinks you're the hottest junior?</div>
+
+          <div style="margin-top:26px; align-self:stretch; box-sizing:border-box; background:#FFF6E8; border-radius:30px; padding:22px; box-shadow:0 7px 0 #D9C7AF; display:flex; flex-direction:column; gap:16px">
+            <div style="display:flex; gap:10px">
+              <div style="flex:1; box-sizing:border-box; background:#6BF2C2; border-radius:20px; padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:3px">
+                <div style="font-size:22px">🎓</div>
+                <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:19px; color:#0A3B2C">11th</div>
+                <div style="font-size:10.5px; font-weight:900; color:#12664C">SCRATCHED</div>
+              </div>
+              <div style="flex:1; box-sizing:border-box; background:#FFD84D; border-radius:20px; padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:3px">
+                <div style="font-size:22px">👧</div>
+                <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:19px; color:#3A2A00">Girl</div>
+                <div style="font-size:10.5px; font-weight:900; color:#7A5A00">SCRATCHED</div>
+              </div>
+              <div style="flex:1; background:#C1C0C0; border-radius:20px; padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:3px; position:relative; overflow:hidden">
+                <div style="font-size:22px">🪙</div>
+                <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:19px; color:#5B585C">M?</div>
+                <div style="font-size:10.5px; font-weight:900; color:#727074">TAP HERE</div>
+              </div>
+            </div>
+
+            <div style="height:1.5px; background:#E4D6BF; flex-shrink:0"></div>
+
+            <div style="display:flex; flex-direction:column; gap:9px">
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#8B888D; font-weight:800; font-size:14px">Picked you</div>
+                <div style="color:#2D2A2E; font-weight:900; font-size:14px">4 times 🔥</div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#8B888D; font-weight:800; font-size:14px">Since</div>
+                <div style="color:#2D2A2E; font-weight:900; font-size:14px">2 weeks ago</div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#8B888D; font-weight:800; font-size:14px">Also picked you for</div>
+                <div style="color:#2D2A2E; font-weight:900; font-size:14px">2 other prompts</div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#8B888D; font-weight:800; font-size:14px">In their grade you're</div>
+                <div style="color:#2D2A2E; font-weight:900; font-size:14px">their #1 pick 🏆</div>
+              </div>
+            </div>
+
+            <div style="box-sizing:border-box; background:#F2E7D4; border-radius:20px; padding:14px 16px; display:flex; gap:12px; align-items:center">
+              <div style="font-size:22px">🫂</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="color:#2D2A2E; font-weight:900; font-size:14px">3 other people picked you too</div>
+                <div style="color:#8B888D; font-weight:700; font-size:12.5px">Two juniors and a senior. Scratch them next.</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:22px; align-self:stretch; box-sizing:border-box; background:#FF5CA8; border-radius:100px; padding:17px; text-align:center; font-family:'Fredoka',sans-serif; font-weight:700; font-size:19px; color:#fff; box-shadow:0 5px 0 #C43A7C">Scratch the last one · 🍬 3</div>
+          <div style="margin-top:12px; align-self:stretch; box-sizing:border-box; background:#403E41; border-radius:100px; padding:15px; text-align:center; font-family:'Fredoka',sans-serif; font-weight:700; font-size:17px; color:#6BF2C2">Skip the wait · God Mode 😈</div>
+          <div style="margin-top:14px; color:#9A989B; font-size:13.5px; font-weight:800; text-align:center; line-height:1.4">Free scratch every day at 3pm</div>
+
+          <div style="margin-top:auto; padding-bottom:30px; color:#727074; font-size:14px; font-weight:800">Later</div>
+        </div>
+      </x-import>
+
+      <!-- god mode -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#221F22; padding:58px 22px 0; box-sizing:border-box; font-family:'Nunito',system-ui">
+          <div style="display:flex; justify-content:flex-end; color:#727074; font-size:22px; font-weight:800">✕</div>
+          <div style="margin-top:4px; font-size:46px; animation:wobble 3s ease-in-out infinite; display:inline-block; width:56px">😈</div>
+          <div style="margin-top:6px; font-family:'Fredoka',sans-serif; font-weight:700; font-size:44px; line-height:1; color:#6BF2C2">God Mode</div>
+          <div style="margin-top:8px; color:#C1C0C0; font-weight:700; font-size:15.5px; line-height:1.4">Stop guessing. Get the actual names.</div>
+
+          <div style="margin-top:20px; background:#FFF6E8; border-radius:26px; padding:17px; display:flex; flex-direction:column; gap:13px; box-shadow:0 6px 0 #D9C7AF">
+            <div style="display:flex; align-items:center; gap:12px">
+              <div style="width:36px; height:36px; border-radius:100px; background:#FF5CA8; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:center">M</div>
+              <div style="flex:1; color:#2D2A2E; font-weight:900; font-size:15px">Maya R. picked you</div>
+              <div style="font-size:16px">🥵</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; filter:blur(3.5px)">
+              <div style="width:36px; height:36px; border-radius:100px; background:#7C5CFF; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:center">J</div>
+              <div style="flex:1; color:#2D2A2E; font-weight:900; font-size:15px">Jordan P. picked you</div>
+              <div style="font-size:16px">😏</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; filter:blur(4.5px)">
+              <div style="width:36px; height:36px; border-radius:100px; background:#6BF2C2; color:#0A3B2C; font-family:'Fredoka',sans-serif; font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:center">A</div>
+              <div style="flex:1; color:#2D2A2E; font-weight:900; font-size:15px">Amara T. picked you</div>
+              <div style="font-size:16px">💅</div>
+            </div>
+            <div style="text-align:center; color:#8B888D; font-size:12.5px; font-weight:900">+ 5 MORE HIDING IN HERE</div>
+          </div>
+
+          <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px">
+            <div style="display:flex; gap:11px; align-items:center"><div style="font-size:16px">✅</div><div style="color:#FCFCFA; font-weight:800; font-size:15px">Real names on every flame</div></div>
+            <div style="display:flex; gap:11px; align-items:center"><div style="font-size:16px">✅</div><div style="color:#FCFCFA; font-weight:800; font-size:15px">Double candy every round</div></div>
+            <div style="display:flex; gap:11px; align-items:center"><div style="font-size:16px">✅</div><div style="color:#FCFCFA; font-weight:800; font-size:15px">Unlimited scratches, no waiting</div></div>
+            <div style="display:flex; gap:11px; align-items:center"><div style="font-size:16px">✅</div><div style="color:#FCFCFA; font-weight:800; font-size:15px">Vote in stealth mode</div></div>
+          </div>
+
+          <div style="margin-top:20px; display:flex; gap:11px">
+            <div style="flex:1; background:#403E41; border-radius:22px; padding:16px 13px; display:flex; flex-direction:column; gap:2px">
+              <div style="color:#848286; font-weight:900; font-size:12px">WEEKLY</div>
+              <div style="color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:26px">$6.99</div>
+              <div style="color:#848286; font-weight:700; font-size:12px">every week</div>
+            </div>
+            <div style="flex:1; background:#6BF2C2; border-radius:22px; padding:16px 13px; display:flex; flex-direction:column; gap:2px; position:relative; box-shadow:0 5px 0 #3FBF95">
+              <div style="position:absolute; top:-12px; left:11px; background:#FF5CA8; color:#fff; font-size:10.5px; font-weight:900; border-radius:100px; padding:4px 10px; transform:rotate(-3deg)">BEST DEAL</div>
+              <div style="color:#12664C; font-weight:900; font-size:12px">SEMESTER</div>
+              <div style="color:#0A3B2C; font-family:'Fredoka',sans-serif; font-weight:700; font-size:26px">$29.99</div>
+              <div style="color:#12664C; font-weight:700; font-size:12px">$1.50 a week</div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto; padding-bottom:32px">
+            <div style="background:#FF5CA8; border-radius:100px; padding:18px; text-align:center; font-family:'Fredoka',sans-serif; font-weight:700; font-size:20px; color:#fff; box-shadow:0 5px 0 #C43A7C">Try 3 days free</div>
+            <div style="margin-top:12px; text-align:center; color:#727074; font-size:12.5px; font-weight:700">Then $29.99 a semester. Cancel whenever.</div>
+          </div>
+        </div>
+      </x-import>
+
+      <!-- ranks board -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#221F22; padding:56px 20px 0; box-sizing:border-box; font-family:'Nunito',system-ui; overflow:hidden">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start">
+            <div style="display:flex; flex-direction:column; gap:3px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:36px; line-height:1; color:#fff">The board</div>
+              <div style="color:#9A989B; font-weight:700; font-size:14px">Most flames at Lakeview this week</div>
+            </div>
+            <div style="background:#FF7A3D; border-radius:100px; padding:6px 12px; box-shadow:0 3px 0 #C4501E; flex-shrink:0; white-space:nowrap">
+              <span style="color:#fff; font-weight:900; font-size:12px">⏳ 2d left</span>
+            </div>
+          </div>
+
+          <div style="margin-top:18px; display:flex; gap:8px">
+            <div style="background:#6BF2C2; border-radius:100px; padding:8px 15px; color:#0A3B2C; font-weight:900; font-size:13px">Overall</div>
+            <div style="background:#403E41; border-radius:100px; padding:8px 15px; color:#C1C0C0; font-weight:800; font-size:13px">My grade</div>
+            <div style="background:#403E41; border-radius:100px; padding:8px 15px; color:#C1C0C0; font-weight:800; font-size:13px">Hottest</div>
+          </div>
+
+          <div style="margin-top:20px; display:flex; gap:9px; align-items:flex-end">
+            <div style="flex:1; background:#FFF6E8; border-radius:22px; padding:14px 8px; display:flex; flex-direction:column; align-items:center; gap:6px; box-shadow:0 4px 0 #D9C7AF">
+              <div style="width:46px; height:46px; border-radius:100px; background:#6BF2C2; color:#0A3B2C; font-family:'Fredoka',sans-serif; font-weight:700; font-size:17px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #3FBF95">TL</div>
+              <div style="color:#2D2A2E; font-weight:900; font-size:14px">Tyler L.</div>
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:20px; color:#2D2A2E">171</div>
+              <div style="color:#8B888D; font-weight:900; font-size:11px">2ND 🥈</div>
+            </div>
+            <div style="flex:1.14; background:#FFF6E8; border-radius:24px; padding:18px 8px; display:flex; flex-direction:column; align-items:center; gap:6px; box-shadow:0 6px 0 #D9C7AF; position:relative">
+              <div style="position:absolute; top:-13px; background:#FFD84D; color:#3A2A00; font-weight:900; font-size:11px; border-radius:100px; padding:4px 11px; transform:rotate(-3deg); white-space:nowrap">👑 THE ONE</div>
+              <div style="margin-top:4px; width:56px; height:56px; border-radius:100px; background:#FF5CA8; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:21px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #C43A7C">MR</div>
+              <div style="color:#2D2A2E; font-weight:900; font-size:15px">Maya R.</div>
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:26px; color:#2D2A2E">184</div>
+              <div style="color:#8B888D; font-weight:900; font-size:11px">1ST 🥇</div>
+            </div>
+            <div style="flex:1; background:#FFF6E8; border-radius:22px; padding:14px 8px; display:flex; flex-direction:column; align-items:center; gap:6px; box-shadow:0 4px 0 #D9C7AF">
+              <div style="width:46px; height:46px; border-radius:100px; background:#7C5CFF; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:17px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #5334D6">SO</div>
+              <div style="color:#2D2A2E; font-weight:900; font-size:14px">Sofia O.</div>
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:20px; color:#2D2A2E">158</div>
+              <div style="color:#8B888D; font-weight:900; font-size:11px">3RD 🥉</div>
+            </div>
+          </div>
+
+          <div style="margin-top:18px; display:flex; flex-direction:column; gap:8px">
+            <div style="background:#403E41; border-radius:20px; padding:13px 15px; display:flex; align-items:center; gap:13px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:17px; color:#848286; width:26px">4</div>
+              <div style="width:38px; height:38px; border-radius:100px; background:#FFD84D; color:#3A2A00; font-family:'Fredoka',sans-serif; font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center">JP</div>
+              <div style="flex:1; display:flex; flex-direction:column"><div style="color:#fff; font-weight:900; font-size:15px">Jordan P.</div><div style="color:#848286; font-weight:700; font-size:12.5px">12th grade</div></div>
+              <div style="color:#C1C0C0; font-weight:900; font-size:15px">121</div>
+            </div>
+            <div style="background:#403E41; border-radius:20px; padding:13px 15px; display:flex; align-items:center; gap:13px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:17px; color:#848286; width:26px">5</div>
+              <div style="width:38px; height:38px; border-radius:100px; background:#6BF2C2; color:#0A3B2C; font-family:'Fredoka',sans-serif; font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center">AT</div>
+              <div style="flex:1; display:flex; flex-direction:column"><div style="color:#fff; font-weight:900; font-size:15px">Amara T.</div><div style="color:#848286; font-weight:700; font-size:12.5px">10th grade</div></div>
+              <div style="color:#C1C0C0; font-weight:900; font-size:15px">104</div>
+            </div>
+            <div style="background:#403E41; border-radius:20px; padding:13px 15px; display:flex; align-items:center; gap:13px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:17px; color:#848286; width:26px">6</div>
+              <div style="width:38px; height:38px; border-radius:100px; background:#FF5CA8; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center">NV</div>
+              <div style="flex:1; display:flex; flex-direction:column"><div style="color:#fff; font-weight:900; font-size:15px">Nico V.</div><div style="color:#848286; font-weight:700; font-size:12.5px">11th grade</div></div>
+              <div style="color:#C1C0C0; font-weight:900; font-size:15px">97</div>
+            </div>
+            <div style="background:#403E41; border-radius:20px; padding:13px 15px; display:flex; align-items:center; gap:13px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:17px; color:#848286; width:26px">7</div>
+              <div style="width:38px; height:38px; border-radius:100px; background:#7C5CFF; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center">EH</div>
+              <div style="flex:1; display:flex; flex-direction:column"><div style="color:#fff; font-weight:900; font-size:15px">Ella H.</div><div style="color:#848286; font-weight:700; font-size:12.5px">12th grade</div></div>
+              <div style="color:#C1C0C0; font-weight:900; font-size:15px">88</div>
+            </div>
+            <div style="background:#403E41; border-radius:20px; padding:13px 15px; display:flex; align-items:center; gap:13px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:17px; color:#848286; width:26px">8</div>
+              <div style="width:38px; height:38px; border-radius:100px; background:#FFD84D; color:#3A2A00; font-family:'Fredoka',sans-serif; font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center">MB</div>
+              <div style="flex:1; display:flex; flex-direction:column"><div style="color:#fff; font-weight:900; font-size:15px">Marcus B.</div><div style="color:#848286; font-weight:700; font-size:12.5px">10th grade</div></div>
+              <div style="color:#C1C0C0; font-weight:900; font-size:15px">81</div>
+            </div>
+            <div style="text-align:center; color:#727074; font-weight:800; font-size:12.5px; padding:2px 0">· · ·</div>
+          </div>
+
+          <div style="margin-top:auto; margin-bottom:28px; background:#FF5CA8; border-radius:24px; padding:17px 19px; display:flex; align-items:center; gap:14px; box-shadow:0 5px 0 #C43A7C">
+            <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:30px; color:#fff">14</div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+              <div style="color:#fff; font-weight:900; font-size:15px">You · 62 flames</div>
+              <div style="color:#FFD6E9; font-weight:800; font-size:12.5px">6 more flames cracks the top 10</div>
+            </div>
+            <div style="font-size:24px">📈</div>
+          </div>
+        </div>
+      </x-import>
+
+      <!-- profile -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#221F22; padding:56px 20px 0; box-sizing:border-box; font-family:'Nunito',system-ui; overflow:hidden">
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <div style="color:#727074; font-size:22px; font-weight:800">‹</div>
+            <div style="color:#727074; font-size:20px">⚙️</div>
+          </div>
+
+          <div style="margin-top:14px; display:flex; gap:15px; align-items:center">
+            <div style="width:78px; height:78px; border-radius:100px; background:#FF5CA8; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:29px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 0 #C43A7C; flex-shrink:0">RB</div>
+            <div style="display:flex; flex-direction:column; gap:3px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:28px; line-height:1; color:#fff">Riley B.</div>
+              <div style="color:#9A989B; font-weight:700; font-size:13.5px">11th grade · Lakeview High</div>
+              <div style="display:flex; align-items:center; gap:6px; background:#FF7A3D; border-radius:100px; padding:4px 11px; align-self:flex-start; box-shadow:0 3px 0 #C4501E; margin-top:2px">
+                <span style="font-size:13px">🔥</span><span style="color:#fff; font-weight:900; font-size:13px">12 day streak</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:22px; display:flex; gap:9px">
+            <div style="flex:1; background:#403E41; border-radius:20px; padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:2px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:24px; color:#fff">62</div>
+              <div style="color:#848286; font-weight:900; font-size:11px">FLAMES</div>
+            </div>
+            <div style="flex:1; background:#403E41; border-radius:20px; padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:2px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:24px; color:#6BF2C2">#14</div>
+              <div style="color:#848286; font-weight:900; font-size:11px">IN SCHOOL</div>
+            </div>
+            <div style="flex:1; background:#403E41; border-radius:20px; padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:2px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:24px; color:#fff">7</div>
+              <div style="color:#848286; font-weight:900; font-size:11px">FRIENDS</div>
+            </div>
+          </div>
+
+          <div style="margin-top:22px; color:#9A989B; font-weight:900; font-size:12.5px">WHAT YOU'VE WON</div>
+          <div style="margin-top:11px; display:flex; flex-wrap:wrap; gap:9px">
+            <div style="background:#FF5CA8; border-radius:100px; padding:9px 14px; color:#fff; font-weight:900; font-size:13.5px; box-shadow:0 3px 0 #C43A7C">🥵 Hottest in 11th</div>
+            <div style="background:#FFD84D; border-radius:100px; padding:9px 14px; color:#3A2A00; font-weight:900; font-size:13.5px; box-shadow:0 3px 0 #D4AC17">💅 Best dressed ×3</div>
+            <div style="background:#7C5CFF; border-radius:100px; padding:9px 14px; color:#fff; font-weight:900; font-size:13.5px; box-shadow:0 3px 0 #5334D6">🎤 Would go viral</div>
+            <div style="background:#403E41; border-radius:100px; padding:9px 14px; color:#848286; font-weight:900; font-size:13.5px">🔒 2 still locked</div>
+          </div>
+
+          <div style="margin-top:22px; background:#FFF6E8; border-radius:26px; padding:18px; display:flex; flex-direction:column; gap:12px; box-shadow:0 6px 0 #D9C7AF">
+            <div style="display:flex; align-items:center; gap:10px">
+              <div style="font-size:24px">💌</div>
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:20px; color:#2D2A2E">Bring your class</div>
+            </div>
+            <div style="color:#8B888D; font-weight:700; font-size:13.5px; line-height:1.4">Every friend who joins puts you in more people's polls. More polls, more flames.</div>
+            <div style="display:flex; gap:7px; align-items:center">
+              <div style="flex:1; height:10px; background:#E4D6BF; border-radius:100px; overflow:hidden; display:flex"><div style="width:60%; background:#FF5CA8; border-radius:100px"></div></div>
+              <div style="color:#8B888D; font-weight:900; font-size:12px">3/5</div>
+            </div>
+            <div style="background:#FF5CA8; border-radius:100px; padding:14px; text-align:center; font-family:'Fredoka',sans-serif; font-weight:700; font-size:16px; color:#fff; box-shadow:0 4px 0 #C43A7C">Invite 2 more · get 🍬 25</div>
+          </div>
+
+          <div style="margin-top:auto; margin-bottom:30px; display:flex; justify-content:space-between; align-items:center; background:#403E41; border-radius:20px; padding:14px 16px">
+            <div style="color:#C1C0C0; font-weight:800; font-size:13.5px">Block or report someone</div>
+            <div style="color:#727074; font-weight:800; font-size:18px">›</div>
+          </div>
+        </div>
+      </x-import>
+
+      <!-- candy shop -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#221F22; padding:56px 20px 0; box-sizing:border-box; font-family:'Nunito',system-ui; overflow:hidden">
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <div style="color:#727074; font-size:22px; font-weight:800">‹</div>
+            <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:19px; color:#fff">Candy</div>
+            <div style="width:22px"></div>
+          </div>
+
+          <div style="margin-top:22px; background:#FFD84D; border-radius:28px; padding:22px; display:flex; flex-direction:column; align-items:center; gap:3px; box-shadow:0 6px 0 #D4AC17">
+            <div style="font-size:36px; animation:wobble 3s ease-in-out infinite">🍬</div>
+            <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:44px; line-height:1; color:#3A2A00">48</div>
+            <div style="color:#7A5A00; font-weight:900; font-size:13px">1 candy = 1 scratch</div>
+          </div>
+
+          <div style="margin-top:22px; color:#9A989B; font-weight:900; font-size:12.5px">EARN IT FREE</div>
+          <div style="margin-top:11px; display:flex; flex-direction:column; gap:9px">
+            <div style="background:#403E41; border-radius:20px; padding:14px 16px; display:flex; align-items:center; gap:13px">
+              <div style="font-size:21px">🗳</div>
+              <div style="flex:1; display:flex; flex-direction:column"><div style="color:#fff; font-weight:900; font-size:15px">Finish today's round</div><div style="color:#848286; font-weight:700; font-size:12.5px">8 questions, takes a minute</div></div>
+              <div style="color:#6BF2C2; font-weight:900; font-size:15px">+10</div>
+            </div>
+            <div style="background:#403E41; border-radius:20px; padding:14px 16px; display:flex; align-items:center; gap:13px">
+              <div style="font-size:21px">🔥</div>
+              <div style="flex:1; display:flex; flex-direction:column"><div style="color:#fff; font-weight:900; font-size:15px">Keep your streak</div><div style="color:#848286; font-weight:700; font-size:12.5px">Day 12 · payout doubles at day 30</div></div>
+              <div style="color:#6BF2C2; font-weight:900; font-size:15px">+5</div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:20px; padding:14px 16px; display:flex; align-items:center; gap:13px; box-shadow:0 4px 0 #D9C7AF">
+              <div style="font-size:21px">💌</div>
+              <div style="flex:1; display:flex; flex-direction:column"><div style="color:#2D2A2E; font-weight:900; font-size:15px">Invite a classmate</div><div style="color:#8B888D; font-weight:700; font-size:12.5px">They join, you both get paid</div></div>
+              <div style="color:#C43A7C; font-weight:900; font-size:15px">+25</div>
+            </div>
+          </div>
+
+          <div style="margin-top:22px; color:#9A989B; font-weight:900; font-size:12.5px">OR JUST BUY IT</div>
+          <div style="margin-top:11px; display:flex; gap:9px; align-items:flex-end">
+            <div style="flex:1; background:#403E41; border-radius:22px; padding:15px 8px; display:flex; flex-direction:column; align-items:center; gap:2px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:22px; color:#fff">25</div>
+              <div style="color:#848286; font-weight:700; font-size:12px">candy</div>
+              <div style="margin-top:5px; color:#C1C0C0; font-weight:900; font-size:14px">$1.99</div>
+            </div>
+            <div style="flex:1.1; background:#FF5CA8; border-radius:22px; padding:19px 8px; display:flex; flex-direction:column; align-items:center; gap:2px; box-shadow:0 5px 0 #C43A7C; position:relative">
+              <div style="position:absolute; top:-12px; background:#FFD84D; color:#3A2A00; font-weight:900; font-size:10.5px; border-radius:100px; padding:4px 10px; transform:rotate(-3deg); white-space:nowrap">MOST PICKED</div>
+              <div style="margin-top:3px; font-family:'Fredoka',sans-serif; font-weight:700; font-size:26px; color:#fff">100</div>
+              <div style="color:#FFD6E9; font-weight:700; font-size:12px">candy</div>
+              <div style="margin-top:5px; color:#fff; font-weight:900; font-size:15px">$5.99</div>
+            </div>
+            <div style="flex:1; background:#403E41; border-radius:22px; padding:15px 8px; display:flex; flex-direction:column; align-items:center; gap:2px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:22px; color:#fff">300</div>
+              <div style="color:#848286; font-weight:700; font-size:12px">candy</div>
+              <div style="margin-top:5px; color:#C1C0C0; font-weight:900; font-size:14px">$12.99</div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto; margin-bottom:30px; background:#6BF2C2; border-radius:24px; padding:16px 18px; display:flex; align-items:center; gap:13px; box-shadow:0 5px 0 #3FBF95">
+            <div style="font-size:24px">😈</div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:1px">
+              <div style="color:#0A3B2C; font-weight:900; font-size:15px">Or skip candy entirely</div>
+              <div style="color:#12664C; font-weight:800; font-size:12.5px">God Mode shows every name, always</div>
+            </div>
+            <div style="background:#0A3B2C; border-radius:100px; padding:9px 14px; color:#6BF2C2; font-weight:900; font-size:13px; white-space:nowrap">Try free</div>
+          </div>
+        </div>
+      </x-import>
+
+      <!-- onboarding -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#221F22; padding:60px 20px 0; box-sizing:border-box; font-family:'Nunito',system-ui; overflow:hidden">
+          <div style="display:flex; gap:5px">
+            <div style="height:8px; flex:1; border-radius:100px; background:#6BF2C2"></div>
+            <div style="height:8px; flex:1; border-radius:100px; background:#6BF2C2"></div>
+            <div style="height:8px; flex:1; border-radius:100px; background:#403E41"></div>
+            <div style="height:8px; flex:1; border-radius:100px; background:#403E41"></div>
+          </div>
+
+          <div style="margin-top:30px; font-family:'Fredoka',sans-serif; font-weight:700; font-size:38px; line-height:1.04; color:#fff; text-wrap:balance">Which school do you go to?</div>
+          <div style="margin-top:10px; color:#9A989B; font-weight:700; font-size:15px; line-height:1.45">You'll only ever see people from your school, and only they can see you.</div>
+
+          <div style="margin-top:22px; background:#403E41; border-radius:20px; padding:15px 17px; display:flex; align-items:center; gap:11px">
+            <div style="font-size:17px">🔍</div>
+            <div style="color:#fff; font-weight:800; font-size:16px">Lakeview</div>
+            <div style="width:2px; height:20px; background:#6BF2C2"></div>
+          </div>
+
+          <div style="margin-top:12px; display:flex; flex-direction:column; gap:9px">
+            <div style="background:#FFF6E8; border-radius:20px; padding:15px 16px; display:flex; align-items:center; gap:13px; box-shadow:0 4px 0 #D9C7AF">
+              <div style="width:44px; height:44px; border-radius:15px; background:#6BF2C2; display:flex; align-items:center; justify-content:center; font-size:21px">🏫</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:1px">
+                <div style="color:#2D2A2E; font-weight:900; font-size:15.5px">Lakeview High School</div>
+                <div style="color:#8B888D; font-weight:700; font-size:12.5px">Austin, TX · 312 kids already here</div>
+              </div>
+              <div style="width:24px; height:24px; border-radius:100px; background:#6BF2C2; color:#0A3B2C; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center">✓</div>
+            </div>
+            <div style="background:#403E41; border-radius:20px; padding:15px 16px; display:flex; align-items:center; gap:13px">
+              <div style="width:44px; height:44px; border-radius:15px; background:#4A474B; display:flex; align-items:center; justify-content:center; font-size:21px">🏫</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:1px">
+                <div style="color:#fff; font-weight:900; font-size:15.5px">Lakeview Prep</div>
+                <div style="color:#848286; font-weight:700; font-size:12.5px">Austin, TX · 41 kids already here</div>
+              </div>
+            </div>
+            <div style="background:#403E41; border-radius:20px; padding:15px 16px; display:flex; align-items:center; gap:13px">
+              <div style="width:44px; height:44px; border-radius:15px; background:#4A474B; display:flex; align-items:center; justify-content:center; font-size:21px">🏫</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:1px">
+                <div style="color:#fff; font-weight:900; font-size:15.5px">Lake Travis High</div>
+                <div style="color:#848286; font-weight:700; font-size:12.5px">Austin, TX · 88 kids already here</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px; background:#4A474B; border-radius:20px; padding:15px 16px; display:flex; gap:11px; align-items:flex-start">
+            <div style="font-size:18px">🔒</div>
+            <div style="color:#C1C0C0; font-weight:700; font-size:13px; line-height:1.42">Aura is 13+. We check your grade with your school, and nobody ever sees who you voted for — not even the person you picked.</div>
+          </div>
+
+          <div style="margin-top:auto; padding-bottom:32px">
+            <div style="background:#6BF2C2; border-radius:100px; padding:18px; text-align:center; font-family:'Fredoka',sans-serif; font-weight:700; font-size:19px; color:#0A3B2C; box-shadow:0 5px 0 #3FBF95">That's my school</div>
+            <div style="margin-top:12px; text-align:center; color:#727074; font-weight:800; font-size:12.5px">Can't find it? Request your school</div>
+          </div>
+        </div>
+      </x-import>
+    </div>
+  </div>
+</section>
+
+<section style="padding:56px 48px 40px; display:flex; flex-direction:column; gap:40px; font-family:'Manrope',system-ui">
+  <div style="display:flex; flex-direction:column; gap:10px; max-width:900px">
+    <div style="font-size:13px; letter-spacing:.16em; text-transform:uppercase; color:#8A8578; font-weight:700">Turn 2 · Lights Out, warmed up</div>
+    <div style="font-family:'Anton',sans-serif; font-size:52px; line-height:1; text-transform:uppercase; color:#14120F">Less casino, more cafeteria</div>
+    <div style="font-size:16px; line-height:1.5; color:#4A463D; max-width:660px; text-wrap:pretty">Same dark, same one-tap grid, same reveal beat as <a href="#1a">1a</a>. What changed: plum instead of pure black, chunky rounded type instead of condensed caps, a full candy palette instead of acid-yellow-on-black, stickers and hand-drawn wobble in place of chrome. The reveal is a scratch-off mystery card, not three spinning reels — <a href="#2a">2a</a>.</div>
+  </div>
+
+  <div id="2a" style="display:flex; flex-direction:column; gap:24px">
+    <div style="display:flex; align-items:baseline; gap:14px">
+      <div style="background:#FF5CA8; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:20px; padding:5px 15px; border-radius:100px">2A</div>
+      <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:34px; color:#14120F">Lights Out v2</div>
+    </div>
+
+    <div style="display:flex; gap:32px; flex-wrap:wrap">
+
+      <!-- vote -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#1A1030; padding:56px 20px 0; box-sizing:border-box; font-family:'Nunito',system-ui">
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <div style="display:flex; align-items:center; gap:7px; background:#FF7A3D; border-radius:100px; padding:7px 14px; box-shadow:0 3px 0 #C4501E">
+              <span style="font-size:15px">🔥</span>
+              <span style="color:#fff; font-weight:900; font-size:15px">12</span>
+              <span style="color:#FFE0CE; font-weight:800; font-size:13px">days</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:7px; background:#2C1B4D; border-radius:100px; padding:7px 14px">
+              <span style="font-size:14px">🍬</span>
+              <span style="color:#fff; font-weight:900; font-size:15px">48</span>
+            </div>
+          </div>
+
+          <div style="margin-top:24px; display:flex; gap:6px; align-items:center">
+            <div style="flex:1; height:10px; border-radius:100px; background:#2C1B4D; overflow:hidden; display:flex">
+              <div style="width:37.5%; background:#6BF2C2; border-radius:100px"></div>
+            </div>
+            <div style="color:#A38FD0; font-weight:800; font-size:13px">3/8</div>
+          </div>
+
+          <div style="margin-top:26px; background:#2C1B4D; border-radius:26px; padding:20px; position:relative">
+            <div style="position:absolute; top:-14px; left:20px; background:#FFD84D; color:#3A2A00; font-weight:900; font-size:12px; border-radius:100px; padding:5px 12px; transform:rotate(-3deg)">EVERYONE'S VOTING ON THIS</div>
+            <div style="margin-top:6px; font-size:40px; line-height:1; animation:wobble 3s ease-in-out infinite; display:inline-block">🥵</div>
+            <div style="margin-top:8px; font-family:'Fredoka',sans-serif; font-weight:700; font-size:31px; line-height:1.08; color:#fff; text-wrap:balance">Hottest in the junior class?</div>
+            <div style="margin-top:8px; font-size:13.5px; font-weight:700; color:#A38FD0">They'll know they got picked. Never that it was you.</div>
+          </div>
+
+          <div style="margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:12px">
+            <div style="background:#FFF6E8; border-radius:24px; padding:16px 14px; display:flex; flex-direction:column; gap:11px; box-shadow:0 5px 0 #D9C7AF">
+              <div style="width:54px; height:54px; border-radius:100px; background:#FF5CA8; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:21px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #C43A7C">MR</div>
+              <div style="display:flex; flex-direction:column; gap:1px">
+                <div style="color:#241539; font-weight:900; font-size:17px">Maya R.</div>
+                <div style="color:#8A7BA5; font-weight:700; font-size:13px">11th · Lakeview</div>
+              </div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:24px; padding:16px 14px; display:flex; flex-direction:column; gap:11px; box-shadow:0 5px 0 #D9C7AF">
+              <div style="width:54px; height:54px; border-radius:100px; background:#6BF2C2; color:#0A3B2C; font-family:'Fredoka',sans-serif; font-weight:700; font-size:21px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #3FBF95">DK</div>
+              <div style="display:flex; flex-direction:column; gap:1px">
+                <div style="color:#241539; font-weight:900; font-size:17px">Deven K.</div>
+                <div style="color:#8A7BA5; font-weight:700; font-size:13px">11th · Lakeview</div>
+              </div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:24px; padding:16px 14px; display:flex; flex-direction:column; gap:11px; box-shadow:0 5px 0 #D9C7AF">
+              <div style="width:54px; height:54px; border-radius:100px; background:#7C5CFF; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:21px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #5334D6">SO</div>
+              <div style="display:flex; flex-direction:column; gap:1px">
+                <div style="color:#241539; font-weight:900; font-size:17px">Sofia O.</div>
+                <div style="color:#8A7BA5; font-weight:700; font-size:13px">11th · Lakeview</div>
+              </div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:24px; padding:16px 14px; display:flex; flex-direction:column; gap:11px; box-shadow:0 5px 0 #D9C7AF">
+              <div style="width:54px; height:54px; border-radius:100px; background:#FFD84D; color:#3A2A00; font-family:'Fredoka',sans-serif; font-weight:700; font-size:21px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 0 #D4AC17">TL</div>
+              <div style="display:flex; flex-direction:column; gap:1px">
+                <div style="color:#241539; font-weight:900; font-size:17px">Tyler L.</div>
+                <div style="color:#8A7BA5; font-weight:700; font-size:13px">12th · Lakeview</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px; display:flex; gap:10px">
+            <div style="flex:1; background:#2C1B4D; border-radius:100px; padding:13px; text-align:center; color:#C9BAE6; font-weight:800; font-size:15px">🔄 New four</div>
+            <div style="flex:1; background:#2C1B4D; border-radius:100px; padding:13px; text-align:center; color:#C9BAE6; font-weight:800; font-size:15px">Skip ⏭</div>
+          </div>
+
+          <div style="margin-top:auto; display:flex; justify-content:space-between; align-items:center; background:#2C1B4D; border-radius:26px; margin-bottom:28px; padding:12px 6px">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px; width:78px">
+              <div style="background:#6BF2C2; border-radius:100px; padding:6px 14px; font-size:19px">🗳</div>
+              <div style="color:#6BF2C2; font-size:11px; font-weight:900">VOTE</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px; width:78px; position:relative">
+              <div style="padding:6px 14px; font-size:19px">🔥</div>
+              <div style="color:#8873B0; font-size:11px; font-weight:900">FLAMES</div>
+              <div style="position:absolute; top:-2px; right:14px; background:#FF5CA8; color:#fff; font-size:11px; font-weight:900; border-radius:100px; min-width:20px; height:20px; display:flex; align-items:center; justify-content:center; padding:0 5px; border:2px solid #2C1B4D">7</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px; width:78px">
+              <div style="padding:6px 14px; font-size:19px">🏆</div>
+              <div style="color:#8873B0; font-size:11px; font-weight:900">RANKS</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px; width:78px">
+              <div style="padding:6px 14px; font-size:19px">😎</div>
+              <div style="color:#8873B0; font-size:11px; font-weight:900">ME</div>
+            </div>
+          </div>
+        </div>
+      </x-import>
+
+      <!-- inbox -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#1A1030; padding:56px 20px 0; box-sizing:border-box; font-family:'Nunito',system-ui; overflow:hidden">
+          <div style="display:flex; flex-direction:column; gap:3px">
+            <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:36px; line-height:1; color:#fff">Your flames</div>
+            <div style="color:#A38FD0; font-weight:700; font-size:14px">7 people picked you this week 👀</div>
+          </div>
+
+          <div style="margin-top:20px; background:#6BF2C2; border-radius:24px; padding:17px 19px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 5px 0 #3FBF95">
+            <div style="display:flex; flex-direction:column; gap:2px">
+              <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:20px; color:#0A3B2C">See who picked you</div>
+              <div style="font-size:12.5px; font-weight:800; color:#12664C">God Mode · free for 3 days</div>
+            </div>
+            <div style="font-size:26px">😈</div>
+          </div>
+
+          <div style="margin-top:14px; display:flex; align-items:center; gap:11px; background:#3A2058; border-radius:20px; padding:14px 16px">
+            <div style="font-size:19px">🫣</div>
+            <div style="font-size:13.5px; font-weight:800; color:#FFC9E4; line-height:1.35">Somebody picked you 4 times this week. Bold of them.</div>
+          </div>
+
+          <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px">
+            <div style="background:#FFF6E8; border-radius:22px; padding:15px; display:flex; gap:13px; align-items:center; box-shadow:0 4px 0 #D9C7AF">
+              <div style="width:46px; height:46px; border-radius:16px; background:#FF5CA8; display:flex; align-items:center; justify-content:center; font-size:23px">🥵</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="color:#241539; font-weight:900; font-size:15px; line-height:1.25">Hottest in the junior class</div>
+                <div style="color:#8A7BA5; font-weight:700; font-size:12.5px">Girl · 11th grade · 🔒 name hidden</div>
+              </div>
+              <div style="background:#FF5CA8; color:#fff; font-size:11px; font-weight:900; border-radius:100px; padding:5px 10px">NEW</div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:22px; padding:15px; display:flex; gap:13px; align-items:center; box-shadow:0 4px 0 #D9C7AF">
+              <div style="width:46px; height:46px; border-radius:16px; background:#FFD84D; display:flex; align-items:center; justify-content:center; font-size:23px">😏</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="color:#241539; font-weight:900; font-size:15px; line-height:1.25">Biggest flirt in 3rd period</div>
+                <div style="color:#8A7BA5; font-weight:700; font-size:12.5px">Boy · 12th grade · starts with J</div>
+              </div>
+              <div style="color:#C4B6DC; font-size:20px">›</div>
+            </div>
+            <div style="background:#FFF6E8; border-radius:22px; padding:15px; display:flex; gap:13px; align-items:center; box-shadow:0 4px 0 #D9C7AF">
+              <div style="width:46px; height:46px; border-radius:16px; background:#7C5CFF; display:flex; align-items:center; justify-content:center; font-size:23px">💅</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="color:#241539; font-weight:900; font-size:15px; line-height:1.25">Best dressed, no competition</div>
+                <div style="color:#2E8F6E; font-weight:800; font-size:12.5px">✅ Revealed: Maya R.</div>
+              </div>
+              <div style="color:#C4B6DC; font-size:20px">›</div>
+            </div>
+            <div style="background:#2C1B4D; border-radius:22px; padding:15px; display:flex; gap:13px; align-items:center">
+              <div style="width:46px; height:46px; border-radius:16px; background:#3A2058; display:flex; align-items:center; justify-content:center; font-size:23px">🎤</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="color:#C9BAE6; font-weight:900; font-size:15px; line-height:1.25">Would go viral first</div>
+                <div style="color:#8873B0; font-weight:700; font-size:12.5px">Boy · 10th grade · already opened</div>
+              </div>
+              <div style="color:#6B5A91; font-size:20px">›</div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto; padding:16px 0 32px; text-align:center; color:#6B5A91; font-size:12.5px; font-weight:800">flames disappear after 30 days ✨</div>
+        </div>
+      </x-import>
+
+      <!-- scratch reveal -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#1A1030; padding:60px 22px 0; box-sizing:border-box; font-family:'Nunito',system-ui; align-items:center">
+          <div style="color:#A38FD0; font-weight:900; font-size:13px">SCRATCH TO REVEAL</div>
+          <div style="margin-top:8px; font-family:'Fredoka',sans-serif; font-weight:700; font-size:31px; line-height:1.08; color:#fff; text-align:center; text-wrap:balance">Who thinks you're the hottest junior?</div>
+
+          <div style="margin-top:26px; width:100%; background:#FFF6E8; border-radius:30px; padding:22px; box-shadow:0 7px 0 #D9C7AF; display:flex; flex-direction:column; gap:16px">
+            <div style="display:flex; gap:10px">
+              <div style="flex:1; background:#6BF2C2; border-radius:20px; padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:3px">
+                <div style="font-size:22px">🎓</div>
+                <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:19px; color:#0A3B2C">11th</div>
+                <div style="font-size:10.5px; font-weight:900; color:#12664C">SCRATCHED</div>
+              </div>
+              <div style="flex:1; background:#FFD84D; border-radius:20px; padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:3px">
+                <div style="font-size:22px">👧</div>
+                <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:19px; color:#3A2A00">Girl</div>
+                <div style="font-size:10.5px; font-weight:900; color:#7A5A00">SCRATCHED</div>
+              </div>
+              <div style="flex:1; background:#C9BAE6; border-radius:20px; padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:3px; position:relative; overflow:hidden">
+                <div style="font-size:22px">🪙</div>
+                <div style="font-family:'Fredoka',sans-serif; font-weight:700; font-size:19px; color:#4A3B66">M?</div>
+                <div style="font-size:10.5px; font-weight:900; color:#6B5A91">TAP HERE</div>
+              </div>
+            </div>
+
+            <div style="height:1.5px; background:#E4D6BF"></div>
+
+            <div style="display:flex; flex-direction:column; gap:9px">
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#8A7BA5; font-weight:800; font-size:14px">Picked you</div>
+                <div style="color:#241539; font-weight:900; font-size:14px">4 times 🔥</div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#8A7BA5; font-weight:800; font-size:14px">Since</div>
+                <div style="color:#241539; font-weight:900; font-size:14px">2 weeks ago</div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#8A7BA5; font-weight:800; font-size:14px">Also picked you for</div>
+                <div style="color:#241539; font-weight:900; font-size:14px">2 other prompts</div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#8A7BA5; font-weight:800; font-size:14px">In their grade you're</div>
+                <div style="color:#241539; font-weight:900; font-size:14px">their #1 pick 🏆</div>
+              </div>
+            </div>
+
+            <div style="background:#F2E7D4; border-radius:20px; padding:14px 16px; display:flex; gap:12px; align-items:center">
+              <div style="font-size:22px">🫂</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="color:#241539; font-weight:900; font-size:14px">3 other people picked you too</div>
+                <div style="color:#8A7BA5; font-weight:700; font-size:12.5px">Two juniors and a senior. Scratch them next.</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:22px; width:100%; background:#FF5CA8; border-radius:100px; padding:17px; text-align:center; font-family:'Fredoka',sans-serif; font-weight:700; font-size:19px; color:#fff; box-shadow:0 5px 0 #C43A7C">Scratch the last one · 🍬 3</div>
+          <div style="margin-top:12px; width:100%; background:#2C1B4D; border-radius:100px; padding:15px; text-align:center; font-family:'Fredoka',sans-serif; font-weight:700; font-size:17px; color:#6BF2C2">Skip the wait · God Mode 😈</div>
+          <div style="margin-top:14px; color:#A38FD0; font-size:13.5px; font-weight:800; text-align:center; line-height:1.4">Free scratch every day at 3pm</div>
+
+          <div style="margin-top:auto; padding-bottom:30px; color:#6B5A91; font-size:14px; font-weight:800">Later</div>
+        </div>
+      </x-import>
+
+      <!-- god mode -->
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="height:100%; display:flex; flex-direction:column; background:#1A1030; padding:58px 22px 0; box-sizing:border-box; font-family:'Nunito',system-ui">
+          <div style="display:flex; justify-content:flex-end; color:#6B5A91; font-size:22px; font-weight:800">✕</div>
+          <div style="margin-top:4px; font-size:46px; animation:wobble 3s ease-in-out infinite; display:inline-block; width:56px">😈</div>
+          <div style="margin-top:6px; font-family:'Fredoka',sans-serif; font-weight:700; font-size:44px; line-height:1; color:#6BF2C2">God Mode</div>
+          <div style="margin-top:8px; color:#C9BAE6; font-weight:700; font-size:15.5px; line-height:1.4">Stop guessing. Get the actual names.</div>
+
+          <div style="margin-top:20px; background:#FFF6E8; border-radius:26px; padding:17px; display:flex; flex-direction:column; gap:13px; box-shadow:0 6px 0 #D9C7AF">
+            <div style="display:flex; align-items:center; gap:12px">
+              <div style="width:36px; height:36px; border-radius:100px; background:#FF5CA8; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:center">M</div>
+              <div style="flex:1; color:#241539; font-weight:900; font-size:15px">Maya R. picked you</div>
+              <div style="font-size:16px">🥵</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; filter:blur(3.5px)">
+              <div style="width:36px; height:36px; border-radius:100px; background:#7C5CFF; color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:center">J</div>
+              <div style="flex:1; color:#241539; font-weight:900; font-size:15px">Jordan P. picked you</div>
+              <div style="font-size:16px">😏</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; filter:blur(4.5px)">
+              <div style="width:36px; height:36px; border-radius:100px; background:#6BF2C2; color:#0A3B2C; font-family:'Fredoka',sans-serif; font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:center">A</div>
+              <div style="flex:1; color:#241539; font-weight:900; font-size:15px">Amara T. picked you</div>
+              <div style="font-size:16px">💅</div>
+            </div>
+            <div style="text-align:center; color:#8A7BA5; font-size:12.5px; font-weight:900">+ 5 MORE HIDING IN HERE</div>
+          </div>
+
+          <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px">
+            <div style="display:flex; gap:11px; align-items:center"><div style="font-size:16px">✅</div><div style="color:#E6DEF5; font-weight:800; font-size:15px">Real names on every flame</div></div>
+            <div style="display:flex; gap:11px; align-items:center"><div style="font-size:16px">✅</div><div style="color:#E6DEF5; font-weight:800; font-size:15px">Double candy every round</div></div>
+            <div style="display:flex; gap:11px; align-items:center"><div style="font-size:16px">✅</div><div style="color:#E6DEF5; font-weight:800; font-size:15px">Unlimited scratches, no waiting</div></div>
+            <div style="display:flex; gap:11px; align-items:center"><div style="font-size:16px">✅</div><div style="color:#E6DEF5; font-weight:800; font-size:15px">Vote in stealth mode</div></div>
+          </div>
+
+          <div style="margin-top:20px; display:flex; gap:11px">
+            <div style="flex:1; background:#2C1B4D; border-radius:22px; padding:16px 13px; display:flex; flex-direction:column; gap:2px">
+              <div style="color:#8873B0; font-weight:900; font-size:12px">WEEKLY</div>
+              <div style="color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:26px">$6.99</div>
+              <div style="color:#8873B0; font-weight:700; font-size:12px">every week</div>
+            </div>
+            <div style="flex:1; background:#6BF2C2; border-radius:22px; padding:16px 13px; display:flex; flex-direction:column; gap:2px; position:relative; box-shadow:0 5px 0 #3FBF95">
+              <div style="position:absolute; top:-12px; left:11px; background:#FF5CA8; color:#fff; font-size:10.5px; font-weight:900; border-radius:100px; padding:4px 10px; transform:rotate(-3deg)">BEST DEAL</div>
+              <div style="color:#12664C; font-weight:900; font-size:12px">SEMESTER</div>
+              <div style="color:#0A3B2C; font-family:'Fredoka',sans-serif; font-weight:700; font-size:26px">$29.99</div>
+              <div style="color:#12664C; font-weight:700; font-size:12px">$1.50 a week</div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto; padding-bottom:32px">
+            <div style="background:#FF5CA8; border-radius:100px; padding:18px; text-align:center; font-family:'Fredoka',sans-serif; font-weight:700; font-size:20px; color:#fff; box-shadow:0 5px 0 #C43A7C">Try 3 days free</div>
+            <div style="margin-top:12px; text-align:center; color:#6B5A91; font-size:12.5px; font-weight:700">Then $29.99 a semester. Cancel whenever.</div>
+          </div>
+        </div>
+      </x-import>
+    </div>
+  </div>
+</section>
+
+<section style="padding:16px 48px 96px; display:flex; flex-direction:column; gap:64px; font-family:'Manrope',system-ui">
+
+  <div style="display:flex; flex-direction:column; gap:10px; max-width:900px">
+    <div style="font-size:13px; letter-spacing:.16em; text-transform:uppercase; color:#8A8578; font-weight:700">Turn 1 · Aura mobile</div>
+    <div style="font-family:'Anton',sans-serif; font-size:52px; line-height:1; text-transform:uppercase; color:#14120F">Three directions for the voting loop</div>
+    <div style="font-size:16px; line-height:1.5; color:#4A463D; max-width:620px; text-wrap:pretty">Each direction changes the aesthetic, the way a vote is cast, and the navigation. Reference them in chat by id: <a href="#1a">1a</a>, <a href="#1b">1b</a>, <a href="#1c">1c</a>.</div>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:72px; align-items:flex-start">
+
+    <!-- ══════════════ 1a — NEON NIGHT ══════════════ -->
+    <div id="1a" style="display:flex; flex-direction:column; gap:24px">
+      <div style="display:flex; align-items:baseline; gap:14px">
+        <div style="background:#08070A; color:#E8FF4D; font-family:'Anton',sans-serif; font-size:20px; padding:6px 14px 4px; border-radius:4px">1A</div>
+        <div style="font-family:'Anton',sans-serif; font-size:34px; text-transform:uppercase; color:#14120F">Lights Out</div>
+      </div>
+      <div style="font-size:15px; line-height:1.5; color:#4A463D; max-width:820px; text-wrap:pretty">Nightclub dark, acid yellow, four names in a 2×2 grid — one tap per vote, no confirm. Bottom tab bar. The slot machine is the centrepiece: every reveal is a spin, and coins buy spins.</div>
+
+      <div style="display:flex; gap:32px; flex-wrap:wrap">
+
+        <!-- vote -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#08070A; padding:56px 20px 0; box-sizing:border-box; font-family:'Manrope',system-ui">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div style="display:flex; align-items:center; gap:6px; background:#1A1815; border:1px solid #2E2A22; border-radius:100px; padding:7px 13px">
+                <span style="font-size:15px">🔥</span>
+                <span style="color:#E8FF4D; font-weight:800; font-size:15px">12</span>
+                <span style="color:#6E6A5E; font-weight:600; font-size:13px">day streak</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px; background:#1A1815; border:1px solid #2E2A22; border-radius:100px; padding:7px 13px">
+                <span style="font-size:14px">🪙</span>
+                <span style="color:#fff; font-weight:800; font-size:15px">48</span>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:5px; margin-top:26px">
+              <div style="height:4px; flex:1; border-radius:2px; background:#E8FF4D"></div>
+              <div style="height:4px; flex:1; border-radius:2px; background:#E8FF4D"></div>
+              <div style="height:4px; flex:1; border-radius:2px; background:#E8FF4D"></div>
+              <div style="height:4px; flex:1; border-radius:2px; background:#2E2A22"></div>
+              <div style="height:4px; flex:1; border-radius:2px; background:#2E2A22"></div>
+              <div style="height:4px; flex:1; border-radius:2px; background:#2E2A22"></div>
+              <div style="height:4px; flex:1; border-radius:2px; background:#2E2A22"></div>
+              <div style="height:4px; flex:1; border-radius:2px; background:#2E2A22"></div>
+            </div>
+
+            <div style="margin-top:34px; display:flex; flex-direction:column; gap:14px">
+              <div style="font-size:44px; line-height:1">🥵</div>
+              <div style="font-family:'Anton',sans-serif; font-size:38px; line-height:.98; text-transform:uppercase; color:#fff; text-wrap:balance">Hottest in the junior class</div>
+              <div style="font-size:13px; font-weight:600; color:#6E6A5E">Anonymous · they only see they got picked</div>
+            </div>
+
+            <div style="margin-top:26px; display:grid; grid-template-columns:1fr 1fr; gap:12px">
+              <div style="background:#17161A; border:1.5px solid #2E2A22; border-radius:22px; padding:18px 14px; display:flex; flex-direction:column; gap:12px">
+                <div style="width:52px; height:52px; border-radius:100px; background:#E8FF4D; color:#08070A; font-family:'Anton',sans-serif; font-size:22px; display:flex; align-items:center; justify-content:center">MR</div>
+                <div style="display:flex; flex-direction:column; gap:2px">
+                  <div style="color:#fff; font-weight:800; font-size:17px">Maya R.</div>
+                  <div style="color:#6E6A5E; font-weight:600; font-size:13px">11th · Lakeview</div>
+                </div>
+              </div>
+              <div style="background:#17161A; border:1.5px solid #2E2A22; border-radius:22px; padding:18px 14px; display:flex; flex-direction:column; gap:12px">
+                <div style="width:52px; height:52px; border-radius:100px; background:#7B5CFF; color:#fff; font-family:'Anton',sans-serif; font-size:22px; display:flex; align-items:center; justify-content:center">DK</div>
+                <div style="display:flex; flex-direction:column; gap:2px">
+                  <div style="color:#fff; font-weight:800; font-size:17px">Deven K.</div>
+                  <div style="color:#6E6A5E; font-weight:600; font-size:13px">11th · Lakeview</div>
+                </div>
+              </div>
+              <div style="background:#17161A; border:1.5px solid #2E2A22; border-radius:22px; padding:18px 14px; display:flex; flex-direction:column; gap:12px">
+                <div style="width:52px; height:52px; border-radius:100px; background:#00E5A0; color:#08070A; font-family:'Anton',sans-serif; font-size:22px; display:flex; align-items:center; justify-content:center">SO</div>
+                <div style="display:flex; flex-direction:column; gap:2px">
+                  <div style="color:#fff; font-weight:800; font-size:17px">Sofia O.</div>
+                  <div style="color:#6E6A5E; font-weight:600; font-size:13px">11th · Lakeview</div>
+                </div>
+              </div>
+              <div style="background:#17161A; border:1.5px solid #2E2A22; border-radius:22px; padding:18px 14px; display:flex; flex-direction:column; gap:12px">
+                <div style="width:52px; height:52px; border-radius:100px; background:#FF3B6B; color:#fff; font-family:'Anton',sans-serif; font-size:22px; display:flex; align-items:center; justify-content:center">TL</div>
+                <div style="display:flex; flex-direction:column; gap:2px">
+                  <div style="color:#fff; font-weight:800; font-size:17px">Tyler L.</div>
+                  <div style="color:#6E6A5E; font-weight:600; font-size:13px">12th · Lakeview</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:18px; display:flex; gap:10px">
+              <div style="flex:1; border:1.5px solid #2E2A22; border-radius:100px; padding:13px; text-align:center; color:#A8A395; font-weight:700; font-size:15px">⇄ Shuffle</div>
+              <div style="flex:1; border:1.5px solid #2E2A22; border-radius:100px; padding:13px; text-align:center; color:#A8A395; font-weight:700; font-size:15px">Skip ⏩</div>
+            </div>
+
+            <div style="margin-top:auto; display:flex; justify-content:space-between; align-items:center; border-top:1px solid #1F1D19; padding:14px 8px 30px">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:70px">
+                <div style="font-size:21px">🔮</div>
+                <div style="color:#E8FF4D; font-size:11px; font-weight:800; letter-spacing:.05em">VOTE</div>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:70px; position:relative">
+                <div style="font-size:21px">🔥</div>
+                <div style="color:#5B574C; font-size:11px; font-weight:800; letter-spacing:.05em">FLAMES</div>
+                <div style="position:absolute; top:-6px; right:2px; background:#FF3B6B; color:#fff; font-size:11px; font-weight:800; border-radius:100px; min-width:19px; height:19px; display:flex; align-items:center; justify-content:center; padding:0 4px">7</div>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:70px">
+                <div style="font-size:21px">📈</div>
+                <div style="color:#5B574C; font-size:11px; font-weight:800; letter-spacing:.05em">RANKS</div>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:5px; width:70px">
+                <div style="font-size:21px">👑</div>
+                <div style="color:#5B574C; font-size:11px; font-weight:800; letter-spacing:.05em">ME</div>
+              </div>
+            </div>
+          </div>
+        </x-import>
+
+        <!-- inbox -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#08070A; padding:56px 20px 0; box-sizing:border-box; font-family:'Manrope',system-ui; overflow:hidden">
+            <div style="display:flex; flex-direction:column; gap:4px">
+              <div style="font-family:'Anton',sans-serif; font-size:36px; line-height:1; text-transform:uppercase; color:#fff">Your flames</div>
+              <div style="color:#6E6A5E; font-weight:600; font-size:14px">7 people picked you this week</div>
+            </div>
+
+            <div style="margin-top:20px; background:#E8FF4D; border-radius:20px; padding:16px 18px; display:flex; align-items:center; justify-content:space-between">
+              <div style="display:flex; flex-direction:column; gap:2px">
+                <div style="font-family:'Anton',sans-serif; font-size:19px; text-transform:uppercase; color:#08070A">See who picked you</div>
+                <div style="font-size:12px; font-weight:700; color:#4C5406">God Mode · 3 day free trial</div>
+              </div>
+              <div style="font-size:24px">👀</div>
+            </div>
+
+            <div style="margin-top:14px; display:flex; align-items:center; gap:10px; background:#241C10; border:1px solid #4A3A16; border-radius:16px; padding:13px 15px">
+              <div style="font-size:17px">🔥</div>
+              <div style="font-size:13px; font-weight:700; color:#F0C86A; line-height:1.35">Someone picked you 4 times this week. Secret admirer.</div>
+            </div>
+
+            <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px">
+              <div style="background:#17161A; border:1.5px solid #2E2A22; border-radius:20px; padding:16px; display:flex; gap:14px; align-items:center">
+                <div style="width:44px; height:44px; border-radius:14px; background:#2A2620; display:flex; align-items:center; justify-content:center; font-size:22px">🥵</div>
+                <div style="flex:1; display:flex; flex-direction:column; gap:3px">
+                  <div style="color:#fff; font-weight:800; font-size:15px; line-height:1.25">Hottest in the junior class</div>
+                  <div style="color:#6E6A5E; font-weight:600; font-size:12.5px">Girl · 11th grade · 🔒 name hidden</div>
+                </div>
+                <div style="background:#E8FF4D; color:#08070A; font-size:11px; font-weight:800; border-radius:100px; padding:5px 9px">NEW</div>
+              </div>
+              <div style="background:#17161A; border:1.5px solid #2E2A22; border-radius:20px; padding:16px; display:flex; gap:14px; align-items:center">
+                <div style="width:44px; height:44px; border-radius:14px; background:#2A2620; display:flex; align-items:center; justify-content:center; font-size:22px">😏</div>
+                <div style="flex:1; display:flex; flex-direction:column; gap:3px">
+                  <div style="color:#fff; font-weight:800; font-size:15px; line-height:1.25">Biggest flirt in 3rd period</div>
+                  <div style="color:#6E6A5E; font-weight:600; font-size:12.5px">Boy · 12th grade · From J•••</div>
+                </div>
+                <div style="color:#3F3B33; font-size:20px">›</div>
+              </div>
+              <div style="background:#17161A; border:1.5px solid #2E2A22; border-radius:20px; padding:16px; display:flex; gap:14px; align-items:center">
+                <div style="width:44px; height:44px; border-radius:14px; background:#2A2620; display:flex; align-items:center; justify-content:center; font-size:22px">💅</div>
+                <div style="flex:1; display:flex; flex-direction:column; gap:3px">
+                  <div style="color:#fff; font-weight:800; font-size:15px; line-height:1.25">Best dressed, no competition</div>
+                  <div style="color:#6E6A5E; font-weight:600; font-size:12.5px">Girl · 11th grade · ✅ It's Maya R.</div>
+                </div>
+                <div style="color:#3F3B33; font-size:20px">›</div>
+              </div>
+              <div style="background:#17161A; border:1.5px solid #2E2A22; border-radius:20px; padding:16px; display:flex; gap:14px; align-items:center; opacity:.62">
+                <div style="width:44px; height:44px; border-radius:14px; background:#2A2620; display:flex; align-items:center; justify-content:center; font-size:22px">🎤</div>
+                <div style="flex:1; display:flex; flex-direction:column; gap:3px">
+                  <div style="color:#fff; font-weight:800; font-size:15px; line-height:1.25">Would go viral first</div>
+                  <div style="color:#6E6A5E; font-weight:600; font-size:12.5px">Boy · 10th grade · seen by you</div>
+                </div>
+                <div style="color:#3F3B33; font-size:20px">›</div>
+              </div>
+            </div>
+
+            <div style="margin-top:auto; padding:16px 0 34px; text-align:center; color:#3F3B33; font-size:12px; font-weight:700; letter-spacing:.06em">FLAMES OLDER THAN 30 DAYS DISAPPEAR</div>
+          </div>
+        </x-import>
+
+        <!-- slot reveal -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#0B0A0E; padding:64px 22px 0; box-sizing:border-box; font-family:'Manrope',system-ui; align-items:center">
+            <div style="color:#6E6A5E; font-weight:800; font-size:12px; letter-spacing:.14em">REVEALING YOUR ADMIRER</div>
+            <div style="margin-top:12px; font-family:'Anton',sans-serif; font-size:34px; line-height:1; text-transform:uppercase; color:#fff; text-align:center; text-wrap:balance">Who picked you as hottest?</div>
+
+            <div style="margin-top:32px; width:100%; background:#17161A; border:2px solid #E8FF4D; border-radius:26px; padding:20px 16px; display:flex; gap:10px; box-shadow:0 0 60px rgba(232,255,77,.16)">
+              <div style="flex:1; display:flex; flex-direction:column; gap:8px; align-items:center">
+                <div style="color:#6E6A5E; font-size:10px; font-weight:800; letter-spacing:.1em">GRADE</div>
+                <div style="width:100%; height:96px; border-radius:16px; background:#0B0A0E; border:1px solid #2E2A22; display:flex; align-items:center; justify-content:center; overflow:hidden">
+                  <div style="font-family:'Anton',sans-serif; font-size:40px; color:#E8FF4D">11</div>
+                </div>
+                <div style="color:#E8FF4D; font-size:11px; font-weight:800">LOCKED ✓</div>
+              </div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:8px; align-items:center">
+                <div style="color:#6E6A5E; font-size:10px; font-weight:800; letter-spacing:.1em">GENDER</div>
+                <div style="width:100%; height:96px; border-radius:16px; background:#0B0A0E; border:1px solid #2E2A22; display:flex; align-items:center; justify-content:center; overflow:hidden">
+                  <div style="font-family:'Anton',sans-serif; font-size:34px; color:#E8FF4D">GIRL</div>
+                </div>
+                <div style="color:#E8FF4D; font-size:11px; font-weight:800">LOCKED ✓</div>
+              </div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:8px; align-items:center">
+                <div style="color:#6E6A5E; font-size:10px; font-weight:800; letter-spacing:.1em">INITIAL</div>
+                <div style="width:100%; height:96px; border-radius:16px; background:#0B0A0E; border:1px solid #E8FF4D; display:flex; align-items:center; justify-content:center; overflow:hidden">
+                  <div style="display:flex; flex-direction:column; animation:reelspin .45s linear infinite; font-family:'Anton',sans-serif; font-size:40px; color:#fff; line-height:96px">
+                    <div>A</div><div>K</div><div>M</div><div>R</div><div>S</div><div>T</div>
+                  </div>
+                </div>
+                <div style="color:#6E6A5E; font-size:11px; font-weight:800">SPINNING…</div>
+              </div>
+            </div>
+
+            <div style="margin-top:26px; width:100%; background:#17161A; border:1.5px solid #2E2A22; border-radius:20px; padding:18px; display:flex; flex-direction:column; gap:10px">
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#A8A395; font-weight:700; font-size:14px">Picked you</div>
+                <div style="color:#fff; font-weight:800; font-size:14px">4 times 🔥</div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#A8A395; font-weight:700; font-size:14px">First picked you</div>
+                <div style="color:#fff; font-weight:800; font-size:14px">2 weeks ago</div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="color:#A8A395; font-weight:700; font-size:14px">Also picked you for</div>
+                <div style="color:#fff; font-weight:800; font-size:14px">2 other prompts</div>
+              </div>
+            </div>
+
+            <div style="margin-top:22px; width:100%; background:#E8FF4D; border-radius:100px; padding:17px; text-align:center; font-family:'Anton',sans-serif; font-size:19px; text-transform:uppercase; color:#08070A">Spin the last reel · 🪙 3</div>
+            <div style="margin-top:12px; color:#6E6A5E; font-size:13px; font-weight:700; text-align:center">Or unlock her full name with God Mode</div>
+
+            <div style="margin-top:auto; padding-bottom:36px; color:#3F3B33; font-size:13px; font-weight:700">Maybe later</div>
+          </div>
+        </x-import>
+
+        <!-- god mode paywall -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#0B0A0E; padding:60px 22px 0; box-sizing:border-box; font-family:'Manrope',system-ui">
+            <div style="display:flex; justify-content:flex-end; color:#4A463D; font-size:22px; font-weight:700">✕</div>
+            <div style="margin-top:8px; font-size:46px">👑</div>
+            <div style="margin-top:10px; font-family:'Anton',sans-serif; font-size:44px; line-height:.95; text-transform:uppercase; color:#E8FF4D">God mode</div>
+            <div style="margin-top:8px; color:#A8A395; font-weight:600; font-size:15px; line-height:1.45">Stop guessing. See the names behind your flames.</div>
+
+            <div style="margin-top:22px; background:#17161A; border:1.5px solid #2E2A22; border-radius:22px; padding:16px; display:flex; flex-direction:column; gap:12px">
+              <div style="display:flex; align-items:center; gap:12px">
+                <div style="width:34px; height:34px; border-radius:100px; background:#E8FF4D; color:#08070A; font-family:'Anton',sans-serif; font-size:15px; display:flex; align-items:center; justify-content:center">M</div>
+                <div style="flex:1; color:#fff; font-weight:800; font-size:15px">Maya R. picked you</div>
+                <div style="font-size:15px">🥵</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:12px; filter:blur(3.5px)">
+                <div style="width:34px; height:34px; border-radius:100px; background:#7B5CFF; color:#fff; font-family:'Anton',sans-serif; font-size:15px; display:flex; align-items:center; justify-content:center">J</div>
+                <div style="flex:1; color:#fff; font-weight:800; font-size:15px">Jordan P. picked you</div>
+                <div style="font-size:15px">😏</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:12px; filter:blur(4.5px)">
+                <div style="width:34px; height:34px; border-radius:100px; background:#00E5A0; color:#08070A; font-family:'Anton',sans-serif; font-size:15px; display:flex; align-items:center; justify-content:center">A</div>
+                <div style="flex:1; color:#fff; font-weight:800; font-size:15px">Amara T. picked you</div>
+                <div style="font-size:15px">💅</div>
+              </div>
+              <div style="text-align:center; color:#6E6A5E; font-size:12px; font-weight:800; letter-spacing:.08em">+ 5 MORE HIDDEN</div>
+            </div>
+
+            <div style="margin-top:20px; display:flex; flex-direction:column; gap:11px">
+              <div style="display:flex; gap:11px; align-items:center"><div style="color:#E8FF4D; font-size:15px">✓</div><div style="color:#E4E0D6; font-weight:700; font-size:15px">Full names on every flame</div></div>
+              <div style="display:flex; gap:11px; align-items:center"><div style="color:#E8FF4D; font-size:15px">✓</div><div style="color:#E4E0D6; font-weight:700; font-size:15px">2× coins on every round</div></div>
+              <div style="display:flex; gap:11px; align-items:center"><div style="color:#E8FF4D; font-size:15px">✓</div><div style="color:#E4E0D6; font-weight:700; font-size:15px">Free reel spins, no cooldown</div></div>
+              <div style="display:flex; gap:11px; align-items:center"><div style="color:#E8FF4D; font-size:15px">✓</div><div style="color:#E4E0D6; font-weight:700; font-size:15px">Vote invisibly — nobody sees your streak</div></div>
+            </div>
+
+            <div style="margin-top:22px; display:flex; gap:11px">
+              <div style="flex:1; border:1.5px solid #2E2A22; border-radius:20px; padding:16px 12px; display:flex; flex-direction:column; gap:3px">
+                <div style="color:#6E6A5E; font-weight:800; font-size:12px; letter-spacing:.06em">WEEKLY</div>
+                <div style="color:#fff; font-family:'Anton',sans-serif; font-size:26px">$6.99</div>
+                <div style="color:#6E6A5E; font-weight:600; font-size:12px">billed weekly</div>
+              </div>
+              <div style="flex:1; border:2px solid #E8FF4D; background:#181707; border-radius:20px; padding:16px 12px; display:flex; flex-direction:column; gap:3px; position:relative">
+                <div style="position:absolute; top:-11px; left:12px; background:#E8FF4D; color:#08070A; font-size:10px; font-weight:800; border-radius:100px; padding:3px 8px; letter-spacing:.06em">BEST VALUE</div>
+                <div style="color:#E8FF4D; font-weight:800; font-size:12px; letter-spacing:.06em">SEMESTER</div>
+                <div style="color:#fff; font-family:'Anton',sans-serif; font-size:26px">$29.99</div>
+                <div style="color:#B8B2A2; font-weight:600; font-size:12px">$1.50 / week</div>
+              </div>
+            </div>
+
+            <div style="margin-top:auto; padding-bottom:34px">
+              <div style="background:#E8FF4D; border-radius:100px; padding:18px; text-align:center; font-family:'Anton',sans-serif; font-size:20px; text-transform:uppercase; color:#08070A">Start 3 days free</div>
+              <div style="margin-top:11px; text-align:center; color:#4A463D; font-size:12px; font-weight:600">Then $29.99 / semester. Cancel anytime.</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+    </div>
+
+    <!-- ══════════════ 1b — YEARBOOK ══════════════ -->
+    <div id="1b" style="display:flex; flex-direction:column; gap:24px">
+      <div style="display:flex; align-items:baseline; gap:14px">
+        <div style="background:#14120F; color:#E8FF4D; font-family:'Archivo Black',sans-serif; font-size:18px; padding:7px 14px 5px; border-radius:4px">1B</div>
+        <div style="font-family:'Archivo Black',sans-serif; font-size:32px; text-transform:uppercase; color:#14120F">Superlatives</div>
+      </div>
+      <div style="font-size:15px; line-height:1.5; color:#4A463D; max-width:820px; text-wrap:pretty">Printed-yearbook logic on cream stock. You vote by swiping a stack of cards, one candidate at a time, so every vote is a snap judgement. Navigation is the swipe plus a single top-left menu. The hook is the weekly school ranking board.</div>
+
+      <div style="display:flex; gap:32px; flex-wrap:wrap">
+
+        <!-- swipe vote -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#F4EFE4; padding:58px 22px 0; box-sizing:border-box; font-family:'Space Grotesk',system-ui">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div style="font-family:'Archivo Black',sans-serif; font-size:15px; letter-spacing:.02em; color:#14120F">LAKEVIEW '27</div>
+              <div style="display:flex; gap:8px; align-items:center; flex-shrink:0">
+                <div style="background:#14120F; color:#F4EFE4; font-weight:700; font-size:13px; border-radius:4px; padding:5px 9px; flex-shrink:0; white-space:nowrap">🪙 48</div>
+                <div style="background:#E8FF4D; color:#14120F; font-weight:700; font-size:13px; border-radius:4px; padding:5px 9px; flex-shrink:0; white-space:nowrap">🔥 12</div>
+              </div>
+            </div>
+
+            <div style="margin-top:30px; border-top:2px solid #14120F; border-bottom:2px solid #14120F; padding:14px 0">
+              <div style="font-family:'Archivo Black',sans-serif; font-size:29px; line-height:1.04; text-transform:uppercase; color:#14120F; text-wrap:balance">Most likely to break a heart this semester</div>
+            </div>
+            <div style="margin-top:10px; display:flex; justify-content:space-between; font-size:12px; font-weight:700; letter-spacing:.08em; color:#8A8578">
+              <div>QUESTION 04 / 08</div>
+              <div>ANONYMOUS</div>
+            </div>
+
+            <div style="margin-top:26px; position:relative; height:392px">
+              <div style="position:absolute; inset:0; transform:rotate(3.5deg); background:#EDE7D9; border:2px solid #C9C0AB; border-radius:6px"></div>
+              <div style="position:absolute; inset:0; transform:rotate(-2deg); background:#EFEADC; border:2px solid #C9C0AB; border-radius:6px"></div>
+              <div style="position:absolute; inset:0; background:#FFFDF7; border:2px solid #14120F; border-radius:6px; padding:18px; display:flex; flex-direction:column; box-shadow:8px 8px 0 #14120F">
+                <div style="flex:1; background:#E8FF4D; border:2px solid #14120F; display:flex; align-items:center; justify-content:center">
+                  <div style="font-family:'Archivo Black',sans-serif; font-size:88px; color:#14120F">DK</div>
+                </div>
+                <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:flex-end">
+                  <div style="display:flex; flex-direction:column; gap:2px">
+                    <div style="font-family:'Archivo Black',sans-serif; font-size:26px; text-transform:uppercase; color:#14120F">Deven K.</div>
+                    <div style="font-size:13px; font-weight:600; color:#6E6A5E">11th grade · Track, Debate</div>
+                  </div>
+                  <div style="font-size:12px; font-weight:700; letter-spacing:.06em; color:#8A8578">2 / 5</div>
+                </div>
+              </div>
+              <div style="position:absolute; top:22px; left:-6px; transform:rotate(-9deg); background:#14120F; color:#F4EFE4; font-family:'Archivo Black',sans-serif; font-size:13px; padding:6px 10px; letter-spacing:.06em">NOPE ←</div>
+              <div style="position:absolute; top:22px; right:-6px; transform:rotate(9deg); background:#FF3B6B; color:#fff; font-family:'Archivo Black',sans-serif; font-size:13px; padding:6px 10px; letter-spacing:.06em">→ THAT'S THEM</div>
+            </div>
+
+            <div style="margin-top:22px; display:flex; gap:12px; align-items:center; justify-content:center">
+              <div style="width:64px; height:64px; border-radius:100px; border:2px solid #14120F; display:flex; align-items:center; justify-content:center; font-size:24px; color:#14120F">✕</div>
+              <div style="width:52px; height:52px; border-radius:100px; border:2px solid #C9C0AB; display:flex; align-items:center; justify-content:center; font-size:18px; color:#8A8578">⇄</div>
+              <div style="width:64px; height:64px; border-radius:100px; background:#FF3B6B; border:2px solid #14120F; display:flex; align-items:center; justify-content:center; font-size:26px; box-shadow:4px 4px 0 #14120F">🔥</div>
+            </div>
+
+            <div style="margin-top:auto; padding:16px 0 34px; text-align:center; font-size:12px; font-weight:700; letter-spacing:.06em; color:#A8A395">SWIPE RIGHT TO PICK · NOBODY SEES YOUR VOTE</div>
+          </div>
+        </x-import>
+
+        <!-- leaderboard -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#F4EFE4; padding:58px 22px 0; box-sizing:border-box; font-family:'Space Grotesk',system-ui; overflow:hidden">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div style="font-size:22px; color:#14120F">☰</div>
+              <div style="font-size:12px; font-weight:700; letter-spacing:.08em; color:#8A8578">RESETS SUNDAY 11:59PM</div>
+            </div>
+
+            <div style="margin-top:22px; font-family:'Archivo Black',sans-serif; font-size:40px; line-height:.98; text-transform:uppercase; color:#14120F">The board</div>
+            <div style="margin-top:6px; font-size:14px; font-weight:600; color:#6E6A5E">Most flames at Lakeview High this week</div>
+
+            <div style="margin-top:18px; display:flex; gap:8px">
+              <div style="background:#14120F; color:#F4EFE4; font-weight:700; font-size:13px; border-radius:100px; padding:7px 14px">Overall</div>
+              <div style="border:1.5px solid #C9C0AB; color:#6E6A5E; font-weight:700; font-size:13px; border-radius:100px; padding:7px 14px">11th</div>
+              <div style="border:1.5px solid #C9C0AB; color:#6E6A5E; font-weight:700; font-size:13px; border-radius:100px; padding:7px 14px">Hottest</div>
+            </div>
+
+            <div style="margin-top:20px; display:flex; flex-direction:column">
+              <div style="display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid #D8D0BC">
+                <div style="font-family:'Archivo Black',sans-serif; font-size:30px; color:#14120F; width:44px">01</div>
+                <div style="width:44px; height:44px; background:#E8FF4D; border:2px solid #14120F; font-family:'Archivo Black',sans-serif; font-size:16px; display:flex; align-items:center; justify-content:center; color:#14120F">MR</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:16px; color:#14120F">Maya R.</div><div style="font-size:12.5px; font-weight:600; color:#8A8578">11th · won 4 superlatives</div></div>
+                <div style="font-family:'Archivo Black',sans-serif; font-size:17px; color:#14120F">184</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid #D8D0BC">
+                <div style="font-family:'Archivo Black',sans-serif; font-size:30px; color:#14120F; width:44px">02</div>
+                <div style="width:44px; height:44px; background:#FFFDF7; border:2px solid #14120F; font-family:'Archivo Black',sans-serif; font-size:16px; display:flex; align-items:center; justify-content:center; color:#14120F">TL</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:16px; color:#14120F">Tyler L.</div><div style="font-size:12.5px; font-weight:600; color:#8A8578">12th · won 3 superlatives</div></div>
+                <div style="font-family:'Archivo Black',sans-serif; font-size:17px; color:#14120F">171</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid #D8D0BC">
+                <div style="font-family:'Archivo Black',sans-serif; font-size:30px; color:#14120F; width:44px">03</div>
+                <div style="width:44px; height:44px; background:#FFFDF7; border:2px solid #14120F; font-family:'Archivo Black',sans-serif; font-size:16px; display:flex; align-items:center; justify-content:center; color:#14120F">SO</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:16px; color:#14120F">Sofia O.</div><div style="font-size:12.5px; font-weight:600; color:#8A8578">11th · won 3 superlatives</div></div>
+                <div style="font-family:'Archivo Black',sans-serif; font-size:17px; color:#14120F">158</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid #D8D0BC">
+                <div style="font-family:'Archivo Black',sans-serif; font-size:30px; color:#8A8578; width:44px">04</div>
+                <div style="width:44px; height:44px; background:#FFFDF7; border:2px solid #C9C0AB; font-family:'Archivo Black',sans-serif; font-size:16px; display:flex; align-items:center; justify-content:center; color:#8A8578">JP</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:16px; color:#14120F">Jordan P.</div><div style="font-size:12.5px; font-weight:600; color:#8A8578">12th · won 1 superlative</div></div>
+                <div style="font-family:'Archivo Black',sans-serif; font-size:17px; color:#8A8578">121</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid #D8D0BC">
+                <div style="font-family:'Archivo Black',sans-serif; font-size:30px; color:#8A8578; width:44px">05</div>
+                <div style="width:44px; height:44px; background:#FFFDF7; border:2px solid #C9C0AB; font-family:'Archivo Black',sans-serif; font-size:16px; display:flex; align-items:center; justify-content:center; color:#8A8578">AT</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:16px; color:#14120F">Amara T.</div><div style="font-size:12.5px; font-weight:600; color:#8A8578">10th · won 1 superlative</div></div>
+                <div style="font-family:'Archivo Black',sans-serif; font-size:17px; color:#8A8578">104</div>
+              </div>
+            </div>
+
+            <div style="margin-top:auto; margin-bottom:44px; background:#14120F; border-radius:6px; padding:18px; display:flex; align-items:center; justify-content:space-between">
+              <div style="display:flex; flex-direction:column; gap:3px">
+                <div style="color:#8A8578; font-size:11px; font-weight:700; letter-spacing:.1em">YOU</div>
+                <div style="color:#F4EFE4; font-family:'Archivo Black',sans-serif; font-size:20px">#14 · 62 flames</div>
+                <div style="color:#E8FF4D; font-size:12.5px; font-weight:700">6 more to crack the top 10</div>
+              </div>
+              <div style="font-family:'Archivo Black',sans-serif; font-size:34px; color:#E8FF4D">14</div>
+            </div>
+          </div>
+        </x-import>
+
+        <!-- profile -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#F4EFE4; padding:58px 22px 0; box-sizing:border-box; font-family:'Space Grotesk',system-ui; overflow:hidden">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div style="font-size:22px; color:#14120F">‹</div>
+              <div style="font-size:20px; color:#14120F">⚙</div>
+            </div>
+
+            <div style="margin-top:16px; display:flex; gap:16px; align-items:flex-end">
+              <div style="width:96px; height:112px; background:#E8FF4D; border:2px solid #14120F; box-shadow:6px 6px 0 #14120F; display:flex; align-items:center; justify-content:center; font-family:'Archivo Black',sans-serif; font-size:38px; color:#14120F">RB</div>
+              <div style="display:flex; flex-direction:column; gap:4px; padding-bottom:6px">
+                <div style="font-family:'Archivo Black',sans-serif; font-size:26px; text-transform:uppercase; color:#14120F; line-height:1">Riley B.</div>
+                <div style="font-size:13.5px; font-weight:600; color:#6E6A5E">11th grade · Lakeview High</div>
+                <div style="font-size:13.5px; font-weight:700; color:#14120F">🔥 12 day streak</div>
+              </div>
+            </div>
+
+            <div style="margin-top:24px; display:flex; border-top:2px solid #14120F; border-bottom:2px solid #14120F">
+              <div style="flex:1; padding:14px 0; display:flex; flex-direction:column; gap:2px"><div style="font-family:'Archivo Black',sans-serif; font-size:26px; color:#14120F">62</div><div style="font-size:11px; font-weight:700; letter-spacing:.06em; color:#8A8578">FLAMES</div></div>
+              <div style="width:1px; background:#D8D0BC"></div>
+              <div style="flex:1; padding:14px 0 14px 16px; display:flex; flex-direction:column; gap:2px"><div style="font-family:'Archivo Black',sans-serif; font-size:26px; color:#14120F">#14</div><div style="font-size:11px; font-weight:700; letter-spacing:.06em; color:#8A8578">IN SCHOOL</div></div>
+              <div style="width:1px; background:#D8D0BC"></div>
+              <div style="flex:1; padding:14px 0 14px 16px; display:flex; flex-direction:column; gap:2px"><div style="font-family:'Archivo Black',sans-serif; font-size:26px; color:#14120F">7</div><div style="font-size:11px; font-weight:700; letter-spacing:.06em; color:#8A8578">FRIENDS</div></div>
+            </div>
+
+            <div style="margin-top:24px; font-size:12px; font-weight:700; letter-spacing:.1em; color:#8A8578">SUPERLATIVES WON</div>
+            <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:10px">
+              <div style="background:#FFFDF7; border:2px solid #14120F; border-radius:100px; padding:9px 14px; font-weight:700; font-size:13.5px; color:#14120F">🥵 Hottest in 11th</div>
+              <div style="background:#FFFDF7; border:2px solid #14120F; border-radius:100px; padding:9px 14px; font-weight:700; font-size:13.5px; color:#14120F">🎤 Would go viral first</div>
+              <div style="background:#E8FF4D; border:2px solid #14120F; border-radius:100px; padding:9px 14px; font-weight:700; font-size:13.5px; color:#14120F">💅 Best dressed ×3</div>
+              <div style="background:#FFFDF7; border:2px solid #C9C0AB; border-radius:100px; padding:9px 14px; font-weight:700; font-size:13.5px; color:#8A8578">🔒 2 locked</div>
+            </div>
+
+            <div style="margin-top:26px; background:#FFFDF7; border:2px solid #14120F; border-radius:6px; padding:18px; display:flex; flex-direction:column; gap:12px">
+              <div style="font-family:'Archivo Black',sans-serif; font-size:19px; text-transform:uppercase; color:#14120F">Add your class</div>
+              <div style="font-size:13.5px; font-weight:600; color:#6E6A5E; line-height:1.4">Each friend who joins puts you in more people's polls. More polls, more flames.</div>
+              <div style="display:flex; gap:8px; align-items:center">
+                <div style="flex:1; background:#E8FF4D; border:2px solid #14120F; border-radius:4px; padding:13px; text-align:center; font-family:'Archivo Black',sans-serif; font-size:15px; color:#14120F">INVITE 5 · GET 🪙 25</div>
+              </div>
+              <div style="display:flex; gap:6px; align-items:center">
+                <div style="flex:1; height:8px; background:#EDE7D9; border:1.5px solid #14120F; border-radius:100px; overflow:hidden"><div style="width:60%; height:100%; background:#FF3B6B"></div></div>
+                <div style="font-size:12px; font-weight:700; color:#6E6A5E">3 / 5</div>
+              </div>
+            </div>
+
+            <div style="margin-top:auto; margin-bottom:44px; display:flex; justify-content:space-between; padding-top:16px; border-top:1px solid #D8D0BC">
+              <div style="font-size:13px; font-weight:700; color:#6E6A5E">Block or report someone</div>
+              <div style="font-size:13px; font-weight:700; color:#8A8578">›</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+    </div>
+
+    <!-- ══════════════ 1c — CHROME ══════════════ -->
+    <div id="1c" style="display:flex; flex-direction:column; gap:24px">
+      <div style="display:flex; align-items:baseline; gap:14px">
+        <div style="background:#FF2D95; color:#fff; font-family:'Syne',sans-serif; font-weight:800; font-size:19px; padding:6px 14px; border-radius:100px">1C</div>
+        <div style="font-family:'Syne',sans-serif; font-weight:800; font-size:33px; color:#14120F">Drop</div>
+      </div>
+      <div style="font-size:15px; line-height:1.5; color:#4A463D; max-width:820px; text-wrap:pretty">Voting is not always-on. Polls drop three times a day for eight minutes, everyone in the school votes at once, and results land together. Bright, glossy, Y2K. The push notification is the product.</div>
+
+      <div style="display:flex; gap:32px; flex-wrap:wrap">
+
+        <!-- lock screen -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#241226; padding:56px 16px 0; box-sizing:border-box; font-family:'Outfit',system-ui; align-items:center">
+            <div style="margin-top:34px; color:rgba(255,255,255,.7); font-weight:400; font-size:19px">Thursday, March 12</div>
+            <div style="font-family:'Syne',sans-serif; font-weight:700; font-size:82px; color:#fff; line-height:1; margin-top:2px">3:07</div>
+
+            <div style="margin-top:38px; width:100%; display:flex; flex-direction:column; gap:11px">
+              <div style="background:rgba(255,255,255,.14); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,.14); border-radius:22px; padding:14px 16px; display:flex; gap:12px">
+                <div style="width:40px; height:40px; border-radius:11px; background:#FF2D95; display:flex; align-items:center; justify-content:center; font-size:20px">💗</div>
+                <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                  <div style="display:flex; justify-content:space-between"><div style="color:#fff; font-weight:600; font-size:14px">AURA</div><div style="color:rgba(255,255,255,.55); font-size:13px">now</div></div>
+                  <div style="color:#fff; font-weight:600; font-size:15px">3 people picked you today 🔥</div>
+                  <div style="color:rgba(255,255,255,.72); font-size:14px; line-height:1.3">One of them picked you 4 times. Tap to spin.</div>
+                </div>
+              </div>
+              <div style="background:rgba(255,255,255,.11); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,.1); border-radius:22px; padding:14px 16px; display:flex; gap:12px">
+                <div style="width:40px; height:40px; border-radius:11px; background:#3D5AFE; display:flex; align-items:center; justify-content:center; font-size:20px">⏱</div>
+                <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                  <div style="display:flex; justify-content:space-between"><div style="color:#fff; font-weight:600; font-size:14px">AURA</div><div style="color:rgba(255,255,255,.55); font-size:13px">2m ago</div></div>
+                  <div style="color:#fff; font-weight:600; font-size:15px">The 3PM drop is live</div>
+                  <div style="color:rgba(255,255,255,.72); font-size:14px; line-height:1.3">8 minutes. 214 people from Lakeview are voting right now.</div>
+                </div>
+              </div>
+              <div style="background:rgba(255,255,255,.08); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,.08); border-radius:22px; padding:14px 16px; display:flex; gap:12px">
+                <div style="width:40px; height:40px; border-radius:11px; background:#FFD400; display:flex; align-items:center; justify-content:center; font-size:20px">🔥</div>
+                <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                  <div style="display:flex; justify-content:space-between"><div style="color:#fff; font-weight:600; font-size:14px">AURA</div><div style="color:rgba(255,255,255,.55); font-size:13px">8h ago</div></div>
+                  <div style="color:#fff; font-weight:600; font-size:15px">Your 12 day streak ends at midnight</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:auto; padding-bottom:40px; display:flex; gap:210px; align-items:center">
+              <div style="width:44px; height:44px; border-radius:100px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-size:19px">🔦</div>
+              <div style="width:44px; height:44px; border-radius:100px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-size:19px">📷</div>
+            </div>
+          </div>
+        </x-import>
+
+        <!-- timed drop vote -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#FFF5FA; padding:56px 20px 0; box-sizing:border-box; font-family:'Outfit',system-ui">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div style="display:flex; align-items:center; gap:8px">
+                <div style="width:9px; height:9px; border-radius:100px; background:#FF2D95; animation:pulsering 1.4s ease-in-out infinite"></div>
+                <div style="font-weight:700; font-size:14px; color:#FF2D95; letter-spacing:.04em">LIVE · 3PM DROP</div>
+              </div>
+              <div style="background:#14120F; color:#fff; font-weight:600; font-size:14px; border-radius:100px; padding:6px 13px">🪙 48</div>
+            </div>
+
+            <div style="margin-top:20px; display:flex; align-items:center; gap:14px; background:#fff; border:1px solid #FFD3E8; border-radius:20px; padding:14px 16px; box-shadow:0 6px 20px rgba(255,45,149,.08)">
+              <div style="width:54px; height:54px; border-radius:100px; border:4px solid #FFD3E8; border-top-color:#FF2D95; display:flex; align-items:center; justify-content:center; font-family:'Syne',sans-serif; font-weight:800; font-size:15px; color:#FF2D95">4:12</div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="font-weight:700; font-size:15px; color:#14120F">214 juniors voting right now</div>
+                <div style="font-size:13.5px; color:#8A8578">Results unlock when the timer hits zero</div>
+              </div>
+            </div>
+
+            <div style="margin-top:26px; display:flex; flex-direction:column; gap:8px">
+              <div style="font-size:13px; font-weight:600; color:#B08098; letter-spacing:.06em">QUESTION 2 OF 5</div>
+              <div style="font-family:'Syne',sans-serif; font-weight:800; font-size:34px; line-height:1.06; color:#14120F; text-wrap:balance">Who has the whole school on read?</div>
+            </div>
+
+            <div style="margin-top:24px; display:flex; flex-direction:column; gap:11px">
+              <div style="background:#fff; border:2px solid #FF2D95; border-radius:22px; padding:15px 17px; display:flex; align-items:center; gap:14px; box-shadow:0 8px 24px rgba(255,45,149,.14)">
+                <div style="width:46px; height:46px; border-radius:100px; background:linear-gradient(135deg,#FF2D95,#FF8AC0); color:#fff; font-family:'Syne',sans-serif; font-weight:800; font-size:17px; display:flex; align-items:center; justify-content:center">MR</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:17px; color:#14120F">Maya R.</div><div style="font-size:13px; color:#8A8578">11th grade</div></div>
+                <div style="width:26px; height:26px; border-radius:100px; background:#FF2D95; color:#fff; font-size:14px; display:flex; align-items:center; justify-content:center">✓</div>
+              </div>
+              <div style="background:#fff; border:1.5px solid #F0DCE6; border-radius:22px; padding:15px 17px; display:flex; align-items:center; gap:14px">
+                <div style="width:46px; height:46px; border-radius:100px; background:#F3EEF1; color:#8A8578; font-family:'Syne',sans-serif; font-weight:800; font-size:17px; display:flex; align-items:center; justify-content:center">DK</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:17px; color:#14120F">Deven K.</div><div style="font-size:13px; color:#8A8578">11th grade</div></div>
+              </div>
+              <div style="background:#fff; border:1.5px solid #F0DCE6; border-radius:22px; padding:15px 17px; display:flex; align-items:center; gap:14px">
+                <div style="width:46px; height:46px; border-radius:100px; background:#F3EEF1; color:#8A8578; font-family:'Syne',sans-serif; font-weight:800; font-size:17px; display:flex; align-items:center; justify-content:center">SO</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:17px; color:#14120F">Sofia O.</div><div style="font-size:13px; color:#8A8578">11th grade</div></div>
+              </div>
+              <div style="background:#fff; border:1.5px solid #F0DCE6; border-radius:22px; padding:15px 17px; display:flex; align-items:center; gap:14px">
+                <div style="width:46px; height:46px; border-radius:100px; background:#F3EEF1; color:#8A8578; font-family:'Syne',sans-serif; font-weight:800; font-size:17px; display:flex; align-items:center; justify-content:center">JP</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:17px; color:#14120F">Jordan P.</div><div style="font-size:13px; color:#8A8578">12th grade</div></div>
+              </div>
+            </div>
+
+            <div style="margin-top:auto; padding-bottom:40px; display:flex; gap:11px; align-items:center">
+              <div style="width:54px; height:54px; border-radius:100px; border:1.5px solid #F0DCE6; background:#fff; display:flex; align-items:center; justify-content:center; font-size:19px; color:#8A8578">⇄</div>
+              <div style="flex:1; background:#14120F; border-radius:100px; padding:17px; text-align:center; font-family:'Syne',sans-serif; font-weight:800; font-size:17px; color:#fff">Next question →</div>
+            </div>
+          </div>
+        </x-import>
+
+        <!-- coin shop -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#FFF5FA; padding:56px 20px 0; box-sizing:border-box; font-family:'Outfit',system-ui; overflow:hidden">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div style="font-size:21px; color:#14120F">‹</div>
+              <div style="font-family:'Syne',sans-serif; font-weight:800; font-size:17px; color:#14120F">Coins</div>
+              <div style="width:21px"></div>
+            </div>
+
+            <div style="margin-top:24px; background:linear-gradient(135deg,#FFD400,#FF8A00); border-radius:26px; padding:24px; display:flex; flex-direction:column; align-items:center; gap:4px; box-shadow:0 12px 30px rgba(255,138,0,.22)">
+              <div style="font-size:38px">🪙</div>
+              <div style="font-family:'Syne',sans-serif; font-weight:800; font-size:46px; color:#14120F; line-height:1">48</div>
+              <div style="font-weight:600; font-size:14px; color:#6B4A00">1 coin = 1 reel spin</div>
+            </div>
+
+            <div style="margin-top:22px; font-size:12.5px; font-weight:700; letter-spacing:.08em; color:#B08098">EARN FREE</div>
+            <div style="margin-top:11px; display:flex; flex-direction:column; gap:9px">
+              <div style="background:#fff; border:1.5px solid #F0DCE6; border-radius:18px; padding:14px 16px; display:flex; align-items:center; gap:13px">
+                <div style="font-size:20px">🗳</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:15px; color:#14120F">Finish a drop</div><div style="font-size:13px; color:#8A8578">3 drops a day, 5 questions each</div></div>
+                <div style="font-weight:700; font-size:14px; color:#FF2D95">+10</div>
+              </div>
+              <div style="background:#fff; border:1.5px solid #F0DCE6; border-radius:18px; padding:14px 16px; display:flex; align-items:center; gap:13px">
+                <div style="font-size:20px">🔥</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:15px; color:#14120F">Keep your streak</div><div style="font-size:13px; color:#8A8578">Day 12 · doubles at day 30</div></div>
+                <div style="font-weight:700; font-size:14px; color:#FF2D95">+5</div>
+              </div>
+              <div style="background:#fff; border:2px solid #FF2D95; border-radius:18px; padding:14px 16px; display:flex; align-items:center; gap:13px">
+                <div style="font-size:20px">💌</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:15px; color:#14120F">Invite a classmate</div><div style="font-size:13px; color:#8A8578">They join, you both get paid</div></div>
+                <div style="font-weight:700; font-size:14px; color:#FF2D95">+25</div>
+              </div>
+            </div>
+
+            <div style="margin-top:22px; font-size:12.5px; font-weight:700; letter-spacing:.08em; color:#B08098">BUY</div>
+            <div style="margin-top:11px; display:flex; gap:9px">
+              <div style="flex:1; background:#fff; border:1.5px solid #F0DCE6; border-radius:18px; padding:16px 10px; display:flex; flex-direction:column; align-items:center; gap:3px">
+                <div style="font-family:'Syne',sans-serif; font-weight:800; font-size:21px; color:#14120F">25</div>
+                <div style="font-size:12px; color:#8A8578">coins</div>
+                <div style="margin-top:6px; font-weight:700; font-size:14px; color:#14120F">$1.99</div>
+              </div>
+              <div style="flex:1; background:#14120F; border-radius:18px; padding:16px 10px; display:flex; flex-direction:column; align-items:center; gap:3px; position:relative">
+                <div style="position:absolute; top:-10px; background:#FF2D95; color:#fff; font-size:10px; font-weight:700; border-radius:100px; padding:3px 8px">POPULAR</div>
+                <div style="font-family:'Syne',sans-serif; font-weight:800; font-size:21px; color:#FFD400">100</div>
+                <div style="font-size:12px; color:#9A9490">coins</div>
+                <div style="margin-top:6px; font-weight:700; font-size:14px; color:#fff">$5.99</div>
+              </div>
+              <div style="flex:1; background:#fff; border:1.5px solid #F0DCE6; border-radius:18px; padding:16px 10px; display:flex; flex-direction:column; align-items:center; gap:3px">
+                <div style="font-family:'Syne',sans-serif; font-weight:800; font-size:21px; color:#14120F">300</div>
+                <div style="font-size:12px; color:#8A8578">coins</div>
+                <div style="margin-top:6px; font-weight:700; font-size:14px; color:#14120F">$12.99</div>
+              </div>
+            </div>
+
+            <div style="margin-top:auto; margin-bottom:44px; background:#fff; border:1.5px solid #F0DCE6; border-radius:20px; padding:16px; display:flex; align-items:center; gap:13px">
+              <div style="font-size:22px">👑</div>
+              <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:15px; color:#14120F">Or skip coins entirely</div><div style="font-size:13px; color:#8A8578">God Mode reveals every name</div></div>
+              <div style="background:#FF2D95; color:#fff; font-weight:700; font-size:13px; border-radius:100px; padding:9px 14px">Try free</div>
+            </div>
+          </div>
+        </x-import>
+
+        <!-- onboarding -->
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%; display:flex; flex-direction:column; background:#FFF5FA; padding:64px 22px 0; box-sizing:border-box; font-family:'Outfit',system-ui">
+            <div style="display:flex; gap:5px">
+              <div style="height:4px; flex:1; border-radius:2px; background:#FF2D95"></div>
+              <div style="height:4px; flex:1; border-radius:2px; background:#FF2D95"></div>
+              <div style="height:4px; flex:1; border-radius:2px; background:#F0DCE6"></div>
+              <div style="height:4px; flex:1; border-radius:2px; background:#F0DCE6"></div>
+            </div>
+
+            <div style="margin-top:36px; font-family:'Syne',sans-serif; font-weight:800; font-size:40px; line-height:1.02; color:#14120F; text-wrap:balance">Which school?</div>
+            <div style="margin-top:10px; font-size:15.5px; color:#6E6A5E; line-height:1.45">You'll only ever see people from your own school, and they'll only see you.</div>
+
+            <div style="margin-top:26px; background:#fff; border:2px solid #14120F; border-radius:18px; padding:15px 17px; display:flex; align-items:center; gap:11px">
+              <div style="font-size:17px">🔍</div>
+              <div style="font-weight:600; font-size:16px; color:#14120F">Lakeview High</div>
+              <div style="width:2px; height:20px; background:#FF2D95"></div>
+            </div>
+
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:9px">
+              <div style="background:#fff; border:2px solid #FF2D95; border-radius:18px; padding:15px 17px; display:flex; align-items:center; gap:13px">
+                <div style="width:44px; height:44px; border-radius:13px; background:#FFE9F3; display:flex; align-items:center; justify-content:center; font-size:20px">🏫</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:16px; color:#14120F">Lakeview High School</div><div style="font-size:13px; color:#8A8578">Austin, TX · 1,240 students · 312 on Aura</div></div>
+              </div>
+              <div style="background:#fff; border:1.5px solid #F0DCE6; border-radius:18px; padding:15px 17px; display:flex; align-items:center; gap:13px">
+                <div style="width:44px; height:44px; border-radius:13px; background:#F3EEF1; display:flex; align-items:center; justify-content:center; font-size:20px">🏫</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:16px; color:#14120F">Lakeview Prep</div><div style="font-size:13px; color:#8A8578">Austin, TX · 680 students · 41 on Aura</div></div>
+              </div>
+              <div style="background:#fff; border:1.5px solid #F0DCE6; border-radius:18px; padding:15px 17px; display:flex; align-items:center; gap:13px">
+                <div style="width:44px; height:44px; border-radius:13px; background:#F3EEF1; display:flex; align-items:center; justify-content:center; font-size:20px">🏫</div>
+                <div style="flex:1; display:flex; flex-direction:column"><div style="font-weight:700; font-size:16px; color:#14120F">Lake Travis High</div><div style="font-size:13px; color:#8A8578">Austin, TX · 2,100 students · 88 on Aura</div></div>
+              </div>
+            </div>
+
+            <div style="margin-top:22px; background:#FFF0D6; border:1.5px solid #FFD98A; border-radius:18px; padding:15px; display:flex; gap:11px; align-items:flex-start">
+              <div style="font-size:17px">🔒</div>
+              <div style="font-size:13.5px; color:#6B4A00; line-height:1.42; font-weight:500">Aura is 13+. We verify your grade with your school and never show your votes to anyone — not even the person you picked.</div>
+            </div>
+
+            <div style="margin-top:auto; padding-bottom:40px">
+              <div style="background:#FF2D95; border-radius:100px; padding:18px; text-align:center; font-family:'Syne',sans-serif; font-weight:800; font-size:18px; color:#fff; box-shadow:0 10px 26px rgba(255,45,149,.28)">Continue</div>
+              <div style="margin-top:12px; text-align:center; font-size:13px; color:#A8A395; font-weight:500">Can't find your school? Request it</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+</body>
+</html>

@@ -70,6 +70,8 @@ const typeDefs = /* GraphQL */ `
   type User {
     id: ID!
     schoolId: ID
+    """Resolved from schoolId on demand — only costs a lookup when actually selected."""
+    school: School
     firstName: String
     lastName: String
     username: String
@@ -273,6 +275,13 @@ function str(v: unknown, max: number): string {
 }
 
 const resolvers = {
+  /* Field resolver rather than a join in getUserById: most queries never ask for the school, and
+     this way they don't pay for it. Only `me { school { name } }`-style selections trigger it. */
+  User: {
+    school: (parent: { schoolId: string | null }, _: unknown, ctx: GraphQLContext) =>
+      parent.schoolId ? ctx.db.getSchool(parent.schoolId) : null
+  },
+
   Query: {
     schools: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
       const { success } = await ctx.ratelimit.limit(ctx.ip);

@@ -12,7 +12,13 @@ const ME_QUERY = /* GraphQL */ `
       lastName
       username
       gender
+      grade
       hideTopFlames
+      schoolId
+      school {
+        id
+        name
+      }
     }
   }
 `;
@@ -26,7 +32,10 @@ export type Me = {
   lastName: string | null;
   username: string | null;
   gender: string | null;
+  grade: string | null;
   hideTopFlames: boolean | null;
+  schoolId: string | null;
+  school: { id: string; name: string } | null;
 };
 
 type MeResult = { me: Me };

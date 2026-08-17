@@ -3,6 +3,15 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useUpdateMe } from '../src/hooks/useUpdateMe';
 import { useSchools } from '../src/hooks/useSchools';
+import {
+  AuthButton,
+  AuthFooter,
+  AuthHeading,
+  AuthHint,
+  AuthProgress,
+  AuthRule,
+  AuthShell
+} from '../src/components/authKit';
 
 const GRADES = ['9', '10', '11', '12', 'Not in High School', 'Already Graduated'];
 const GENDERS: { value: string; label: string }[] = [
@@ -11,7 +20,10 @@ const GENDERS: { value: string; label: string }[] = [
   { value: 'nonbinary', label: 'Non-binary' }
 ];
 
-const STEPS = ['age', 'grade', 'school', 'name', 'username', 'gender'] as const;
+/* `rules` is 5A's new first step — it's where the 13+ notice lives now, having moved off the
+   sign-up screen when the split sign-in/sign-up flow was replaced by the one-door welcome. It
+   collects nothing, so `next()` skips the mutation for it. */
+const STEPS = ['rules', 'age', 'grade', 'school', 'name', 'username', 'gender'] as const;
 type Step = (typeof STEPS)[number];
 
 export default function Onboarding() {
@@ -35,14 +47,47 @@ export default function Onboarding() {
   const ageNum = Number(age);
   const ageValid = age !== '' && Number.isInteger(ageNum) && ageNum >= 13 && ageNum <= 99;
 
-  async function next(fields: Record<string, unknown>) {
-    await updateMe.mutateAsync(fields);
+  async function next(fields: Record<string, unknown> | null) {
+    if (fields) await updateMe.mutateAsync(fields);
     if (stepIndex === STEPS.length - 1) {
       await updateMe.mutateAsync({ onboarded: true });
       router.replace('/');
     } else {
       setStepIndex(stepIndex + 1);
     }
+  }
+
+  if (step === 'rules') {
+    return (
+      <AuthShell>
+        <AuthProgress step={1} />
+        <AuthHeading
+          marginTop={30}
+          title="First, the ground rules"
+          subtitle="Three of them. Then you're picking your school."
+        />
+        <View className="mt-[22px] gap-[10px]">
+          <AuthRule emoji="🔒" lead="Aura is 13+.">
+            We check your grade with your school, and your number stays private.
+          </AuthRule>
+          <AuthRule emoji="🙈" lead="Votes are anonymous.">
+            Nobody ever sees who you picked — not even the person you picked.
+          </AuthRule>
+          <AuthRule emoji="🏫" lead="One school, one you.">
+            You only ever see people from your school, and only they can see you.
+          </AuthRule>
+        </View>
+        <AuthHint emoji="🚫">
+          Prompts are compliments only. Anything cruel gets the person who sent it removed.
+        </AuthHint>
+        <AuthFooter>
+          <AuthButton label="Got it — pick my school" onPress={() => next(null)} disabled={false} />
+          <Text className="font-nunito-800 text-center text-[12.5px] leading-[18px] text-ink-faint">
+            By continuing you agree to the Terms and Privacy Policy.
+          </Text>
+        </AuthFooter>
+      </AuthShell>
+    );
   }
 
   return (

@@ -15,7 +15,11 @@ export async function verifyClerkRequest(req: Request, secretKey: string): Promi
   try {
     const payload = await verifyToken(token, { secretKey });
     return payload as ClerkClaims;
-  } catch {
-    return null; // invalid/expired token — treated as "no session", not a hard error
+  } catch (e) {
+    // Still treated as "no session" rather than a hard error, but log the reason: silently
+    // swallowing this makes a rejected-token bug (wrong key, clock skew, wrong issuer) look
+    // identical to "not signed in" from the client's side, which is very hard to diagnose.
+    console.warn('[auth] token rejected:', e instanceof Error ? e.message : e);
+    return null;
   }
 }
