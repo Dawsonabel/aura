@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Share, Text, View } from 'react-native';
+import { Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { RoundChoice, RoundPoll } from '@aura/api-client';
 import { useAuraRound } from '../../src/hooks/useAuraRound';
@@ -14,9 +14,9 @@ import { COIN_FILL } from '../../src/components/coin';
 import { gradeShort } from '../../src/components/profileKit';
 import { EmptyState, InlineFailure, SkeletonBlock } from '../../src/components/stateKit';
 import {
+  CandidateSheet,
   CountdownPill,
   CreamActionCard,
-  PeekCard,
   PersonPlusButton,
   RerollShortSheet,
   RoundPips
@@ -30,11 +30,6 @@ const ACCENTS = [
   { bg: '#7C5CFF', shadow: '#5334D6', ink: '#FFFFFF' },
   { bg: '#FFD84D', shadow: '#D4AC17', ink: '#3A2A00' }
 ];
-
-/* 14A retires the "✋ HOLD" chip once the gesture has had a fair chance to be learned. Counted against
-   `me.roundsTotal` (rounds ever *completed*, tracked server-side) rather than a local flag, so a
-   reinstall doesn't re-teach it to someone who has been playing for a month. */
-const HOLD_HINT_ROUNDS = 3;
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -74,7 +69,7 @@ export default function Aura() {
   const { data: me } = useMe();
   const router = useRouter();
   const [pickedId, setPickedId] = useState<string | null>(null);
-  const [peekId, setPeekId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [shortSheet, setShortSheet] = useState(false);
   // See AuthShell: the spec's flat "58px top" collides with the Dynamic Island on real hardware.
   const insets = useSafeAreaInsets();
@@ -82,12 +77,19 @@ export default function Aura() {
   const coins = me?.coins ?? 0;
   const canAffordReroll = coins >= rerollCost;
 
-  function handlePick(targetId: string) {
+  /* Called from the candidate sheet's Vote button, never from the grid.
+
+     The design had no confirm step — a tap on a card *was* the vote — and the profile could only be
+     reached by long-pressing, precisely so the gesture that opened it couldn't also cast a ballot.
+     That's inverted now: the tap opens the card and the vote is a button inside it. It costs a second
+     tap on each of the twelve questions, and buys back the thing the old model had no answer for —
+     a mis-tap used to be an irreversible anonymous vote for the wrong person, with nothing between the
+     finger and the ballot. */
+  function handleVote(targetId: string) {
     if (pickedId) return;
     setPickedId(targetId);
     pick(targetId);
-    // The design has no confirm step — tapping a candidate IS the vote, and the next question
-    // slides in on its own. 300ms lets the avatar-flash read before advancing.
+    // 300ms lets the avatar-flash read before the next question slides in.
     setTimeout(() => {
       advance();
       setPickedId(null);
@@ -110,100 +112,106 @@ export default function Aura() {
         onCoins={() => router.push('/shop')}
       />
 
-      {/* 10A: loading, failed and empty are three different things. They all used to render the
-          skeleton, which meant a round that never came back looked like one that was still coming. */}
-      {mode === 'poll' && poll ? (
-        <>
-          <ProgressRow
-            count={count}
-            total={total}
-            roundNumber={roundNumber}
+      {/* Everything below the status row scrolls.
+
+          This screen was the one fixed-height surface in the app, on the assumption that a round fits
+          a phone. It doesn't always: a three-line prompt pushes the reroll row under the tab bar and
+          there was no way to reach it — no scroll to try, since the content sat in a plain View that
+          simply clipped. The status row stays put because the coin balance is what the reroll row
+          spends, and scrolling one out of view to reach the other is how you get a surprise. */}
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
+        {/* 10A: loading, failed and empty are three different things. They all used to render the
+            skeleton, which meant a round that never came back looked like one that was still coming. */}
+        {mode === 'poll' && poll ? (
+          <>
+            <ProgressRow
+              count={count}
+              total={total}
+              roundNumber={roundNumber}
+              dailyLimit={dailyLimit}
+            />
+            <PromptCard poll={poll} />
+            <CandidateGrid choices={choices} pickedId={pickedId} onOpen={setOpenId} />
+
+            <Text className="font-nunito-800 mt-[11px] text-center text-[12.5px] text-ink-faint">
+              Tap someone to see their card.
+            </Text>
+
+            <UtilityRow
+              onReroll={handleReroll}
+              onSkip={advance}
+              locked={pickedId !== null}
+              rerollCost={rerollCost}
+              canAfford={canAffordReroll}
+              rerollPending={rerollPending}
+              rerollUsed={shuffleUsed}
+            />
+            {rerollError && <AuthError message={rerollError} />}
+          </>
+        ) : mode === 'congrats' ? (
+          /* Every completed round used to land here and render the loading skeleton forever, because
+             this screen had no branch for 'congrats' — a dead end at the end of all 12 questions. With
+             rounds rationed it happens three times a day, so it needs a real surface. */
+          <RoundDone
+            earned={earned}
+            roundsLeft={roundsLeft}
+            godMode={!!me?.godMode}
+            onNext={playAgain}
+          />
+        ) : mode === 'failed' ? (
+          <View className="mt-[26px]">
+            <InlineFailure
+              icon="ballot"
+              title="Today's round didn't load"
+              body="Everything else works. This one just didn't come back."
+              onRetry={retry}
+            />
+          </View>
+        ) : mode === 'out' ? (
+          <OutOfRounds
             dailyLimit={dailyLimit}
+            votesToday={votesToday}
+            followingCount={me?.following?.length ?? 0}
+            followWeightFactor={followWeightFactor}
+            nextRoundAt={nextRoundAt}
+            onPeople={() => router.push('/add')}
+            onAura={() => router.replace('/inbox')}
           />
-          <PromptCard poll={poll} />
-          <CandidateGrid
-            choices={choices}
-            pickedId={pickedId}
-            schoolName={me?.school?.name ?? null}
-            showHoldHint={(me?.roundsTotal ?? 0) < HOLD_HINT_ROUNDS}
-            onPick={handlePick}
-            // Long-press, not tap: a tap here is an irreversible vote, so the profile can't share it.
-            onPeek={setPeekId}
-          />
-
-          <Text className="font-nunito-800 mt-[11px] text-center text-[12.5px] text-ink-faint">
-            Tap to pick. Hold to peek at a profile.
-          </Text>
-
-          <UtilityRow
-            onReroll={handleReroll}
-            onSkip={advance}
-            locked={pickedId !== null}
-            rerollCost={rerollCost}
-            canAfford={canAffordReroll}
-            rerollPending={rerollPending}
-            rerollUsed={shuffleUsed}
-          />
-          {rerollError && <AuthError message={rerollError} />}
-        </>
-      ) : mode === 'congrats' ? (
-        /* Every completed round used to land here and render the loading skeleton forever, because
-           this screen had no branch for 'congrats' — a dead end at the end of all 12 questions. With
-           rounds rationed it happens three times a day, so it needs a real surface. */
-        <RoundDone
-          earned={earned}
-          roundsLeft={roundsLeft}
-          godMode={!!me?.godMode}
-          onNext={playAgain}
-        />
-      ) : mode === 'failed' ? (
-        <View className="mt-[26px]">
-          <InlineFailure
-            icon="ballot"
-            title="Today's round didn't load"
-            body="Everything else works. This one just didn't come back."
-            onRetry={retry}
-          />
-        </View>
-      ) : mode === 'out' ? (
-        <OutOfRounds
-          dailyLimit={dailyLimit}
-          votesToday={votesToday}
-          followingCount={me?.following?.length ?? 0}
-          followWeightFactor={followWeightFactor}
-          nextRoundAt={nextRoundAt}
-          onPeople={() => router.push('/add')}
-          onAura={() => router.replace('/inbox')}
-        />
-      ) : mode === 'empty' ? (
-        <View className="mt-[26px]">
-          <EmptyState
-            icon="clock"
-            title="No round today"
-            body={
-              me?.school?.name
-                ? `${me.school.name} has no questions set up yet, so there's nothing to vote on. Check back tomorrow.`
-                : "There are no questions set up yet, so there's nothing to vote on. Check back tomorrow."
-            }
-            ctaLabel="Check again"
-            onCta={retry}
-            ctaTone="mint"
-          />
-        </View>
-      ) : (
-        <LoadingSkeleton />
-      )}
+        ) : mode === 'empty' ? (
+          <View className="mt-[26px]">
+            <EmptyState
+              icon="clock"
+              title="No round today"
+              body={
+                me?.school?.name
+                  ? `${me.school.name} has no questions set up yet, so there's nothing to vote on. Check back tomorrow.`
+                  : "There are no questions set up yet, so there's nothing to vote on. Check back tomorrow."
+              }
+              ctaLabel="Check again"
+              onCta={retry}
+              ctaTone="mint"
+            />
+          </View>
+        ) : (
+          <LoadingSkeleton />
+        )}
+      </ScrollView>
 
       {/* Sheets last so they layer above everything, and are unmounted (not hidden) when closed —
-          the peek card runs a profile query, which shouldn't fire until someone actually holds a card. */}
-      {peekId && (
-        <Peek
-          userId={peekId}
+          the sheet runs a profile query, which shouldn't fire until someone actually opens a card. */}
+      {openId && (
+        <CandidateSheetData
+          userId={openId}
           following={me?.following ?? []}
-          onClose={() => setPeekId(null)}
+          onClose={() => setOpenId(null)}
+          onVote={() => {
+            const id = openId;
+            setOpenId(null);
+            handleVote(id);
+          }}
           onOpenProfile={() => {
-            const id = peekId;
-            setPeekId(null);
+            const id = openId;
+            setOpenId(null);
             router.push({ pathname: '/u', params: { userId: id } });
           }}
         />
@@ -225,18 +233,20 @@ export default function Aura() {
   );
 }
 
-/* The peek card's data, kept in its own component so the profile query mounts with the card and
-   unmounts with it. Follow state comes from `me.following` — the same list the People screen reads, so
-   following from a peek and following from the list can't disagree. */
-function Peek({
+/* The sheet's data, kept in its own component so the profile query mounts with the card and unmounts
+   with it. Follow state comes from `me.following` — the same list the People screen reads, so following
+   from here and following from the list can't disagree. */
+function CandidateSheetData({
   userId,
   following,
   onClose,
+  onVote,
   onOpenProfile
 }: {
   userId: string;
   following: string[];
   onClose: () => void;
+  onVote: () => void;
   onOpenProfile: () => void;
 }) {
   const { data: profile, isLoading } = usePublicProfile(userId);
@@ -245,12 +255,13 @@ function Peek({
   const isFollowing = following.includes(userId);
 
   return (
-    <PeekCard
+    <CandidateSheet
       profile={profile}
       loading={isLoading}
       isFollowing={isFollowing}
       followBusy={follow.isPending || unfollow.isPending}
       onToggleFollow={() => (isFollowing ? unfollow.mutate(userId) : follow.mutate(userId))}
+      onVote={onVote}
       onOpenProfile={onOpenProfile}
       onClose={onClose}
     />
@@ -376,17 +387,11 @@ function PromptCard({ poll }: { poll: RoundPoll }) {
 function CandidateGrid({
   choices,
   pickedId,
-  schoolName,
-  showHoldHint,
-  onPick,
-  onPeek
+  onOpen
 }: {
   choices: RoundChoice[];
   pickedId: string | null;
-  schoolName: string | null;
-  showHoldHint: boolean;
-  onPick: (targetId: string) => void;
-  onPeek: (targetId: string) => void;
+  onOpen: (targetId: string) => void;
 }) {
   const rows = [choices.slice(0, 2), choices.slice(2, 4)];
 
@@ -394,23 +399,16 @@ function CandidateGrid({
     <View className="mt-[18px] gap-3">
       {rows.map((row, i) => (
         <View key={i} className="flex-row gap-3">
-          {row.map((c, j) => {
-            const position = i * 2 + j;
-            return (
-              <CandidateCard
-                key={c.id}
-                choice={c}
-                schoolName={schoolName}
-                accent={ACCENTS[position % ACCENTS.length]}
-                picked={c.id === pickedId}
-                disabled={pickedId !== null}
-                // On exactly one card, as in the design — a chip on all four is noise, not a hint.
-                hold={showHoldHint && position === 1}
-                onPress={() => onPick(c.id)}
-                onLongPress={() => onPeek(c.id)}
-              />
-            );
-          })}
+          {row.map((c, j) => (
+            <CandidateCard
+              key={c.id}
+              choice={c}
+              accent={ACCENTS[(i * 2 + j) % ACCENTS.length]}
+              picked={c.id === pickedId}
+              disabled={pickedId !== null}
+              onPress={() => onOpen(c.id)}
+            />
+          ))}
         </View>
       ))}
     </View>
@@ -419,28 +417,22 @@ function CandidateGrid({
 
 function CandidateCard({
   choice,
-  schoolName,
   accent,
   picked,
   disabled,
-  hold,
-  onPress,
-  onLongPress
+  onPress
 }: {
   choice: RoundChoice;
-  schoolName: string | null;
   accent: { bg: string; shadow: string; ink: string };
   picked: boolean;
   disabled: boolean;
-  hold: boolean;
   onPress: () => void;
-  onLongPress: () => void;
 }) {
   const avatarAccent = picked ? { bg: '#FF5CA8', shadow: '#C43A7C', ink: '#FFFFFF' } : accent;
-  /* Real now: grade comes from the server with the candidate (RoundChoice.grade), and the school is the
-     viewer's own, since every candidate is by definition at it. This line used to read a hardcoded
-     "11th · Lakeview" for everyone. Renders nothing rather than a placeholder when neither is known. */
-  const meta = [gradeShort(choice.grade), schoolName].filter(Boolean).join(' · ');
+  /* Grade only. This line used to read a hardcoded "11th · Lakeview", then a real "9th · Lincoln High
+     Sch…" — but every candidate is at the viewer's own school by construction, so the school name was
+     a constant that only ever ellipsised the one varying part off the end of the line. */
+  const meta = gradeShort(choice.grade) ?? '';
 
   return (
     <View className="flex-1">
@@ -450,20 +442,9 @@ function CandidateCard({
         backgroundColor="#FFF6E8"
         radius={24}
         onPress={onPress}
-        onLongPress={onLongPress}
         disabled={disabled}
       >
         <View className="gap-[11px] px-[14px] py-4">
-          {hold && (
-            <View
-              className="flex-row items-center gap-1 rounded-pill px-[9px] py-1"
-              style={{ position: 'absolute', top: 12, right: 12, backgroundColor: '#EDE3D2', zIndex: 1 }}
-            >
-              <Text className="font-nunito-900 text-[10.5px]" style={{ color: '#8B888D' }}>
-                ✋ HOLD
-              </Text>
-            </View>
-          )}
           {/* self-start, or the avatar isn't round.
 
               ToyShadow's slab and face are plain Views, and this card is a flex *column*, so the default

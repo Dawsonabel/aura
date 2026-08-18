@@ -16,6 +16,7 @@ import { SkeletonBlock } from '../../src/components/stateKit';
 import { PersonPlusButton } from '../../src/components/voteKit';
 import { AuraIcon } from '../../src/components/AuraIcon';
 import { COIN_FILL } from '../../src/components/coin';
+import { BrandTile } from '../../src/components/BrandMark';
 import {
   ProfileActionRow,
   ProfileBadge,
@@ -175,12 +176,9 @@ export default function Profile() {
         {socialKey ? (
           <View className="mt-[10px] rounded-20 bg-surface px-4 py-[13px]">
             <View className="flex-row items-center gap-3">
-              <View
-                className="h-[38px] w-[38px] items-center justify-center"
-                style={{ borderRadius: 12, backgroundColor: SOCIALS.find(s => s.key === socialKey)!.color }}
-              >
-                <Text style={{ fontSize: 18 }}>{SOCIALS.find(s => s.key === socialKey)!.emoji}</Text>
-              </View>
+              {/* Literally the same tile as the linked row on the profile itself, so editing a handle
+                  and seeing it are recognisably the same thing. */}
+              <BrandTile name={socialKey} size={38} />
               <View className="flex-1 flex-row items-center gap-1">
                 <Text className="font-fredoka-700 text-[15px] text-ink-dim">@</Text>
                 <TextInput

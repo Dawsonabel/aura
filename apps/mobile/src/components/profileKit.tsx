@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { SOCIALS, type Socials } from '@aura/api-client';
 import type { Superlative } from '../hooks/useProfile';
 import { ToyShadow } from './ToyShadow';
 import { AuraIcon, type AuraIconName } from './AuraIcon';
+import { BrandTile } from './BrandMark';
 
 /* Shared pieces of 13A's Profile, used by both your own profile and the public one so the two can't
    drift apart — the whole point of the public view is that it's recognisably the same person. */
@@ -11,6 +12,11 @@ import { AuraIcon, type AuraIconName } from './AuraIcon';
 export function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/);
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
+}
+
+/** "Maya Patel" -> "Maya". Buttons and clue tiles use the first name; a surname is never the reward. */
+export function firstNameOf(name: string | null | undefined): string {
+  return (name ?? '').trim().split(/\s+/)[0] || 'Someone';
 }
 
 /* Grade is free text server-side, and real rows hold both bare numbers ("11", from onboarding) and
@@ -123,9 +129,6 @@ export function SectionLabel({ children, trailing }: { children: ReactNode; trai
    palette comes from the prompts, not from a fixed rotation. */
 const CHIP_INK: Record<string, string> = { '#FFD84D': '#3A2A00', '#6BF2C2': '#0A3B2C' };
 
-/** Snapchat's yellow needs dark ink; the other two tiles are dark enough for white. */
-const SOCIAL_INK: Record<string, string> = { snapchat: '#1A1A00' };
-
 function darken(hex: string): string {
   // Cheap shadow for an arbitrary poll colour: 70% toward black, which keeps the hue.
   const n = parseInt(hex.replace('#', ''), 16);
@@ -134,6 +137,24 @@ function darken(hex: string): string {
   const g = Math.round(((n >> 8) & 255) * 0.7);
   const b = Math.round((n & 255) * 0.7);
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+/* Three rows at most, and the overflow goes sideways.
+
+   These used to wrap: every extra title pushed the rest of the profile — socials, the block/report
+   row — further down, so the more someone had won the harder their profile was to use. Height is the
+   scarce axis on a phone and horizontal space is free, so the shelf caps at three rows and scrolls.
+
+   Rows are filled **round-robin**, not in sequence, and that's the load-bearing part: the server
+   returns these most-picked-first, so round-robin puts #1, #2 and #3 in the leftmost column — the top
+   three are what you see before scrolling anything. Chunking sequentially would bury #2 and #3 off the
+   right edge. It also keeps the rows near-equal in width, so the shelf's scroll length is set by the
+   real content rather than by one overloaded row.
+
+   Row count grows with the collection instead of being fixed at three: a profile with two titles gets
+   one row, not one title stranded above two empty ones. */
+function rowsFor(n: number): number {
+  return Math.min(3, Math.ceil(n / 2));
 }
 
 export function SuperlativeChips({
@@ -146,30 +167,62 @@ export function SuperlativeChips({
   lockedCount: number;
   onLockedPress?: () => void;
 }) {
+  /* At least one row even with nothing won: every superlative can be locked behind Infinite Aura, and
+     that lock chip lives on the last row — with zero rows there'd be no row to put it on and the only
+     route to the paywall would silently disappear. */
+  const rowCount = Math.max(1, rowsFor(superlatives.length));
+  const rows: Superlative[][] = Array.from({ length: rowCount }, () => []);
+  superlatives.forEach((s, i) => rows[i % rowCount].push(s));
+
   return (
-    <View className="mt-[10px] flex-row flex-wrap gap-[9px]">
-      {superlatives.map(s => {
-        const bg = /^#[0-9a-fA-F]{6}$/.test(s.color) ? s.color : '#FF5CA8';
-        return (
-          <ToyShadow key={s.text} depth={3} shadowColor={darken(bg)} backgroundColor={bg} radius={9999}>
-            <View className="px-[14px] py-[9px]">
-              <Text className="font-nunito-900 text-[13.5px]" style={{ color: CHIP_INK[bg] ?? '#FFFFFF' }}>
-                {s.emoji} {s.text}
-                {s.count > 1 ? ` ×${s.count}` : ''}
-              </Text>
-            </View>
-          </ToyShadow>
-        );
-      })}
-      {lockedCount > 0 && (
-        <Pressable onPress={onLockedPress} className="rounded-pill bg-surface px-[14px] py-[9px]">
-          <View className="flex-row items-center gap-[6px]">
-            <AuraIcon name="lock" size={14} color="#848286" />
-            <Text className="font-nunito-900 text-[13.5px] text-ink-dim">{lockedCount} still locked</Text>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      /* The chips are pills with a toy shadow, so the shelf needs room below the last row for the slab
+         and a little lead-in at the sides — a chip flush against the screen edge reads as cut off
+         rather than as scrollable. */
+      contentContainerStyle={{ paddingRight: 21, paddingBottom: 4 }}
+      /* Pulled out to the screen edge (both screens pad by 21) so chips scroll off the edge instead of
+         being clipped short of it — inside the padding, a full row looks truncated rather than
+         scrollable. Plain style rather than a negative Tailwind margin, which NativeWind is fussy about. */
+      style={{ marginTop: 10, marginRight: -21 }}
+    >
+      <View className="gap-[9px]">
+        {rows.map((row, i) => (
+          <View key={i} className="flex-row gap-[9px]">
+            {row.map(s => {
+              const bg = /^#[0-9a-fA-F]{6}$/.test(s.color) ? s.color : '#FF5CA8';
+              return (
+                <ToyShadow key={s.text} depth={3} shadowColor={darken(bg)} backgroundColor={bg} radius={9999}>
+                  <View className="px-[14px] py-[9px]">
+                    {/* One line, always. In a horizontal scroller there's no width to wrap against, so
+                        a long prompt simply makes its row longer — which is what the scroll is for. */}
+                    <Text
+                      className="font-nunito-900 text-[13.5px]"
+                      numberOfLines={1}
+                      style={{ color: CHIP_INK[bg] ?? '#FFFFFF' }}
+                    >
+                      {s.emoji} {s.text}
+                      {s.count > 1 ? ` ×${s.count}` : ''}
+                    </Text>
+                  </View>
+                </ToyShadow>
+              );
+            })}
+            {/* The lock chip rides the last row, so it's the thing you reach at the end rather than a
+                fourth row that would break the cap. */}
+            {lockedCount > 0 && i === rowCount - 1 && (
+              <Pressable onPress={onLockedPress} className="rounded-pill bg-surface px-[14px] py-[9px]">
+                <View className="flex-row items-center gap-[6px]">
+                  <AuraIcon name="lock" size={14} color="#848286" />
+                  <Text className="font-nunito-900 text-[13.5px] text-ink-dim">{lockedCount} still locked</Text>
+                </View>
+              </Pressable>
+            )}
           </View>
-        </Pressable>
-      )}
-    </View>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -201,11 +254,9 @@ export function SocialsList({
               onPress={() => Linking.openURL(social.url(handle))}
             >
               <View className="flex-row items-center gap-3 px-[14px] py-3">
-                {/* Category glyph, not a brand mark — see SOCIALS. On the platform's own colour, so the
-                    row still reads as "that app" while the real marks are outstanding. */}
-                <View className="h-[38px] w-[38px] items-center justify-center" style={{ borderRadius: 12, backgroundColor: social.color }}>
-                  <AuraIcon name={social.icon as AuraIconName} size={20} color={SOCIAL_INK[social.key] ?? '#FFFFFF'} />
-                </View>
+                {/* Mark *and* tile from BrandTile — the background is as much the brand's as the glyph
+                    is, and Instagram's is a gradient a View can't paint. See BrandMark. */}
+                <BrandTile name={social.key} size={38} />
                 <View className="flex-1">
                   <Text className="font-nunito-900 text-[14.5px]" style={{ color: '#2D2A2E' }}>
                     {social.label}
@@ -241,6 +292,10 @@ export function SocialsList({
               onPress={() => onEdit(social.key)}
               className="flex-1 flex-row items-center justify-center gap-[6px] rounded-pill bg-surface px-1 py-[10px]"
             >
+              {/* Deliberately the category glyph, not the brand mark, unlike the linked row above:
+                  this pill is Aura mint, and tinting a platform's mark to a colour of ours is exactly
+                  the modification their guidelines rule out. A generic icon beside the platform's name
+                  in our own colour claims nothing. */}
               <AuraIcon name={social.icon as AuraIconName} size={16} color="#6BF2C2" />
               <Text className="font-nunito-900 text-[12.5px]" style={{ color: '#6BF2C2' }}>
                 {social.label}

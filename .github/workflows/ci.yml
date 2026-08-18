@@ -1,0 +1,75 @@
+name: CI
+
+# main gets the gate on every push; feature branches get it on their PR rather than every commit —
+# feedback lands when it matters (opening/updating the PR) without burning CI minutes on every WIP
+# push to a branch nobody's reviewing yet.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A second push to the same branch/PR cancels whatever CI run is still going for the first —
+# otherwise two runs finish out of order and the commit status reflects whichever happened to end
+# last, not the latest code.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The repo's own toolchain, not a second one defined here. flake.nix pins Node 24 + pnpm
+      # 11 — installing them again via actions/setup-node would be a second source of truth that
+      # can drift from what `nix develop` gives you locally, silently, until CI and your laptop
+      # disagree about which Node CI actually ran on.
+      - uses: DeterminateSystems/nix-installer-action@main
+      # Backed by GitHub's own Actions cache, no external account — every dependency Nix pulls in
+      # (Node, pnpm, everything flake.nix names) is cached across runs instead of refetched cold.
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      # pnpm's own store, cached separately from Nix's — this is *packages* (react, graphql-yoga,
+      # the works), keyed on the lockfile so it invalidates exactly when dependencies actually
+      # change rather than on every run or never.
+      # `nix develop --command` prints a "node vX / pnpm vY" banner to stdout ahead of whatever it
+      # wraps (verified locally, not documented) — piped through `tail -n 1` here because this is
+      # the one place that output gets parsed instead of just logged. Grab the wrong line and this
+      # caches nothing every run without ever failing loud enough to notice.
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        run: echo "path=$(nix develop --command pnpm store path --silent | tail -n 1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: nix develop --command pnpm install --frozen-lockfile
+
+      # apps/api's suite calls the Worker's real fetch handler in-process (see test/helpers.ts) —
+      # no wrangler, no workerd — but it still needs real credentials to talk to Neon, Upstash and
+      # Clerk. Locally those live in the gitignored apps/api/.dev.vars; devVars.ts reads that file
+      # by hand because neither the test runner nor scripts/migrate.ts go through `wrangler dev`,
+      # which is the only thing that loads .dev.vars automatically. CI has no such file checked
+      # out, so this step writes one from repo secrets before anything else runs — same shape,
+      # same rule (TEST_DATABASE_URL must be a disposable database: the suite drops and recreates
+      # every table, every run, and helpers.ts refuses to start if it's equal to DATABASE_URL).
+      # DATABASE_URL itself is deliberately absent — nothing in the suite needs the real database,
+      # only something to compare TEST_DATABASE_URL against, and an unset key already satisfies
+      # that check without CI ever holding a credential with write access to production data.
+      - name: Write apps/api/.dev.vars for the test suite
+        run: |
+          cat > apps/api/.dev.vars <<EOF
+          TEST_DATABASE_URL=${{ secrets.TEST_DATABASE_URL }}
+          CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
+          UPSTASH_REDIS_REST_URL=${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN=${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          EOF
+
+      # The one command from CLAUDE.md's "everything, all 4 packages" — same thing you'd run
+      # locally, so a green check here means the same green you'd get on your own machine.
+      - run: nix develop --command pnpm turbo run typecheck test

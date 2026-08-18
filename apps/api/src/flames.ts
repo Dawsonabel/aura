@@ -102,7 +102,18 @@ export async function flamesFor(db: Db, user: User, tuning: Tuning): Promise<Fla
     const voter = voterOf.get(v.voterId) || null;
     const gm = !!user.godMode;
     const anonymous = !!(voter && voter.godMode);
-    const hintShown = v.revealed || gm;
+    /* Membership buys the clue, it doesn't skip the card.
+
+       These two used to be `|| gm`, which handed a member every clue already open — no tap, no foil,
+       no scratch. That's the wrong thing to sell: the scratch *is* the product, and Infinite Aura's
+       promise is that it costs nothing, not that it's over before you get there. A member's tiles
+       arrive sealed and priced FREE, and revealClue charges them nothing (see schema.ts).
+
+       `!anonymous` on both: a sender with Infinite Aura is hidden from everyone, and that has to hold
+       retroactively. Someone can pay to open a grade tile and *then* the sender becomes a member —
+       these are recomputed per request, so the grade goes back in the envelope rather than staying out
+       because of a flag set before the sender was entitled to hide. */
+    const hintShown = v.revealed && !anonymous;
     const pickCount = countsByVoter.get(v.voterId) || 0;
     const nameShown = revealedVoters.includes(v.voterId) && !!voter;
     /* 16A moved the grade behind a coin, which narrows what the anonymity floor has to cover.
@@ -117,15 +128,22 @@ export async function flamesFor(db: Db, user: User, tuning: Tuning): Promise<Fla
        ignores `detailHidden` still can't leak it. Doesn't apply once the name is out — by then the
        sender has been identified through the paid path anyway. */
     const detailHidden = !nameShown && tooSmallToHideIn(voter);
-    const gradeShown = v.gradeRevealed || gm;
+    const gradeShown = v.gradeRevealed && !anonymous;
     return {
       id: v.id, emoji: v.emoji, q: v.text, color: v.color,
       gender: detailHidden ? 'private' : voter ? String(voter.gender) : 'nonbinary',
       /* Empty until bought. The tile renders as sealed foil off exactly this, so an unpaid grade must
          not be in the payload at all — not merely hidden by the client. */
       grade: gradeShown ? (voter ? String(voter.grade) : 'your grade') : '',
-      revealed: v.revealed, gradeRevealed: gradeShown, godMode: gm, unread: v.unread, anonymous,
-      initial: hintShown && voter && !anonymous ? initial(voter) : null,
+      /* `hintShown`, not `v.revealed` — the same treatment `gradeRevealed` gets one line over.
+
+         These two disagreed, and the disagreement was visible: membership used to put the initial in
+         the payload while leaving this flag false, so the Aura list printed "starts with J" next to a
+         clue screen still selling that tile. The invariant both flags now keep is that **a clue is in
+         the payload if and only if its tile is open** — which is what makes the list safe to read
+         straight off the payload, and what stops any client from being the last line of defence. */
+      revealed: hintShown, gradeRevealed: gradeShown, godMode: gm, unread: v.unread, anonymous,
+      initial: hintShown && voter ? initial(voter) : null,
       name: nameShown && !anonymous ? `${voter!.firstName} ${voter!.lastName}` : null,
       repeatAdmirer: pickCount >= 2 && !anonymous, pickCount,
       ts: v.ts,

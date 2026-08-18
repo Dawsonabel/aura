@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Dimensions, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { ToyShadow } from './ToyShadow';
 import { AuraIcon, type AuraIconName } from './AuraIcon';
 import { COIN_FILL, COIN_INK, COIN_SHADOW } from './coin';
-import { SuperlativeChips, gradeLabel, initialsOf } from './profileKit';
+import { SOCIALS } from '@aura/api-client';
+import { SocialsList, firstNameOf, gradeLabel, initialsOf } from './profileKit';
 import { SkeletonBlock } from './stateKit';
 import type { PublicProfile } from '../hooks/useProfile';
 
@@ -231,21 +232,27 @@ export function RerollShortSheet({
   );
 }
 
-/* ---------------------------------------------------------------- long-press peek */
+/* ---------------------------------------------------------------- the candidate sheet */
 
-/* Holding a candidate lifts this over the blurred grid. A card, not a navigation, so the hold can
-   never resolve into a vote — which is the whole reason peeking is a long-press and tapping is the
-   ballot (§5.1: "a tap here is an irreversible vote, so the profile can't share it").
+/* Tapping a candidate lifts this over the blurred grid, and the vote is a button inside it.
 
-   Deviation from the design, stated plainly: the mock's footer reads "Let go to close", but the same
-   card carries a Follow button and a Full profile button, and a card that vanishes on release makes
-   both unreachable. So the peek persists until dismissed, and the footer says so. */
-export function PeekCard({
+   That is a deliberate reversal of the design. §5.1 made the grid tap the ballot and put the profile
+   behind a long-press *because* "a tap here is an irreversible vote, so the profile can't share it" —
+   which solved the collision by making the profile hard to reach, and left the ballot with nothing in
+   front of it. An anonymous vote for the wrong person, cast by a fat finger, could not be taken back.
+   Now the tap opens the card and the vote costs a second, deliberate press. The long-press is gone
+   entirely rather than kept as a synonym: two gestures that do the same thing is how the "✋ HOLD"
+   chip came to exist, and a hint teaching a gesture nobody needs is worse than no hint.
+
+   Deviation from the design, stated plainly: the mock's footer reads "Let go to close", which belonged
+   to the hold. This card is dismissed by tapping outside it, and the footer says so. */
+export function CandidateSheet({
   profile,
   loading,
   isFollowing,
   followBusy,
   onToggleFollow,
+  onVote,
   onOpenProfile,
   onClose
 }: {
@@ -254,15 +261,29 @@ export function PeekCard({
   isFollowing: boolean;
   followBusy: boolean;
   onToggleFollow: () => void;
+  /** Casts the ballot and closes. The only path to a vote now. */
+  onVote: () => void;
   onOpenProfile: () => void;
   onClose: () => void;
 }) {
+  const [socialsOpen, setSocialsOpen] = useState(false);
+  const socialCount = profile ? SOCIALS.filter(s => profile.socials[s.key]).length : 0;
+
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose}>
       <Pressable className="flex-1 justify-center px-[18px]" style={{ backgroundColor: 'rgba(13,12,13,0.62)' }} onPress={onClose}>
         <Pressable onPress={() => {}}>
           <ToyShadow depth={10} shadowColor="#C9B79F" backgroundColor="#FFF6E8" radius={30}>
-            <View className="px-[22px] py-6">
+            {/* Scrolls, because the card is no longer a fixed size: three superlative chips and three
+                expanded socials on a small phone add up past the screen, and a card that can grow needs
+                somewhere for the growth to go. The 82% cap leaves the tap-outside-to-close margin
+                visible at both ends — a sheet filling the screen edge to edge stops reading as
+                dismissable. `bounces={false}` so a short card doesn't rubber-band for no reason. */}
+            <ScrollView
+              className="px-[22px] py-6"
+              style={{ maxHeight: Dimensions.get('window').height * 0.82 }}
+              bounces={false}
+              showsVerticalScrollIndicator={false}>
               {loading ? (
                 <View className="gap-4">
                   <SkeletonBlock height={62} radius={100} width={62} />
@@ -289,21 +310,87 @@ export function PeekCard({
                       <Text className="font-fredoka-700 text-[24px] leading-[27px]" style={{ color: '#2D2A2E' }} numberOfLines={1}>
                         {profile.name}
                       </Text>
+                      {/* No school name: every candidate is at the viewer's own school by construction,
+                          so it was a constant taking up the room the handle and grade had to share. */}
                       <Text className="font-nunito-700 mt-[2px] text-[13px]" style={{ color: '#8B888D' }} numberOfLines={1}>
-                        {[profile.username ? `@${profile.username}` : null, gradeLabel(profile.grade), profile.schoolName]
+                        {[profile.username ? `@${profile.username}` : null, gradeLabel(profile.grade)]
                           .filter(Boolean)
                           .join(' · ')}
                       </Text>
                     </View>
                   </View>
 
-                  {/* Their trophies, not their totals: the peek deliberately shows nothing about how
-                      many flames they have or who sent them. */}
+                  {/* A count, not a list.
+
+                      Naming the titles here put a stranger's whole reputation on the ballot: you were
+                      choosing "smartest in the room" while reading that this person already won it,
+                      which is a nudge toward the person who needs it least. The crown says they've won
+                      *something* — enough to be interesting, not enough to vote by. The titles
+                      themselves are one tap away on the full profile, where nobody is mid-ballot.
+
+                      Still no flame total and still nothing about who sent what: that was already the
+                      rule here and it hasn't moved. */}
                   {profile.superlatives.length > 0 && (
-                    <SuperlativeChips superlatives={profile.superlatives.slice(0, 3)} lockedCount={0} />
+                    <View className="mt-3 flex-row">
+                      <View
+                        className="flex-row items-center gap-[7px] rounded-pill px-[13px] py-[8px]"
+                        style={{ backgroundColor: '#FFD84D' }}
+                      >
+                        <AuraIcon name="crown" size={16} color="#3A2A00" />
+                        <Text className="font-nunito-900 text-[14px]" style={{ color: '#3A2A00' }}>
+                          {profile.superlatives.length}
+                        </Text>
+                      </View>
+                    </View>
                   )}
 
-                  <View className="mt-4 flex-row gap-[9px]">
+                  {/* Collapsed by default, and absent entirely when they've linked nothing — an
+                      expander that opens onto "no socials" is a promise the card can't keep.
+
+                      Behind it is the same SocialsList the Me tab uses, in its read-only mode, so a
+                      handle opens the same URL from here as from a full profile and there's one place
+                      where "what a linked platform looks like" is decided. */}
+                  {socialCount > 0 && (
+                    <View className="mt-4">
+                      <Pressable
+                        onPress={() => setSocialsOpen(o => !o)}
+                        className="flex-row items-center gap-2 rounded-pill px-[15px] py-[11px]"
+                        style={{ backgroundColor: '#EDE3D2' }}
+                      >
+                        <AuraIcon name="link" size={16} color="#6E6B70" />
+                        <Text className="font-nunito-900 flex-1 text-[14px]" style={{ color: '#6E6B70' }}>
+                          {socialCount === 1 ? '1 social' : `${socialCount} socials`}
+                        </Text>
+                        {/* The icon set has one chevron, pointing right. Rotating it beats hand-writing
+                            an up/down path: the drawn icons come from the design doc, not from here. */}
+                        <View style={{ transform: [{ rotate: socialsOpen ? '-90deg' : '90deg' }] }}>
+                          <AuraIcon name="chevronRight" size={16} color="#6E6B70" />
+                        </View>
+                      </Pressable>
+                      {socialsOpen && <SocialsList socials={profile.socials} />}
+                    </View>
+                  )}
+
+                  {/* The ballot. Mint, because that's the Vote tab's colour everywhere else, and
+                      because Follow directly below it is pink — two pink buttons on one card would
+                      make the irreversible one and the reversible one look like the same weight. */}
+                  <View className="mt-4">
+                    <ToyShadow
+                      depth={5}
+                      shadowColor="#3FBF95"
+                      backgroundColor="#6BF2C2"
+                      radius={9999}
+                      onPress={onVote}
+                    >
+                      <View className="items-center py-[15px]">
+                        <Text className="font-fredoka-700 text-[18px]" style={{ color: '#0A3B2C' }}>
+                          Vote for {firstNameOf(profile.name)}
+                        </Text>
+                      </View>
+                    </ToyShadow>
+                  </View>
+
+                  <View className="mt-[10px] flex-row gap-[9px]">
                     <View className="flex-1">
                       {isFollowing ? (
                         <Pressable
@@ -347,11 +434,11 @@ export function PeekCard({
                   </View>
 
                   <Text className="font-nunito-800 mt-[14px] text-center text-[12.5px]" style={{ color: '#9A9691' }}>
-                    Tap outside to close. Peeking casts no vote.
+                    Tap outside to close. Nothing is cast until you vote.
                   </Text>
                 </>
               )}
-            </View>
+            </ScrollView>
           </ToyShadow>
         </Pressable>
       </Pressable>
@@ -361,8 +448,8 @@ export function PeekCard({
 
 /* ---------------------------------------------------------------- follow button */
 
-/* The four states from 14A's state strip, in one place so the People screen, the peek card and any
-   future profile button can't drift: Follow (pink, toy shadow) / Follow back (pink, they follow you) /
+/* The four states from 14A's state strip, in one place so the People screen, the candidate sheet and
+   any future profile button can't drift: Follow (pink, toy shadow) / Follow back (pink, they follow you) /
    Following ✓ (flat cream, tap to unfollow with no confirm) / in-flight (same, dimmed ink).
 
    There is deliberately no pending or requested state — following needs no approval and sends no

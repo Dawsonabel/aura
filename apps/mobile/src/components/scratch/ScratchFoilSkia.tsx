@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useDerivedValue, useSharedValue, withTiming, Easing, runOnJS } from 'react-native-reanimated';
+import { FOIL_COLOR } from '../AuraFoil';
 import { GIVE_UP_AT, SCRATCH_MS, SWIPE_COUNT, pointAt, rnd } from './swipes';
 import { getSkia } from './skiaAvailable';
 
@@ -16,7 +17,7 @@ import { getSkia } from './skiaAvailable';
    The whole animation runs off one Reanimated shared value on the UI thread, so it keeps its timing
    while JS is busy — which it will be, since the tap that starts it also fires the reveal mutation. */
 
-const FOIL = '#B0AEB2';
+const FOIL = FOIL_COLOR;
 const SPECK = 'rgba(90,88,92,0.30)';
 const STREAK = 'rgba(255,255,255,0.16)';
 const CRUMB = 'rgba(176,174,178,0.5)';

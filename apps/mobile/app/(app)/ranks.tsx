@@ -90,9 +90,9 @@ export default function Ranks() {
         {data && (
           <View style={{ flexGrow: 0, flexShrink: 0 }}>
             <ToyShadow depth={3} shadowColor="#C4501E" backgroundColor="#F2703A" radius={9999}>
-              <View className="px-3 py-[6px]">
+              <View className="flex-row items-center gap-[5px] px-3 py-[6px]">
                 <AuraIcon name="hourglass" size={13} color="#FFFFFF" />
-                  <Text className="font-nunito-900 text-[12px] text-white">{timeLeft(data.resetsAt)}</Text>
+                <Text className="font-nunito-900 text-[12px] text-white">{timeLeft(data.resetsAt)}</Text>
               </View>
             </ToyShadow>
           </View>

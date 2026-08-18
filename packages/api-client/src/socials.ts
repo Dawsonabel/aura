@@ -18,9 +18,12 @@ export type Socials = Partial<Record<SocialKey, string>>;
 
 /* 15A: "three slots, not three logos". Instagram, TikTok and Snapchat each publish an official SVG and
    require it unmodified, so a hand-drawn lookalike is both a trademark problem and instantly readable as
-   fake. `icon` names a *category glyph* from the icon library (camera / ghost / musicNote) that holds the
-   slot until the official marks are dropped in; those marks are the one place the 2.2-stroke rule won't
-   apply, since they keep their own shape and colour.
+   fake — and the redrawn glyphs that held these slots were exactly that, which is why they're gone.
+
+   The real marks now live in apps/mobile's BrandMark, kept out of this package because they aren't data
+   about a platform, they're that platform's property under its own terms. `icon` and `emoji` remain the
+   fallback for surfaces that can't use a mark: apps/web has no icon library yet, and the "add a handle"
+   pills are Aura-mint, where tinting a brand mark would be the modification the guidelines forbid.
 
    Spotify is dropped from the row per 15A — the block is Instagram, Snapchat and TikTok. */
 export const SOCIALS: {

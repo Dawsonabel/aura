@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming, Easing } from 'react-native-reanimated';
-import { AuraFoil, FoilLabel } from '../AuraFoil';
+import { AuraFoil, FOIL_COLOR, FoilLabel } from '../AuraFoil';
 import { AuraIcon } from '../AuraIcon';
 import { COIN_FILL, COIN_INK, COIN_SHADOW } from '../coin';
 import { ToyShadow } from '../ToyShadow';
@@ -30,6 +30,7 @@ export function ScratchTile({
   seed = 0,
   cost,
   free,
+  freeLabel = 'FREE TODAY',
   disabled,
   onScratch,
   children
@@ -41,8 +42,10 @@ export function ScratchTile({
   seed?: number;
   /** Coins this tile costs. Ignored when `free` is set. */
   cost: number;
-  /** True when the daily free tile is available, so the badge says so instead of showing a price. */
+  /** True when this tile costs nothing, so the badge says so instead of showing a price. */
   free?: boolean;
+  /** What "free" is called here. "FREE TODAY" is the daily tile; a member's tiles are just FREE. */
+  freeLabel?: string;
   disabled?: boolean;
   /** Fires on tap. Charge here — the animation is presentation, not a confirmation step. */
   onScratch: () => void;
@@ -88,9 +91,15 @@ export function ScratchTile({
         setSize(prev => (prev && prev.w === width && prev.h === height ? prev : { w: width, h: height }));
       }}
     >
-      {/* The face is always mounted and always underneath — the foil is removed from on top of it, so
-          the value is never conjured into existence at the end. */}
-      <Animated.View style={[{ flex: 1 }, faceStyle]}>{children}</Animated.View>
+      {/* The face sits underneath the foil, which is removed from on top of it — the value is never
+          conjured into existence at the end.
+
+          It is *not* mounted while the tile is sealed, though. A cover that has to measure itself before
+          it paints can't be trusted to win a race against the thing it's covering: mount both together
+          and the answer is on screen, unobscured, for however many frames the cover takes to come up.
+          Nothing that hasn't been paid for should exist in the tree at all. The face mounts on the same
+          commit that starts the rake, under a canvas that is already painted and has no holes in it yet. */}
+      {(open || scratching) && <Animated.View style={[{ flex: 1 }, faceStyle]}>{children}</Animated.View>}
 
       {/* Crumbs stay for good on an opened tile.
 
@@ -99,6 +108,20 @@ export function ScratchTile({
           The design is explicit that it shouldn't: the dust is the receipt for the coin. This also covers
           tiles that were already open when the screen loaded, which never had a canvas at all. */}
       {open && <AuraFoil dust seed={seed} />}
+
+      {/* Flat foil colour, under both textured foils, up on the very first frame.
+
+          Neither texture can be: the SVG foil measures itself with onLayout before it draws a single
+          node, and the Skia canvas can't mount until this component's own onLayout has given it a size —
+          then needs a frame or two more to paint. Between them there was also a swap (SVG out, Skia in
+          the moment `size` resolves) with the same gap in the middle. This rect needs no measurement, so
+          the tile is opaque from the start and the texture lands on top of it invisibly. */}
+      {showFoil && (
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: FOIL_COLOR }}
+        />
+      )}
 
       {/* The sealed foil.
 
@@ -122,7 +145,7 @@ export function ScratchTile({
               <View className="flex-row items-center gap-1 px-[10px] py-[5px]">
                 {free ? (
                   <Text className="font-nunito-900 text-[10.5px]" style={{ color: COIN_INK }}>
-                    FREE TODAY
+                    {freeLabel}
                   </Text>
                 ) : (
                   <>

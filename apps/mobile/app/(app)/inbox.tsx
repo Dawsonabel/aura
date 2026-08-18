@@ -18,9 +18,15 @@ import { ToyShadow } from '../../src/components/ToyShadow';
 
 /* 12A's row subtitles: "Girl · 11th grade · 🔒 name hidden" / "… · starts with J" /
    "✅ Revealed: Maya R." / "… · already opened". Gender is omitted when the voter chose not to say
-   (flameGenderLabel returns null), so the line just starts with the grade. */
+   (flameGenderLabel returns null), so the line just starts with the grade.
+
+   This row can print `grade` and `initial` straight because the payload only contains a clue whose tile
+   is open — see the note on `revealed` in apps/api/src/flames.ts. It is not a second gate, and it must
+   not become one: if a clue arrives here it has been bought, and if it hasn't been bought it isn't
+   here. The grade *is* empty for an anonymous sender, though — no clue on that flame is buyable at
+   all — so the pieces are joined rather than interpolated, or the line ends in a dangling separator. */
 function flameSubtitle(f: Flame): string {
-  if (f.anonymous) return `🔒 Anonymous · ${f.grade}`;
+  if (f.anonymous) return ['🔒 Anonymous', f.grade].filter(Boolean).join(' · ');
   if (f.name) return `✅ Revealed: ${f.name}`;
   /* Too few people share this sender's gender+grade for those to be anonymous, so the server withheld
      them — see COHORT_FLOOR. The row still says whether it's been opened. */
@@ -54,7 +60,6 @@ export default function Inbox() {
   }
 
   const [selectedFlameId, setSelectedFlameId] = useState<string | null>(null);
-  const [godModeOpen, setGodModeOpen] = useState(false);
 
   // Opening the Inbox marks everything read immediately, same as apps/web — not gated behind
   // any user action. Fires once auth is actually ready (not on raw mount) — a cold-start deep
@@ -195,7 +200,6 @@ export default function Inbox() {
       {selectedFlame && (
         <FlameDetail flame={selectedFlame} bonusRevealsLeft={data.bonusRevealsLeft} onClose={() => setSelectedFlameId(null)} />
       )}
-      {godModeOpen && <GodModeOverlay onClose={() => setGodModeOpen(false)} />}
     </InboxShell>
   );
 }

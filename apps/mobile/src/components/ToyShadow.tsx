@@ -8,8 +8,6 @@ export type ToyShadowProps = {
   backgroundColor: string;
   radius: number;
   onPress?: () => void;
-  /** Secondary gesture — the Vote card uses it to peek at a profile without casting the vote. */
-  onLongPress?: () => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
@@ -23,7 +21,7 @@ export type ToyShadowProps = {
    When `onPress` is given, pressing translates the face down by `depth` (covering the slab
    entirely) — "the toy button physically depresses" — rather than animating a shadow property,
    since RN shadows aren't real box-shadows to animate in the first place. */
-export function ToyShadow({ depth, shadowColor, backgroundColor, radius, onPress, onLongPress, disabled, style, children }: ToyShadowProps) {
+export function ToyShadow({ depth, shadowColor, backgroundColor, radius, onPress, disabled, style, children }: ToyShadowProps) {
   const face = (pressed: boolean) => (
     <View style={{ backgroundColor: shadowColor, borderRadius: radius }}>
       <View
@@ -38,10 +36,10 @@ export function ToyShadow({ depth, shadowColor, backgroundColor, radius, onPress
     </View>
   );
 
-  if (!onPress && !onLongPress) return face(false);
+  if (!onPress) return face(false);
 
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} disabled={disabled}>
+    <Pressable onPress={onPress} disabled={disabled}>
       {({ pressed }) => face(pressed && !disabled)}
     </Pressable>
   );

@@ -16,7 +16,12 @@ import Svg, { Line, Rect, Circle } from 'react-native-svg';
    Grey is deliberate and load-bearing: 15A moved the currency to yellow precisely so grey could mean
    "unscratched foil" and nothing else. The card underneath is what the foil wipes off to. */
 
-const FOIL = '#B0AEB2';
+/* Exported because the *colour* has to be paintable before the picture is. Both textured foils here
+   (this SVG one, and the Skia canvas) need a layout pass before they can draw anything, so whoever owns
+   a sealed tile lays a flat rect of this down underneath them to cover the frames in between. */
+export const FOIL_COLOR = '#B0AEB2';
+
+const FOIL = FOIL_COLOR;
 const SPECK = 'rgba(90,88,92,0.30)';
 const STREAK = 'rgba(255,255,255,0.16)';
 const CRUMB = 'rgba(176,174,178,0.5)';

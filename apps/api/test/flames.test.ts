@@ -57,7 +57,7 @@ const FLAMES_QUERY = '{ flames { flames { id initial repeatAdmirer unread godMod
 /* 16A's clue ladder. The rules worth pinning: the grade is *not* free any more, the free daily tile is
    spent before coins are, and re-tapping an open tile must never charge twice. Each of those is a way to
    take money we said was free, so each gets a test. */
-const LADDER_QUERY = '{ flames { flames { id grade gradeRevealed initial } coins } shop { freeClueReady clueGradeCost } }';
+const LADDER_QUERY = '{ flames { flames { id grade gradeRevealed revealed initial anonymous } coins } shop { freeClueReady clueGradeCost } }';
 
 test('the grade tile is withheld until bought, then charged for once', async () => {
   const voter = await makeSchoolUser();
@@ -124,10 +124,18 @@ test('a member pays nothing for either clue and keeps the free tile unspent', as
   await callApi('mutation{ legacyGodMode }', undefined, target.token);
   await voteTwice(voter.token, target.userId);
 
+  /* Membership buys the clues, it does not skip them: a member's tiles arrive sealed and empty, same
+     as anyone's, and the scratch is the thing they paid to keep doing for nothing.
+
+     The two flags must agree with the two values, in both directions — a clue is in the payload if and
+     only if its tile is open. When they disagreed (the initial shipped for members while `revealed`
+     stayed false) the Aura list printed "starts with M" beside a clue screen still selling that tile. */
   const before = await callApi(LADDER_QUERY, undefined, target.token);
   const flame = before.body.data.flames.flames[0];
-  // Membership opens every clue on sight, so the payload already carries the grade.
-  assert.equal(flame.gradeRevealed, true);
+  assert.equal(flame.gradeRevealed, false);
+  assert.equal(flame.grade, '');
+  assert.equal(flame.revealed, false);
+  assert.equal(flame.initial, null);
   const coinsBefore = before.body.data.flames.coins;
 
   for (const clue of ['grade', 'initial']) {
@@ -142,6 +150,49 @@ test('a member pays nothing for either clue and keeps the free tile unspent', as
     assert.equal(r.body.data.revealClue.usedFreeClue, false);
   }
   assert.equal((await callApi('{ shop { freeClueReady } }', undefined, target.token)).body.data.shop.freeClueReady, true);
+
+  // …and having scratched them, the member has both, with the flags agreeing.
+  const after = await callApi(LADDER_QUERY, undefined, target.token);
+  const opened = after.body.data.flames.flames.find((f: { id: string }) => f.id === flame.id);
+  assert.equal(opened.gradeRevealed, true);
+  assert.equal(opened.grade, '10');
+  assert.equal(opened.revealed, true);
+  assert.equal(opened.initial, 'M');
+});
+
+/* The sender's own membership outranks the viewer's, and outranks a purchase already made.
+
+   Anonymity has to be retroactive or it isn't a promise: someone can buy a clue about you and *then*
+   you sign up for Infinite Aura. The flags are recomputed per request off the sender's current state,
+   so the grade and the initial go back in the envelope — and the clue screen shows those tiles as
+   hidden rather than as foil with a price, because revealClue refuses to sell them at any price. */
+test('a sender who becomes anonymous takes back clues that were already bought', async () => {
+  const voter = await makeSchoolUser();
+  await callApi('mutation{ updateMe(firstName:"Nina", grade:"9"){ id } }', undefined, voter.token);
+  const target = await makeSchoolUser();
+  await callApi('mutation{ legacyGodMode }', undefined, target.token);
+  await voteTwice(voter.token, target.userId);
+
+  const flame = (await callApi(LADDER_QUERY, undefined, target.token)).body.data.flames.flames[0];
+  for (const clue of ['grade', 'initial']) {
+    await callApi('mutation($id:ID!,$c:String!){ revealClue(id:$id, clue:$c){ ok } }', { id: flame.id, c: clue }, target.token);
+  }
+  const bought = (await callApi(LADDER_QUERY, undefined, target.token)).body.data.flames.flames[0];
+  assert.equal(bought.grade, '9');
+  assert.equal(bought.initial, 'N');
+
+  // The sender signs up, after the fact.
+  await callApi('mutation{ legacyGodMode }', undefined, voter.token);
+
+  const hidden = (await callApi(LADDER_QUERY, undefined, target.token)).body.data.flames.flames[0];
+  assert.equal(hidden.grade, '', 'an anonymous sender\'s grade is withheld even from a member');
+  assert.equal(hidden.gradeRevealed, false);
+  assert.equal(hidden.initial, null);
+  assert.equal(hidden.revealed, false);
+  /* The flame itself doesn't disappear, and the client is told why the tiles won't open. Gender is not
+     asserted here because it's never blanked by anonymity — the cohort floor is what governs that one,
+     and its own test covers it. */
+  assert.equal(hidden.anonymous, true);
 });
 
 test('an unknown clue name is rejected rather than silently charged', async () => {
