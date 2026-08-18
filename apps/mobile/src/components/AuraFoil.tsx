@@ -101,8 +101,12 @@ function Sealed({ w, h, seed }: { w: number; h: number; seed: number }) {
 }
 
 /* Rendered as RN text rather than SVG text so it picks up Nunito properly — the design's canvas asks
-   for `900 Nunito`, and SvgText font resolution on RN is far less reliable than a plain <Text>. */
-function FoilLabel({ label, w }: { label: string; w: number }) {
+   for `900 Nunito`, and SvgText font resolution on RN is far less reliable than a plain <Text>.
+
+   Exported because the foil underneath isn't always this component: when Skia is available the sealed
+   tile is painted by the Skia canvas instead, and that draws no text. The label has to be able to sit
+   over either one, so it lives here and is positioned by whoever owns the tile. */
+export function FoilLabel({ label, w }: { label: string; w: number }) {
   const lines = label.split('|');
   const fontSize = Math.max(9, Math.min(w * 0.11, 12));
   return (

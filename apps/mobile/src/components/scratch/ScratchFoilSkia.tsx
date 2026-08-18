@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useDerivedValue, useSharedValue, withTiming, Easing, runOnJS } from 'react-native-reanimated';
-import { GIVE_UP_AT, SCRATCH_MS, SWIPES, pointAt, rnd } from './swipes';
+import { GIVE_UP_AT, SCRATCH_MS, SWIPE_COUNT, pointAt, rnd } from './swipes';
 import { getSkia } from './skiaAvailable';
 
 /* 16A's scratch-off, in Skia.
@@ -25,18 +25,26 @@ export function ScratchFoilSkia({
   width,
   height,
   seed = 0,
+  /* Mounted while the tile is sealed, animating only once this turns true.
+
+     It used to mount on tap, which flashed the answer: the static foil unmounted immediately but Skia
+     needs a frame or two to measure and paint, and the face underneath was bare in the gap. Painting the
+     sealed state from the start means there is no swap at all — the tap just starts the clock. */
+  running,
   /** Fires once the rake finishes, for the value pop and the success haptic. */
   onDone
 }: {
   width: number;
   height: number;
   seed?: number;
+  running: boolean;
   onDone?: () => void;
 }) {
   const skia = getSkia();
   const progress = useSharedValue(0);
 
   useEffect(() => {
+    if (!running) return;
     progress.value = 0;
     progress.value = withTiming(
       1,
@@ -47,14 +55,14 @@ export function ScratchFoilSkia({
         if (finished && onDone) runOnJS(onDone)();
       }
     );
-    // Runs once per mount — the tile is mounted when the scratch starts and unmounted when it's done.
-  }, [progress, onDone]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, progress]);
 
   /* Rebuilt each frame on the UI thread. Cheap: a few hundred path ops, no allocation of RN views. */
   const rakePath = useDerivedValue(() => {
     const p = skia!.Skia.Path.Make();
     const t = progress.value;
-    const n = SWIPES.length;
+    const n = SWIPE_COUNT; // a number, not the array — see swipeTable on why the array can't cross
 
     for (let s = 0; s < n; s++) {
       const from = s / n;
@@ -122,8 +130,16 @@ export function ScratchFoilSkia({
         <Path path={rakePath} color="black" style="stroke" strokeWidth={rakeWidth} strokeCap="round" strokeJoin="round" blendMode="clear" />
         <Path path={rakePath} color="black" style="fill" blendMode="clear" />
 
-        {/* …and the moment it gives up the rest. */}
-        <Rect x={0} y={0} width={width} height={height} color="black" opacity={giveUpOpacity} blendMode="clear" />
+        {/* …and the moment it gives up the rest.
+
+            dstOut inside an opacity Group, NOT clear. `clear` ignores the source alpha entirely — it
+            zeroes the destination whatever you fade it to — so this rect wiped the whole tile on the
+            very first frame at opacity 0, and the rake was never visible. `dstOut` erases in proportion
+            to source alpha (dst × (1 − srcA)), so the Group's opacity actually controls how much foil
+            lets go. */}
+        <Group opacity={giveUpOpacity}>
+          <Rect x={0} y={0} width={width} height={height} color="black" blendMode="dstOut" />
+        </Group>
       </Group>
 
       {/* Dust rides on top of the cleared tile and never fades — the receipt for the coin. Outside the

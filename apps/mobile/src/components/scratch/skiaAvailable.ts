@@ -18,7 +18,11 @@ function probe(): SkiaModule | null {
     // Touch the native side. Throws in Expo Go and in any build without Skia compiled in.
     mod.Skia.Path.Make();
     return mod;
-  } catch {
+  } catch (e) {
+    /* Logged, not swallowed. Falling back silently is right for the user — the clue still opens — but
+       it's wrong for us: "no animation" and "Skia threw for some unrelated reason" look identical from
+       the outside, and I spent a round of debugging unable to tell which had happened. */
+    console.warn('[scratch] Skia unavailable, falling back to instant reveal:', e);
     return null;
   }
 }

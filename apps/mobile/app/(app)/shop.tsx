@@ -66,27 +66,100 @@ export default function Shop() {
         </View>
       ) : (
         <ScrollView className="mt-4" showsVerticalScrollIndicator={false}>
-          {/* Balance. Yellow card, dark ink — the currency reads as gold on every surface it appears on. */}
-          <ToyShadow depth={6} shadowColor={COIN_SHADOW} backgroundColor={COIN_FILL} radius={26}>
-            <View className="flex-row items-center gap-[14px] p-4">
-              <AuraIcon name="coin" size={36} color={COIN_INK} />
-              <View className="flex-1">
-                <Text className="font-fredoka-700 text-[34px] leading-[36px]" style={{ color: COIN_INK }}>
-                  {shop.coins}
-                </Text>
-                <Text className="font-nunito-900 text-[12.5px]" style={{ color: '#7A5A00' }}>
-                  {/* A member's coins still have a job, and the card says which one rather than going quiet. */}
-                  {member
-                    ? 'Boosts only — clues are free for you'
-                    : `1 coin = 1 clue`}
-                </Text>
-              </View>
-            </View>
-          </ToyShadow>
+          {/* The two things you *have* — a balance and a membership — sit side by side as squares.
 
-          {member && (
-            <MemberCard expires={shop.infiniteAuraExpires} />
-          )}
+              Stacked full-width rows wasted the widest part of the screen on two short lines of text and
+              pushed everything you can *do* below the fold. Square tiles also match the scratch card and
+              the coin packs, so the screen reads as one grid rather than three unrelated rhythms.
+
+              Membership keeps a fixed slot: a member sees their status here, everyone else sees the offer.
+              It leads rather than trails because it reframes every row beneath it — "one more clue · 1
+              coin" only means something once you know there's a version where clues are free. */}
+          <View className="flex-row gap-3">
+            <View className="flex-1">
+              <ToyShadow depth={6} shadowColor={COIN_SHADOW} backgroundColor={COIN_FILL} radius={26}>
+                {/* Icon pinned to the corner, body centred in the space *below* it.
+
+                    The icon is absolutely positioned so it can't shift the body off-centre — with both in
+                    one column, a one-line caption and a two-line one (which the member state has) would
+                    centre at different heights and the two tiles would disagree.
+
+                    The top padding is what reserves the icon's row. Centring in the full square instead
+                    put equal space above and below the body, but the icon fills the space above, so the
+                    tile read as bottom-heavy with a hole under the text. */}
+                <View
+                  className="items-center justify-center"
+                  style={{ aspectRatio: 1, paddingTop: 50, paddingBottom: 16, paddingHorizontal: 18 }}
+                >
+                  <View style={{ position: 'absolute', top: 16, left: 16 }}>
+                    <AuraIcon name="coin" size={32} color={COIN_INK} />
+                  </View>
+                  <View className="items-center">
+                    <Text className="font-fredoka-700 text-[56px] leading-[58px]" style={{ color: COIN_INK }}>
+                      {shop.coins}
+                    </Text>
+                    <Text
+                      className="font-nunito-900 mt-[2px] text-center text-[13px] leading-[17px]"
+                      style={{ color: '#7A5A00' }}
+                    >
+                      {/* A member's coins still have a job, and the tile says which rather than going quiet. */}
+                      {member ? 'Boosts only —\nclues are free' : '1 coin = 1 clue'}
+                    </Text>
+                  </View>
+                </View>
+              </ToyShadow>
+            </View>
+
+            <View className="flex-1">
+              <ToyShadow
+                depth={6}
+                shadowColor="#3FBF95"
+                backgroundColor="#6BF2C2"
+                radius={26}
+                onPress={() => router.push('/infinite')}
+              >
+                <View
+                  className="items-center justify-center"
+                  style={{ aspectRatio: 1, paddingTop: 50, paddingBottom: 16, paddingHorizontal: 18 }}
+                >
+                  <View style={{ position: 'absolute', top: 16, left: 16 }}>
+                    <AuraIcon name="aura" size={32} color="#0A3B2C" />
+                  </View>
+                  {/* The affordance stays opposite the icon — it's chrome for the tile, not part of the
+                      message, so it shouldn't join the centred block. */}
+                  <View style={{ position: 'absolute', top: 16, right: 16 }}>
+                    {member ? (
+                      <Text className="font-nunito-900 text-[12px]" style={{ color: '#12664C' }}>
+                        ON
+                      </Text>
+                    ) : (
+                      <AuraIcon name="chevronRight" size={20} color="#0A3B2C" />
+                    )}
+                  </View>
+                  <View className="items-center">
+                    {/* Two lines on purpose — it fills the tile at a readable size instead of shrinking
+                        to fit one, and it matches the paywall where the name is also stacked. */}
+                    <Text
+                      className="font-fredoka-700 text-center text-[27px] leading-[28px]"
+                      style={{ color: '#0A3B2C' }}
+                    >
+                      Infinite{'\n'}Aura
+                    </Text>
+                    <Text
+                      className="font-nunito-800 mt-[4px] text-center text-[12.5px] leading-[16px]"
+                      style={{ color: '#12664C' }}
+                    >
+                      {member ? 'Clues free · first names' : 'Every clue free'}
+                    </Text>
+                  </View>
+                </View>
+              </ToyShadow>
+            </View>
+          </View>
+
+          {/* A member's detail — renewal, what's included, how to cancel — is too much for a square, so it
+              stays a full-width block underneath the tile that summarises it. */}
+          {member && <MemberCard expires={shop.infiniteAuraExpires} />}
 
           {error && <AuthError message={(error as Error).message} />}
 
@@ -158,34 +231,12 @@ export default function Shop() {
             />
           </View>
 
-          {!member ? (
-            <View className="mt-5 mb-8">
-              <ToyShadow
-                depth={5}
-                shadowColor="#3FBF95"
-                backgroundColor="#6BF2C2"
-                radius={22}
-                onPress={() => router.push('/infinite')}
-              >
-                <View className="flex-row items-center gap-3 px-4 py-[14px]">
-                  <AuraIcon name="aura" size={22} color="#0A3B2C" />
-                  <View className="flex-1">
-                    <Text className="font-fredoka-700 text-[17px]" style={{ color: '#0A3B2C' }}>
-                      Infinite Aura
-                    </Text>
-                    <Text className="font-nunito-800 mt-[1px] text-[11.5px]" style={{ color: '#12664C' }}>
-                      Every clue free · first names
-                    </Text>
-                  </View>
-                  <AuraIcon name="chevronRight" size={18} color="#0A3B2C" />
-                </View>
-              </ToyShadow>
-            </View>
-          ) : (
-            <Text className="font-nunito-800 mt-5 mb-8 text-center text-[12.5px] leading-[18px] text-ink-faint">
-              First names come with Infinite Aura. Coins never buy one.
-            </Text>
-          )}
+          {/* The card moved up under the balance; this line stays. It's the rule the whole ladder rests
+              on, and the bottom of the spend list is exactly where someone is looking for a way to buy
+              a name with coins. */}
+          <Text className="font-nunito-800 mt-5 mb-8 text-center text-[12.5px] leading-[18px] text-ink-faint">
+            First names come with Infinite Aura. Coins never buy one.
+          </Text>
         </ScrollView>
       )}
     </View>

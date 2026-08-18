@@ -464,13 +464,22 @@ function CandidateCard({
               </Text>
             </View>
           )}
-          <ToyShadow depth={3} shadowColor={avatarAccent.shadow} backgroundColor={avatarAccent.bg} radius={9999}>
-            <View className="h-[54px] w-[54px] items-center justify-center">
-              <Text className="font-fredoka-700 text-[21px]" style={{ color: avatarAccent.ink }}>
-                {initials(choice.name)}
-              </Text>
-            </View>
-          </ToyShadow>
+          {/* self-start, or the avatar isn't round.
+
+              ToyShadow's slab and face are plain Views, and this card is a flex *column*, so the default
+              alignItems: stretch pulls them to the full card width — the inner 54×54 keeps its size but
+              the coloured slab behind it becomes a full-width pill. Every other avatar in the app sits in
+              a row (where stretch affects height, not width), which is why this is the only one that
+              needed it, and why it went unnoticed until the grid first rendered with real candidates. */}
+          <View className="self-start">
+            <ToyShadow depth={3} shadowColor={avatarAccent.shadow} backgroundColor={avatarAccent.bg} radius={9999}>
+              <View className="h-[54px] w-[54px] items-center justify-center">
+                <Text className="font-fredoka-700 text-[21px]" style={{ color: avatarAccent.ink }}>
+                  {initials(choice.name)}
+                </Text>
+              </View>
+            </ToyShadow>
+          </View>
           <View>
             <Text className="font-nunito-900 text-[17px]" style={{ color: '#2D2A2E' }} numberOfLines={1}>
               {choice.name}

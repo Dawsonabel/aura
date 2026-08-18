@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming, Easing } from 'react-native-reanimated';
-import { AuraFoil } from '../AuraFoil';
+import { AuraFoil, FoilLabel } from '../AuraFoil';
 import { AuraIcon } from '../AuraIcon';
 import { COIN_FILL, COIN_INK, COIN_SHADOW } from '../coin';
 import { ToyShadow } from '../ToyShadow';
@@ -52,6 +52,9 @@ export function ScratchTile({
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [scratching, setScratching] = useState(false);
   const pop = useSharedValue(1);
+  /* Resolved once, not per render: the canvas is only mounted at rest when it can actually paint, and
+     the sealed state has to pick the same foil the tap will animate. */
+  const skiaReady = hasSkia() && !!size;
 
   /* The payoff: the value pops once the raking stops. 16A is explicit that the reward lands *after* the
      rake, not during it — that's the scratch-card beat. */
@@ -89,9 +92,31 @@ export function ScratchTile({
           the value is never conjured into existence at the end. */}
       <Animated.View style={[{ flex: 1 }, faceStyle]}>{children}</Animated.View>
 
+      {/* Crumbs stay for good on an opened tile.
+
+          They're painted inside the Skia canvas during the rake, but that canvas unmounts the moment the
+          animation ends and took the dust with it — so a scratched tile went back to looking untouched.
+          The design is explicit that it shouldn't: the dust is the receipt for the coin. This also covers
+          tiles that were already open when the screen loaded, which never had a canvas at all. */}
+      {open && <AuraFoil dust seed={seed} />}
+
+      {/* The sealed foil.
+
+          With Skia present this is the *same canvas* that will do the raking, mounted and painted before
+          the tap so there's no swap and no frame where the face shows through. Without Skia it's the
+          static SVG foil, which has nothing to warm up. */}
+      {/* `|| scratching` matters: the caller marks the clue open the moment it's tapped (it has been paid
+          for by then), so keying purely off `!open` would unmount the canvas at the exact instant the
+          rake was meant to start. */}
+      {(!open || scratching) && skiaReady && size && (
+        <ScratchFoilSkia width={size.w} height={size.h} seed={seed} running={scratching} onDone={celebrate} />
+      )}
+
       {showFoil && (
         <>
-          <AuraFoil label={label} seed={seed} />
+          {/* No `label` here — the caption is drawn below, over whichever foil is painting. */}
+          {!skiaReady && <AuraFoil seed={seed} />}
+          {size && <FoilLabel label={label} w={size.w} />}
           <View style={{ position: 'absolute', left: 0, right: 0, bottom: 11, alignItems: 'center' }}>
             <ToyShadow depth={2} shadowColor={COIN_SHADOW} backgroundColor={COIN_FILL} radius={9999}>
               <View className="flex-row items-center gap-1 px-[10px] py-[5px]">
@@ -113,12 +138,8 @@ export function ScratchTile({
         </>
       )}
 
-      {scratching && size && (
-        <>
-          <ScratchFoilSkia width={size.w} height={size.h} seed={seed} onDone={celebrate} />
-          <ScratchCoin width={size.w} height={size.h} />
-        </>
-      )}
+      {/* The coin rides above the canvas, and only while raking. */}
+      {scratching && size && <ScratchCoin width={size.w} height={size.h} />}
     </Pressable>
   );
 }

@@ -1,11 +1,11 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShop } from '../../src/hooks/useShop';
 import { useActivateGodMode } from '../../src/hooks/useActivateGodMode';
 import { AuraIcon } from '../../src/components/AuraIcon';
-import { AuraFoil } from '../../src/components/AuraFoil';
-import { COIN_FILL, COIN_INK, COIN_SHADOW } from '../../src/components/coin';
+import { ScratchTile } from '../../src/components/scratch/ScratchTile';
 import { ToyShadow } from '../../src/components/ToyShadow';
 import { Wobble } from '../../src/components/Wobble';
 import { AuthError } from '../../src/components/authKit';
@@ -22,13 +22,16 @@ import { AuthError } from '../../src/components/authKit';
 
 /* A sample flame, not the reader's. The paywall has to show the ladder before you own any of it, and
    using someone's real locked flame here would mean rendering a clue we haven't been paid for. */
-const SAMPLE = { poll: '🥵 HOTTEST IN THE JUNIOR CLASS', who: 'A girl', name: 'Maya' };
+const SAMPLE = { poll: '🥵 HOTTEST IN THE JUNIOR CLASS', who: 'A girl', grade: '11th', initial: 'M', name: 'Maya' };
 
 export default function InfiniteAura() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data: shop } = useShop();
   const activate = useActivateGodMode();
+  /* Demo-only. Scratching a tile here reveals the sample, spends nothing, and resets when the screen is
+     left — it exists to show what a coin buys, not to hand one over. */
+  const [demo, setDemo] = useState({ grade: false, initial: false });
 
   const gradeCost = shop?.clueGradeCost ?? 1;
   const initialCost = shop?.clueInitialCost ?? 1;
@@ -68,13 +71,35 @@ export default function InfiniteAura() {
               <Text className="font-nunito-900 text-[11.5px]" style={{ color: '#8B888D' }}>
                 {SAMPLE.poll}
               </Text>
+              {/* The two priced rungs are real, tappable scratch tiles rather than pictures of them.
+
+                  Nothing is charged here — `demo` is local state and no mutation fires. That's the point:
+                  the pitch is the feeling of the thing, and letting someone scratch one before paying
+                  demonstrates it far better than a still image of foil. Tapping a tile on a paywall must
+                  never take money, so the handler deliberately does nothing but flip local state. */}
               <View className="mt-3 gap-2">
                 <View className="flex-row gap-2">
                   <ClueTile tone="free" caption="WHO" emoji="👧" value={SAMPLE.who} badge="FREE" />
-                  <FoiledTile label={`GRADE|SCRATCH IT OFF`} seed={4} cost={gradeCost} />
+                  <ScratchTile
+                    open={demo.grade}
+                    label="GRADE|SCRATCH IT OFF"
+                    seed={4}
+                    cost={gradeCost}
+                    onScratch={() => setDemo(d => ({ ...d, grade: true }))}
+                  >
+                    <ClueFace tone="grade" caption="GRADE" emoji="🎓" value={SAMPLE.grade} />
+                  </ScratchTile>
                 </View>
                 <View className="flex-row gap-2">
-                  <FoiledTile label={`INITIAL|SCRATCH IT OFF`} seed={19} cost={initialCost} />
+                  <ScratchTile
+                    open={demo.initial}
+                    label="INITIAL|SCRATCH IT OFF"
+                    seed={19}
+                    cost={initialCost}
+                    onScratch={() => setDemo(d => ({ ...d, initial: true }))}
+                  >
+                    <ClueFace tone="initial" caption="INITIAL" emoji="🔤" value={SAMPLE.initial} />
+                  </ScratchTile>
                   <ClueTile tone="infinite" caption="FIRST NAME" emoji="🙋" value={SAMPLE.name} badge="INFINITE" />
                 </View>
               </View>
@@ -192,13 +217,17 @@ function ClueTile({
   badge: string;
 }) {
   const free = tone === 'free';
+  /* Square, matching the scratch tiles beside it. These carried a fixed 104pt height from before the
+     tiles became squares — the mint one got away with it because a plain View stretches to the row, but
+     the pink one is wrapped in a ToyShadow that doesn't, so it sat two-thirds height next to its
+     neighbours. All four tiles now derive their size the same way. */
   const body = (
-    <View className="items-center justify-center gap-[5px] px-[11px]" style={{ height: 104 }}>
+    <View className="flex-1 items-center justify-center gap-[7px] px-[11px]" style={{ aspectRatio: 1 }}>
       <Text className="font-nunito-900 text-[9.5px]" style={{ color: free ? '#12664C' : '#FFD6E9', letterSpacing: 0.6 }}>
         {caption}
       </Text>
       <Text style={{ fontSize: 19 }}>{emoji}</Text>
-      <Text className="font-fredoka-700 text-[15px]" style={{ color: free ? '#0A3B2C' : '#FFFFFF' }}>
+      <Text className="font-fredoka-700 text-[21px] leading-[23px]" style={{ color: free ? '#0A3B2C' : '#FFFFFF' }}>
         {value}
       </Text>
       <Text className="font-nunito-900 text-[9px]" style={{ color: free ? '#12664C' : '#FFD6E9' }}>
@@ -208,36 +237,48 @@ function ClueTile({
   );
   if (free) {
     return (
-      <View className="flex-1 overflow-hidden rounded-18" style={{ backgroundColor: '#6BF2C2' }}>
+      <View className="flex-1 overflow-hidden rounded-22" style={{ backgroundColor: '#6BF2C2' }}>
         {body}
       </View>
     );
   }
   return (
-    <View className="flex-1">
-      <ToyShadow depth={4} shadowColor="#C43A7C" backgroundColor="#FF5CA8" radius={18}>
-        {body}
-      </ToyShadow>
+    <View className="flex-1 overflow-hidden rounded-22" style={{ backgroundColor: '#FF5CA8' }}>
+      {body}
     </View>
   );
 }
 
-/* A sealed rung: foil over the tile, with the price sitting on top of it. The price is on the foil
-   rather than beside it so it's obvious what the coin buys. */
-function FoiledTile({ label, seed, cost }: { label: string; seed: number; cost: number }) {
+/* What sits *under* the foil on a priced rung. Yellow for the grade, purple for the initial — 16A's
+   colours, and both distinct from the free tile's mint and the members-only pink, so the four squares
+   read as four different kinds of thing before any of them is opened. */
+function ClueFace({
+  tone,
+  caption,
+  emoji,
+  value
+}: {
+  tone: 'grade' | 'initial';
+  caption: string;
+  emoji: string;
+  value: string;
+}) {
+  const grade = tone === 'grade';
   return (
-    <View className="flex-1 items-center justify-end overflow-hidden rounded-18" style={{ height: 104, paddingBottom: 11 }}>
-      <AuraFoil label={label} seed={seed} />
-      <View style={{ zIndex: 1 }}>
-        <ToyShadow depth={2} shadowColor={COIN_SHADOW} backgroundColor={COIN_FILL} radius={9999}>
-          <View className="flex-row items-center gap-1 px-[9px] py-1">
-            <AuraIcon name="coin" size={12} color={COIN_INK} />
-            <Text className="font-nunito-900 text-[10px]" style={{ color: COIN_INK }}>
-              {cost}
-            </Text>
-          </View>
-        </ToyShadow>
-      </View>
+    <View
+      className="flex-1 items-center justify-center gap-[7px] px-[11px]"
+      style={{ backgroundColor: grade ? '#FFD84D' : '#7C5CFF' }}
+    >
+      <Text className="font-nunito-900 text-[9.5px]" style={{ color: grade ? '#7A5A00' : '#D6CBFF', letterSpacing: 0.6 }}>
+        {caption}
+      </Text>
+      <Text style={{ fontSize: 19 }}>{emoji}</Text>
+      <Text
+        className="font-fredoka-700"
+        style={{ fontSize: grade ? 21 : 28, lineHeight: grade ? 23 : 30, color: grade ? '#3A2A00' : '#FFFFFF' }}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
