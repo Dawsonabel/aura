@@ -10,7 +10,7 @@ import { useMarkNotificationsRead } from '../../src/hooks/useMarkNotificationsRe
 import { useRevealFlame } from '../../src/hooks/useRevealFlame';
 import { useRevealFlameName } from '../../src/hooks/useRevealFlameName';
 import { Overlay } from '../../src/components/Overlay';
-import { GodModeOverlay } from '../../src/components/GodModeOverlay';
+import { AuraIcon } from '../../src/components/AuraIcon';
 import { flameGenderLabel } from '@aura/api-client';
 import { EmptyState, InlineFailure, SkeletonBlock, SkeletonRows } from '../../src/components/stateKit';
 import { InfoCard } from '../../src/components/settingsKit';
@@ -130,32 +130,32 @@ export default function Inbox() {
         <FlamesEmpty onVote={() => router.replace('/aura')} />
       ) : (
         <>
-          {/* Mint God Mode card. The design's "free for 3 days" is dropped — there is no trial
-              configured in StoreKit, and this is the second time that banner has promised something
-              the purchase flow doesn't do. */}
+          {/* The membership card. Renamed from God Mode with 15A, and the design's "free for 3 days" is
+              still dropped — there is no trial configured in StoreKit, and that banner had already
+              promised something the purchase flow doesn't do twice. */}
           {data.godMode ? (
             <View className="mt-5 flex-row items-center gap-3 rounded-24 bg-raised px-[19px] py-[17px]">
               <View className="flex-1">
-                <Text className="font-fredoka-700 text-[20px] text-white">God Mode is on</Text>
+                <Text className="font-fredoka-700 text-[20px] text-white">Infinite Aura is on</Text>
                 <Text className="font-nunito-800 mt-[2px] text-[12.5px] text-ink-muted">
-                  Every hint unlocked, no coins needed
+                  Every clue free, and first names
                 </Text>
               </View>
-              <Text style={{ fontSize: 26 }}>👑</Text>
+              <AuraIcon name="aura" size={26} color="#6BF2C2" />
             </View>
           ) : (
             <View className="mt-5">
-              <ToyShadow depth={5} shadowColor="#3FBF95" backgroundColor="#6BF2C2" radius={24} onPress={() => setGodModeOpen(true)}>
+              <ToyShadow depth={5} shadowColor="#3FBF95" backgroundColor="#6BF2C2" radius={24} onPress={() => router.push('/infinite')}>
                 <View className="flex-row items-center gap-3 px-[19px] py-[17px]">
                   <View className="flex-1">
                     <Text className="font-fredoka-700 text-[20px]" style={{ color: '#0A3B2C' }}>
                       See who picked you
                     </Text>
                     <Text className="font-nunito-800 mt-[2px] text-[12.5px]" style={{ color: '#12664C' }}>
-                      God Mode · unlocks every name
+                      Infinite Aura · every clue, and first names
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 26 }}>😈</Text>
+                  <AuraIcon name="aura" size={26} color="#0A3B2C" />
                 </View>
               </ToyShadow>
             </View>
@@ -180,7 +180,9 @@ export default function Inbox() {
 
           <View className="mt-5 gap-[10px]">
             {data.flames.map(f => (
-              <FlameRow key={f.id} flame={f} onPress={() => setSelectedFlameId(f.id)} />
+              /* Opens 16A's scratch card rather than the old detail overlay. The overlay is still below
+                 for now, but nothing reaches it — see the note there. */
+              <FlameRow key={f.id} flame={f} onPress={() => router.push({ pathname: '/clue', params: { id: f.id } })} />
             ))}
           </View>
 

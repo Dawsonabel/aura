@@ -26,6 +26,13 @@ export { useBlockedPeople, type BlockedPerson, type UseBlockedPeopleParams } fro
 export { useSchoolmates, type Schoolmate, type UseSchoolmatesParams } from './hooks/useSchoolmates';
 export { useBoard, type Board, type BoardEntry, type BoardScope, type UseBoardParams } from './hooks/useBoard';
 export { useShop, type Shop, type UseShopParams } from './hooks/useShop';
+export {
+  useRevealClue,
+  type ClueName,
+  type RevealClueInput,
+  type RevealClueResult,
+  type UseRevealClueParams
+} from './hooks/useRevealClue';
 export { useBoostRandom, useBoostCrush, type BoostResult, type UseBoostParams } from './hooks/useBoosts';
 export {
   useMySuperlatives,

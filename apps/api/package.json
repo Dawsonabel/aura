@@ -8,6 +8,7 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "migrate": "tsx scripts/migrate.ts",
+    "seed-flames": "tsx scripts/seedFlames.ts",
     "test": "tsx --test --test-concurrency=1 test/*.test.ts"
   },
   "dependencies": {
