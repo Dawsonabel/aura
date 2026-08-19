@@ -19,6 +19,9 @@ db.json.migrated
 secrets.json
 .direnv/
 
+# Corepack shims for the pnpm version pinned by package.json's "packageManager" field
+.corepack/
+
 # Dependencies
 node_modules/
 

@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --env staging",
+    "deploy": "wrangler deploy --env \"\"",
+    "deploy:staging": "wrangler deploy --env staging",
     "typecheck": "tsc --noEmit",
     "migrate": "tsx scripts/migrate.ts",
     "seed-flames": "tsx scripts/seedFlames.ts",

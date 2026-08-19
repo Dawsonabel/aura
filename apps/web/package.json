@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "deploy": "vite build && wrangler deploy",
+    "deploy": "vite build && wrangler deploy --env \"\"",
+    "deploy:staging": "vite build && wrangler deploy --env staging",
     "test": "vitest run"
   },
   "dependencies": {

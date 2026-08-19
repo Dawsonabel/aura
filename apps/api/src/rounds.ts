@@ -29,9 +29,11 @@ export type Round = {
 
 const ROUND_TTL_SECONDS = 6 * 3600; // matches server.js's 6h prune window
 
-export function makeRoundStore(url: string, token: string) {
+// keyPrefix — same reasoning as makeRateLimiter's: staging and production share one Upstash
+// database, so this is what keeps their round state from ever colliding.
+export function makeRoundStore(url: string, token: string, keyPrefix = 'aura-api') {
   const redis = new Redis({ url, token });
-  const key = (roundId: string) => `round:${roundId}`;
+  const key = (roundId: string) => `${keyPrefix}:round:${roundId}`;
 
   return {
     async create(roundId: string, userId: string, polls: RoundPollSnapshot[] = []): Promise<Round> {

@@ -3,15 +3,23 @@ name: CI
 # main gets the gate on every push; feature branches get it on their PR rather than every commit —
 # feedback lands when it matters (opening/updating the PR) without burning CI minutes on every WIP
 # push to a branch nobody's reviewing yet.
+#
+# workflow_dispatch is kept alongside push so a production deploy can still be re-triggered by hand
+# (e.g. re-running after fixing a Cloudflare-side secret) without needing a new commit — the
+# "production" GitHub Environment's required-reviewer rule (Settings → Environments) is what
+# actually gates deploy-api/deploy-web now, not the trigger type.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 # A second push to the same branch/PR cancels whatever CI run is still going for the first —
 # otherwise two runs finish out of order and the commit status reflects whichever happened to end
-# last, not the latest code.
+# last, not the latest code. Only covers the `test` job on purpose — the deploy jobs below use their
+# own, separate concurrency groups that never cancel, since killing a deploy mid-`wrangler deploy` or
+# mid-migration is a very different thing from killing a redundant test run.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
@@ -21,34 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      # The repo's own toolchain, not a second one defined here. flake.nix pins Node 24 + pnpm
-      # 11 — installing them again via actions/setup-node would be a second source of truth that
-      # can drift from what `nix develop` gives you locally, silently, until CI and your laptop
-      # disagree about which Node CI actually ran on.
-      - uses: DeterminateSystems/nix-installer-action@main
-      # Backed by GitHub's own Actions cache, no external account — every dependency Nix pulls in
-      # (Node, pnpm, everything flake.nix names) is cached across runs instead of refetched cold.
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-
-      # pnpm's own store, cached separately from Nix's — this is *packages* (react, graphql-yoga,
-      # the works), keyed on the lockfile so it invalidates exactly when dependencies actually
-      # change rather than on every run or never.
-      # `nix develop --command` prints a "node vX / pnpm vY" banner to stdout ahead of whatever it
-      # wraps (verified locally, not documented) — piped through `tail -n 1` here because this is
-      # the one place that output gets parsed instead of just logged. Grab the wrong line and this
-      # caches nothing every run without ever failing loud enough to notice.
-      - name: Resolve pnpm store path
-        id: pnpm-store
-        run: echo "path=$(nix develop --command pnpm store path --silent | tail -n 1)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: pnpm-store-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: nix develop --command pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-toolchain
 
       # apps/api's suite calls the Worker's real fetch handler in-process (see test/helpers.ts) —
       # no wrangler, no workerd — but it still needs real credentials to talk to Neon, Upstash and
@@ -71,5 +52,122 @@ jobs:
           EOF
 
       # The one command from CLAUDE.md's "everything, all 4 packages" — same thing you'd run
-      # locally, so a green check here means the same green you'd get on your own machine.
+      # locally, so a green check here means the same green you'd get on your own machine. turbo's
+      # own cache (restored by setup-toolchain) means a PR touching only one package skips
+      # re-running typecheck/test for everything that didn't change.
       - run: nix develop --command pnpm turbo run typecheck test
+
+  # Staging is the shared backend for local dev + TestFlight beta (see the "environment alignment"
+  # plan) — its own Cloudflare Worker, Neon branch, Clerk dev instance and Upstash DB, entirely
+  # separate from production. Nothing here can touch real user data, so unlike the production deploy
+  # jobs below, this runs automatically on every push to main straight after `test` passes — no
+  # manual gate needed for the tier that's explicitly safe to auto-deploy.
+  deploy-staging-api:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-staging-api
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-toolchain
+
+      - name: Run pending migrations
+        run: nix develop --command pnpm --filter api migrate
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+
+      - name: Deploy to Cloudflare Workers
+        run: nix develop --command pnpm --filter api deploy:staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-staging-web:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-staging-web
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-toolchain
+
+      # VITE_API_URL/VITE_CLERK_PUBLISHABLE_KEY are baked into the bundle at `vite build` time (see
+      # apps/web/src/lib/graphql.ts's import.meta.env usage) — locally that comes from apps/web/.env,
+      # which doesn't exist in CI. Both values are non-secret (a public URL, and a Clerk publishable
+      # key that's designed to be exposed client-side per apps/web/.env.example's own comment), so
+      # they're plain, committed values here rather than round-tripped through repo secrets.
+      - name: Deploy to Cloudflare Workers
+        run: nix develop --command pnpm --filter web deploy:staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VITE_API_URL: https://aura-api-staging.tonyhawklover.workers.dev/graphql
+          VITE_CLERK_PUBLISHABLE_KEY: pk_test_dHJ1c3RpbmctYmxvd2Zpc2gtNTIuY2xlcmsuYWNjb3VudHMuZGV2JA
+
+  # Gated on the "production" GitHub Environment (Settings → Environments) — a required-reviewer
+  # rule there means this job pauses for manual approval in the Actions UI before it runs, every
+  # time, regardless of what triggered the workflow. Deploys automatically on merge to main now that
+  # the environment exists to gate on; workflow_dispatch remains available for a manual re-run.
+  # Secrets referenced below (CLOUDFLARE_API_TOKEN etc.) currently live as repository secrets — they
+  # work identically either way, but moving them into this environment's own secrets (rather than
+  # repo-wide ones) is worth doing at some point: environment-scoped secrets are only readable by
+  # jobs that reference the environment, repository secrets are readable by every workflow in the repo.
+  deploy-api:
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: production
+    # Own group so a second dispatch landing mid-deploy queues behind the first instead of cancelling
+    # a partially-applied migration or an in-flight `wrangler deploy` — separate from deploy-web's
+    # group so the two apps still deploy in parallel with each other.
+    concurrency:
+      group: deploy-production-api
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-toolchain
+
+      # Migrations are idempotent (see scripts/migrate.ts) and run against prod DATABASE_URL, ahead
+      # of the code deploy below — new code should never go live expecting a schema that isn't there
+      # yet. This runs from the CI runner directly (not through the Worker — see migrate.ts's own
+      # comment on why: Workers have no boot phase to hook this into), so DATABASE_URL has to be a
+      # second copy of the same secret `wrangler secret put` set for the Worker's own runtime.
+      - name: Run pending migrations
+        run: nix develop --command pnpm --filter api migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Deploy to Cloudflare Workers
+        run: nix develop --command pnpm --filter api deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-web:
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-production-web
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-toolchain
+
+      # `pnpm --filter web deploy` runs `vite build && wrangler deploy` (see apps/web/package.json)
+      # — same script you'd run by hand locally. VITE_API_URL is non-secret like staging's, hardcoded
+      # here too. VITE_CLERK_PUBLISHABLE_KEY is still a repo secret rather than hardcoded, only
+      # because its real value (Clerk's production-instance pk_live_ key) doesn't exist yet — not
+      # because a publishable key needs secrecy once it does.
+      - name: Deploy to Cloudflare Workers
+        run: nix develop --command pnpm --filter web deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VITE_API_URL: https://aura-api.tonyhawklover.workers.dev/graphql
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}

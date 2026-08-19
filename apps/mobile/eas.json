@@ -6,7 +6,11 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://aura-api-staging.tonyhawklover.workers.dev/graphql",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dHJ1c3RpbmctYmxvd2Zpc2gtNTIuY2xlcmsuYWNjb3VudHMuZGV2JA"
+      }
     },
     "development-simulator": {
       "extends": "development",
@@ -15,10 +19,18 @@
       }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://aura-api-staging.tonyhawklover.workers.dev/graphql",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dHJ1c3RpbmctYmxvd2Zpc2gtNTIuY2xlcmsuYWNjb3VudHMuZGV2JA"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://aura-api.tonyhawklover.workers.dev/graphql",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_REPLACE_ME_ONCE_CLERK_PRODUCTION_INSTANCE_IS_ACTIVATED"
+      }
     }
   },
   "submit": {

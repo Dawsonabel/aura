@@ -1,0 +1,64 @@
+name: Set up Nix + pnpm + turbo toolchain
+description: >
+  Installs the repo's pinned toolchain (Nix-provided Node 24, corepack-activated pnpm — see
+  flake.nix) and restores every cache layer it can reuse — the Nix store, corepack's downloaded
+  pnpm binary, turbo's task cache, and pnpm's package store — before running `pnpm install`. Shared
+  by the test job and both deploy jobs so this sequence is maintained in exactly one place.
+
+runs:
+  using: composite
+  steps:
+    # The repo's own toolchain, not a second one defined here. flake.nix pins Node 24, and
+    # package.json's "packageManager" field pins pnpm via corepack — installing either again
+    # through actions/setup-node would be a second source of truth that can drift from what
+    # `nix develop` gives you locally, silently, until CI and your laptop disagree.
+    - uses: DeterminateSystems/nix-installer-action@main
+    # Backed by GitHub's own Actions cache, no external account — every dependency Nix pulls in
+    # (Node, everything flake.nix names) is cached across runs instead of refetched cold.
+    - uses: DeterminateSystems/magic-nix-cache-action@main
+
+    # corepack activates the pnpm version pinned by package.json's "packageManager" field by
+    # downloading it from the npm registry the first time a `nix develop` shell runs (see
+    # flake.nix's shellHook) — that's not something magic-nix-cache-action covers, since it never
+    # touches the Nix store. Cache it separately, keyed on package.json so a version bump fetches
+    # fresh instead of reusing a stale pnpm.
+    - name: Cache corepack downloads
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/node/corepack
+        key: corepack-${{ runner.os }}-${{ hashFiles('package.json') }}
+        restore-keys: corepack-${{ runner.os }}-
+
+    # turbo's own task cache (content-hashed per task — source files + task definition). Restoring
+    # broadly and letting turbo re-validate each entry's hash itself is safe: a stale or irrelevant
+    # entry is just ignored, never trusted blindly. The exact-sha key means this run's results
+    # always get saved as a new entry; restore-keys always pulls the most recent prior run to
+    # hydrate from. This is what lets a PR that only touches one package skip re-running
+    # typecheck/test for every package that didn't change.
+    - name: Cache turbo task cache
+      uses: actions/cache@v4
+      with:
+        path: .turbo/cache
+        key: turbo-${{ runner.os }}-${{ github.sha }}
+        restore-keys: turbo-${{ runner.os }}-
+
+    # pnpm's own store, cached separately from Nix's and turbo's — this is *packages* (react,
+    # graphql-yoga, the works), keyed on the lockfile so it invalidates exactly when dependencies
+    # actually change rather than on every run or never.
+    # `nix develop --command` prints a "node vX / pnpm vY" banner to stdout ahead of whatever it
+    # wraps (verified locally, not documented) — piped through `tail -n 1` here because this is the
+    # one place that output gets parsed instead of just logged. Grab the wrong line and this caches
+    # nothing every run without ever failing loud enough to notice.
+    - name: Resolve pnpm store path
+      id: pnpm-store
+      shell: bash
+      run: echo "path=$(nix develop --command pnpm store path --silent | tail -n 1)" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@v4
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: pnpm-store-${{ runner.os }}-
+
+    - name: Install dependencies
+      shell: bash
+      run: nix develop --command pnpm install --frozen-lockfile

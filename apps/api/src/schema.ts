@@ -18,6 +18,7 @@ export interface Env {
   UPSTASH_REDIS_REST_TOKEN: string;
   CLERK_SECRET_KEY: string;
   ALLOWED_ORIGIN?: string; // apps/web's origin, for CORS — see index.ts. Unset in dev, falls back to localhost.
+  REDIS_KEY_PREFIX?: string; // scopes Upstash keys per environment — see makeRateLimiter/makeRoundStore.
   APPLE_ROOT_CA?: string; // Apple's root cert PEM — see iap.ts. Unset in dev/sandbox (relaxed trust anchor).
   GODMODE_PRODUCT_IDS?: string; // comma-separated StoreKit product IDs, mirrors server.js's GODMODE_PRODUCTS
   /* Gameplay/economy dials, all optional — see tuning.ts for the full list and defaults. Indexed

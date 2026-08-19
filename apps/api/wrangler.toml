@@ -47,6 +47,35 @@ compatibility_flags = ["nodejs_compat"]
 [triggers]
 crons = ["15 20 * * 1-5"]
 
+# Not sensitive (an Origin is public by nature), so a plain var rather than a secret — see
+# corsHeaders() in src/index.ts. tonyhawklover.workers.dev is the account's workers.dev subdomain.
+#
+# REDIS_KEY_PREFIX: staging and production share one Upstash database (free tier only allows one)
+# — this is what keeps a beta tester's rate-limit window or round state from ever colliding with a
+# real user's. See makeRateLimiter/makeRoundStore in src/ratelimit.ts and src/rounds.ts.
+[vars]
+ALLOWED_ORIGIN = "https://aura-web.tonyhawklover.workers.dev"
+REDIS_KEY_PREFIX = "aura-api"
+
 # Secrets (DATABASE_URL, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN) are supplied via
 # .dev.vars locally (gitignored, same idea as the root .env) and `wrangler secret put` in production —
 # never committed here.
+
+# Local dev and TestFlight beta share this Worker + its own Neon branch/Clerk dev instance/Upstash DB
+# — kept separate from the [above] production config so a beta build or a stray local `wrangler
+# deploy` can never touch real user data. Deploy with `wrangler deploy --env staging`
+# (`pnpm --filter api deploy:staging`). Cron triggers aren't inherited by named environments in
+# wrangler, so the round-announcement cron is declared again here — TestFlight testers still need it.
+[env.staging]
+name = "aura-api-staging"
+
+[env.staging.triggers]
+crons = ["15 20 * * 1-5"]
+
+[env.staging.vars]
+ALLOWED_ORIGIN = "https://aura-web-staging.tonyhawklover.workers.dev"
+REDIS_KEY_PREFIX = "aura-api-staging"
+
+# Secrets for this environment are set the same way, with --env staging appended:
+# `wrangler secret put DATABASE_URL --env staging`, etc. — a separate copy per secret, never shared
+# with the production Worker above.
