@@ -1,4 +1,4 @@
-import type { Aura, FriendActivityEvent, Notification } from '@aura/api-client';
+import type { Aura, FriendActivityEvent, FriendMilestone, Notification } from '@aura/api-client';
 
 /* Everything the Aura tab derives from the two queries it already has, kept out of the screen so the
    screen stays layout.
@@ -75,43 +75,57 @@ export function splitOf(auras: Aura[]): GenderSplit {
   return split;
 }
 
-/* `genderCounts` lived here, feeding the card grid's filter chips. The filter is gone — the grid is
-   one undivided stack now — and `splitOf` above still covers the Activity and Receipt splits, which
-   are the remaining places a gender breakdown is shown. */
+/* Three functions lived here and all three are gone, for the same underlying reason: the Activity tab
+   stopped summarising and started listing.
 
-/** True when not one pick in the set has a gender to show — every sender is behind the floor. */
-export function allGendersWithheld(split: GenderSplit): boolean {
-  return split.girls + split.boys + split.nb === 0;
-}
+   `genderCounts` fed the card grid's filter chips. The filter went when the grid became one undivided
+   stack.
 
-/* "19 girls, 13 boys and 6 non-binary picked you". Only the non-zero parts print, and picks whose
-   gender is withheld collect into "more" rather than being dropped — the total on the card above
-   has to match what this sentence adds up to.
+   `pickedYouPhrase` ("19 girls, 13 boys and 6 non-binary picked you") and `allGendersWithheld` fed the
+   split bar on the Activity header card, which is also gone. That card printed your 24-hour count, your
+   streak and that sentence directly above the list those numbers were counting — every figure on it was
+   obtainable by reading the rows underneath. Neither fact was lost with it: the streak is on Me and the
+   Vote tab, and the gender split is still the Receipt's bar and footer.
 
-   When *nothing* has a gender the enumeration collapses to a plain count, because "4 more picked
-   you" with no first clause reads as a truncation bug rather than as the floor doing its job. */
-export function pickedYouPhrase(split: GenderSplit): string {
-  const total = split.girls + split.boys + split.nb + split.unknown;
-  if (total === 0) return 'Nobody picked you';
-  if (allGendersWithheld(split)) return `${total} ${total === 1 ? 'pick' : 'picks'} landed`;
-
-  const parts: string[] = [];
-  if (split.girls) parts.push(`${split.girls} ${split.girls === 1 ? 'girl' : 'girls'}`);
-  if (split.boys) parts.push(`${split.boys} ${split.boys === 1 ? 'boy' : 'boys'}`);
-  if (split.nb) parts.push(`${split.nb} non-binary`);
-  if (split.unknown) parts.push(`${split.unknown} more`);
-  const last = parts.pop() as string;
-  const head = parts.length ? `${parts.join(', ')} and ${last}` : last;
-  return `${head} picked you`;
-}
+   `splitOf` above survives because the Receipt genuinely needs it — a receipt is a summary by
+   definition, and it's the one place in the tab where a total is the point rather than a spoiler. */
 
 // ─────────────────────────────────────────────────────────────
 // Activity feed
 // ─────────────────────────────────────────────────────────────
 
 export type ActivityItem =
-  | { kind: 'pick'; id: string; gender: string; emoji: string; color: string; ts: string }
+  | {
+      kind: 'pick';
+      id: string;
+      gender: string;
+      emoji: string;
+      color: string;
+      /** The superlative. Free on your own card, and the thing that stops every row reading alike. */
+      q: string;
+      /** Set once you've flipped it — the feed says the name it cost a flip to learn. */
+      name: string | null;
+      /** How many times this sender has picked you, shown only when `repeat` is true. */
+      pickCount: number;
+      /** This is the newest card from its sender, so it's the one that carries the "N times" line. */
+      repeat: boolean;
+      /** Face down and never opened — the row you haven't spent anything on yet. */
+      fresh: boolean;
+      ts: string;
+    }
   | { kind: 'friend'; id: string; gender: string; friendId: string; friendName: string; ts: string }
+  | {
+      kind: 'milestone';
+      id: string;
+      friendId: string;
+      friendName: string;
+      /** 'streak' | 'superlative' */
+      milestone: string;
+      count: number;
+      label: string;
+      emoji: string;
+      ts: string;
+    }
   | { kind: 'note'; id: string; text: string; emoji: string; ts: string };
 
 export type ActivityDay = { key: string; label: string; items: ActivityItem[] };
@@ -136,6 +150,87 @@ export function auraLine(gender: string, who: string): string {
   return `${GENDER_ACTOR[gender] ?? 'Someone'} gave ${who} aura`;
 }
 
+/* Your own row's subject. A flipped card says the name outright.
+
+   That's the flip's reward showing up somewhere other than the card screen — you paid to learn it, so
+   the feed should use it rather than going on calling her "a girl" forever. It also gives the feed a
+   second reason to be scrolled: the named rows are the ones you already own, scattered among the ones
+   you don't. */
+export function pickActor(gender: string, name: string | null): string {
+  return name ?? (GENDER_ACTOR[gender] ?? 'Someone');
+}
+
+/* "gave you aura for Best smile".
+
+   ## The feed says this earlier than the card does, and that is deliberate
+
+   A face-down card shows the poll's *emoji* but not its text — the back face in flip.tsx took the
+   prompt off on the grounds that it was "the other side's to give". So a feed row is more specific
+   than the card it opens, which is an asymmetry worth naming rather than leaving for someone to trip
+   over: tapping "…for Would win a talent show" lands on a card that doesn't mention it.
+
+   It stays because the prompt is the only per-row detail that reliably differs. Without it the feed
+   is a screen of identical "A boy gave you aura" lines, which is the exact failure the ungrouped
+   rewrite existed to fix — the variety has to come from somewhere, and this is the only free source.
+
+   ## What it doesn't cost
+
+   Nothing the flip sells. A flip buys the **name**; the prompt merely rode along with it. And there's
+   no privacy cost either — the prompt is a fact about the *reader*, not the sender, so spelling it
+   out narrows nothing about who picked you. (Contrast a friend row, where the prompt would be a fact
+   about someone else — see friendActivityFor in the API.)
+
+   If this ever needs to be consistent, the fix is to put the prompt back on the face-down card, not
+   to strip it from here.
+
+   Falls back to the bare line if a card somehow has no prompt text, rather than printing a dangling
+   "for". */
+export function pickLine(gender: string, name: string | null, q: string): string {
+  const head = `${pickActor(gender, name)} gave you aura`;
+  return q ? `${head} for ${q}` : head;
+}
+
+/* What a friend did. "Lucas is on a 10-day streak" / "Ava won Best smile with 5 aura votes".
+
+   Present tense for the streak because it's a state that is currently true, not an event that
+   happened — the row is dated to the day they last played, and "hit a 10-day streak" would read as a
+   thing that occurred at that timestamp when in fact it's still running.
+
+   ## Why the win count is spelled out rather than "×5"
+
+   `×N` is the app's notation on the profile trophy chips, and it's right there — a chip is a label,
+   read at a glance, and the count is a suffix on it. Dropped into a sentence it stops working: "Ava's
+   won Best smile ×5" makes you re-parse twice, once because `'s` scans as a possessive before it
+   resolves to "has", and again because `×5` is notation sitting where words are. Naming the unit
+   ("aura votes") also says what the number counts, which the chip can get away with leaving implicit
+   because it's sitting on a profile full of them.
+
+   Pluralised even though MIN_WINS (see auras.ts) means the count is never 1 today. That floor is a
+   tuning decision living in another file, and copy that reads "1 aura votes" the day somebody lowers
+   it is the kind of bug nobody tests for. */
+export function milestoneLine(item: {
+  milestone: string;
+  friendName: string;
+  count: number;
+  label: string;
+}): string {
+  if (item.milestone === 'streak') return `${item.friendName} is on a ${item.count}-day streak`;
+  return `${item.friendName} won ${item.label} with ${item.count} aura vote${item.count === 1 ? '' : 's'}`;
+}
+
+/** "6th time 👀" — the repeat-admirer chip. Only ever rendered on a card where `repeat` is true. */
+export function repeatChip(pickCount: number): string {
+  return `${pickCount}${ordinalSuffix(pickCount)} time 👀`;
+}
+
+function ordinalSuffix(n: number): string {
+  if (n % 100 >= 11 && n % 100 <= 13) return 'th';
+  if (n % 10 === 1) return 'st';
+  if (n % 10 === 2) return 'nd';
+  if (n % 10 === 3) return 'rd';
+  return 'th';
+}
+
 /* The feed's ceiling. It merges an unbounded window of your picks with up to 60 friend events and
    30 notifications, and the screen renders it in a ScrollView rather than a list — so a busy student
    at a big school would otherwise mount several hundred rows to show the eight you read.
@@ -157,6 +252,7 @@ export const FEED_MAX_ITEMS = 60;
 export function activityFeed(
   auras: Aura[],
   friendEvents: FriendActivityEvent[],
+  milestones: FriendMilestone[],
   notifications: Notification[],
   now = new Date()
 ): ActivityDay[] {
@@ -169,6 +265,15 @@ export function activityFeed(
         gender: f.gender,
         emoji: f.emoji,
         color: f.color,
+        q: f.q,
+        name: f.name,
+        pickCount: f.pickCount,
+        /* Both conditions matter. `newestFromSender` keeps the line on one card out of that sender's
+           set (the server computes it — the client can't, see auras.ts), and `pickCount >= 2` is what
+           makes it a repeat at all: "1st time 👀" is not a fact worth a chip. */
+        repeat: f.newestFromSender && f.pickCount >= 2,
+        // Never opened *and* never flipped — the only rows with something still to spend on.
+        fresh: !f.opened && !f.name,
         ts: f.ts
       })
     ),
@@ -180,6 +285,19 @@ export function activityFeed(
         friendId: e.friendId,
         friendName: e.friendName,
         ts: e.ts
+      })
+    ),
+    ...milestones.map(
+      (m): ActivityItem => ({
+        kind: 'milestone',
+        id: m.id,
+        friendId: m.friendId,
+        friendName: m.friendName,
+        milestone: m.kind,
+        count: m.count,
+        label: m.label,
+        emoji: m.emoji,
+        ts: m.ts
       })
     ),
     ...notifications.map(

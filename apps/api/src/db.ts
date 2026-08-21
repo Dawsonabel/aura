@@ -503,6 +503,56 @@ export function makeDb(databaseUrl: string) {
       return rows.map(rowToRawVote);
     },
 
+    /* Superlative tallies across several people at once — the Activity feed's friend milestones.
+       Aggregated in SQL rather than by counting rows in JS, because the milestone needs the count over
+       a friend's *whole* window and pulling every vote for every friend to count them client-side is
+       the read this is designed to avoid. `MAX(ts)` is what lets a milestone sit at the right point in
+       a time-ordered feed: the moment it most recently became true. */
+    async getSuperlativeCountsForTargets(
+      targetIds: string[],
+      sinceIso: string
+    ): Promise<{ targetId: string; emoji: string; text: string; color: string; n: number; lastTs: string }[]> {
+      if (!targetIds.length) return [];
+      const rows = await sql`
+        SELECT target_id, emoji, text, color, COUNT(*)::int AS n, MAX(ts) AS last_ts
+        FROM votes WHERE target_id = ANY(${targetIds}) AND ts >= ${sinceIso}
+        GROUP BY target_id, emoji, text, color
+      `;
+      return rows.map((r: any) => ({
+        targetId: r.target_id,
+        emoji: r.emoji,
+        text: r.text,
+        color: r.color,
+        n: r.n,
+        lastTs: new Date(r.last_ts).toISOString()
+      }));
+    },
+
+    /* How busy this school has been — the Activity feed's header.
+
+       Counted on the *target* side, so it reads as "picks people here received" rather than "votes
+       people here cast". Same set in practice (voting is same-school), but the target join is the one
+       that stays correct if cross-school voting ever exists. Counts and nothing else: no ids leave
+       this query, so it says the place is busy without saying anything about anyone in it.
+
+       Both windows in one scan via FILTER rather than two round trips. They're always read together —
+       the number on its own is a fact, and the number next to yesterday's is a direction, which is the
+       half worth opening the app for. */
+    async schoolPulseCounts(
+      schoolId: string,
+      todaySinceIso: string,
+      yesterdaySinceIso: string
+    ): Promise<{ today: number; yesterday: number }> {
+      const rows = await sql`
+        SELECT
+          COUNT(*) FILTER (WHERE v.ts >= ${todaySinceIso})::int AS today,
+          COUNT(*) FILTER (WHERE v.ts < ${todaySinceIso})::int AS yesterday
+        FROM votes v JOIN users u ON u.id = v.target_id
+        WHERE u.school_id = ${schoolId} AND v.ts >= ${yesterdaySinceIso}
+      `;
+      return { today: rows[0]?.today ?? 0, yesterday: rows[0]?.yesterday ?? 0 };
+    },
+
     /** Scoped by targetId so a user can only reveal/mark their own auras, mirroring server.js's `x.targetId===me.id` checks. */
     async getVoteForTarget(voteId: string, targetId: string): Promise<RawVote | null> {
       const rows = await sql`SELECT id, voter_id, target_id, question_id, emoji, text, color, name_revealed, opened, unread, ts FROM votes WHERE id = ${voteId} AND target_id = ${targetId}`;

@@ -149,4 +149,15 @@ test('reports: file as a user, see and resolve as admin', async () => {
 
   const resolve = await callApi('mutation($id:ID!){ resolveReport(id:$id){ status } }', { id: mine.id }, admin.token);
   assert.equal(resolve.body.data.resolveReport.status, 'resolved');
+
+  /* Resolution notifies the reporter (8A) — and this is the notifications lifecycle's one test:
+     the note arrives unread, and marking read flips everything in the list. */
+  const notes = (await callApi('{ notifications { text read } }', undefined, student.token)).body.data.notifications;
+  const note = notes.find((n: any) => /reviewed your report/.test(n.text));
+  assert.ok(note, 'the reporter hears back');
+  assert.equal(note.read, false);
+
+  await callApi('mutation{ markNotificationsRead }', undefined, student.token);
+  const after = (await callApi('{ notifications { read } }', undefined, student.token)).body.data.notifications;
+  assert.equal(after.every((n: any) => n.read), true);
 });

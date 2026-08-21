@@ -13,9 +13,10 @@ plain `node` / `pnpm` are not on `PATH`. Prefix every command with `nix develop 
 
 ```bash
 nix develop --command pnpm turbo run typecheck test    # everything, all 4 packages
-nix develop --command pnpm --filter web test           # apps/web only (Vitest + RTL)
+nix develop --command pnpm --filter web test           # apps/web only (Vitest + RTL, admin UI)
 nix develop --command pnpm --filter api test            # apps/api only (node:test, real Neon branch)
-nix develop --command pnpm --filter mobile typecheck    # apps/mobile only
+nix develop --command pnpm --filter mobile test         # apps/mobile only (Vitest, pure src/lib fns)
+nix develop --command pnpm --filter api-client test     # packages/api-client only (Vitest + RTL hooks)
 ```
 
 (`direnv exec .` also works if you have direnv installed and have already run `direnv allow` in
@@ -26,9 +27,21 @@ not meaningfully different in speed, ~0.5s either way — this isn't a performan
 `pnpm --filter <name>` matches by the unscoped suffix of the package name (`web` matches
 `@aura/web`), so either form works — the short form matches this repo's README.
 
-`apps/mobile` and `packages/api-client` don't have test suites yet; `pnpm turbo run typecheck`
-is what covers them. `apps/api`'s suite drops and recreates every table each run — it must point
+`apps/api`'s suite drops and recreates every table each run — it must point
 at a disposable `TEST_DATABASE_URL`, never the real `DATABASE_URL`.
+
+What each suite is *for* (settled in the 2026-08 test cleanup — keep it this way):
+
+- **apps/api** is the source of truth for behavior: black-box through the real Worker fetch
+  handler, real Neon branch, real Clerk tokens. New server behavior gets its test here.
+- **apps/web** tests cover the admin UI only. The consumer routes are dead (mobile is the
+  consumer app) — don't add tests for them, and don't resurrect the deleted ones.
+- **packages/api-client** covers shared hooks that own real logic (the `useAuraRound` state
+  machine). Do NOT add per-hook "calls fetch with the right query string" tests — ~36 of those
+  were deleted as mirror tests: they mock the fetch and then assert the hook's own constants
+  back at it, so they can't catch schema drift or server changes, only deliberate edits.
+- **apps/mobile** covers the pure functions in `src/lib` (Vitest, node env, no react-native
+  import allowed there). Screen behavior is verified in the simulator, not with jest-expo.
 
 Long-running commands (the full `turbo run typecheck test` in particular takes minutes) should
 go through `run_in_background: true` — don't let them eat the 120s foreground timeout.

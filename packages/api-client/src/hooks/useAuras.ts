@@ -21,6 +21,7 @@ const AURAS_QUERY = /* GraphQL */ `
         anonymous
         name
         repeatAdmirer
+        newestFromSender
         pickCount
         ts
         opened
@@ -47,6 +48,8 @@ export type Aura = {
   /** Null until flipped. */
   name: string | null;
   repeatAdmirer: boolean;
+  /** The most recent card from its sender — the feed's "6 times" line shows on this one only. */
+  newestFromSender: boolean;
   pickCount: number;
   ts: string;
   /* Whether you've already opened this card at full size — NOT whether it's flipped.

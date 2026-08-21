@@ -9,7 +9,7 @@ import { useMe } from '../../src/hooks/useMe';
 import { useMarkAurasRead } from '../../src/hooks/useMarkAurasRead';
 import { useMarkAuraOpened } from '../../src/hooks/useMarkAuraOpened';
 import { useNotifications, type Notification } from '../../src/hooks/useNotifications';
-import { useFriendActivity, type FriendActivityEvent } from '../../src/hooks/useFriendActivity';
+import { useFriendActivity, type FriendActivity } from '../../src/hooks/useFriendActivity';
 import { useMarkNotificationsRead } from '../../src/hooks/useMarkNotificationsRead';
 import { useRevealAuraName } from '../../src/hooks/useRevealAuraName';
 import { AuraIcon } from '../../src/components/AuraIcon';
@@ -37,11 +37,12 @@ import {
 import {
   PERIODS,
   activityFeed,
-  allGendersWithheld,
   auraLine,
+  milestoneLine,
+  pickLine,
+  repeatChip,
   periodDelta,
   periodSpec,
-  pickedYouPhrase,
   receiptCloser,
   receiptLines,
   receiptShareText,
@@ -87,7 +88,7 @@ export default function Inbox() {
   const { data, isLoading, isError, refetch } = useAuras();
   const markAurasRead = useMarkAurasRead();
   const { data: notifications } = useNotifications();
-  const { data: friendEvents } = useFriendActivity();
+  const { data: friendData } = useFriendActivity();
   const markNotificationsRead = useMarkNotificationsRead();
 
   /* The active segment lives in the URL, not in state.
@@ -173,7 +174,11 @@ export default function Inbox() {
      student with no picks of their own can still have a feed worth reading — and blanking it would
      show an empty-state on a screen with content behind it. Cards and Receipt are still genuinely
      empty without auras, so they keep the gate. */
-  const feedEmpty = auras.length === 0 && !friendEvents?.length && !notifications?.length;
+  const feedEmpty =
+    auras.length === 0 &&
+    !friendData?.events.length &&
+    !friendData?.milestones.length &&
+    !notifications?.length;
 
   return (
     <AuraShell segment={segment} onSegment={setSegment}>
@@ -182,7 +187,7 @@ export default function Inbox() {
       ) : segment === 'activity' ? (
         <ActivitySegment
           auras={auras}
-          friendEvents={friendEvents ?? []}
+          friend={friendData ?? null}
           notifications={notifications ?? []}
         />
       ) : segment === 'cards' ? (
@@ -266,57 +271,59 @@ function AuraShell({
    ("19 girls and 13 boys picked you") answered the question before you scrolled. */
 function ActivitySegment({
   auras,
-  friendEvents,
+  friend,
   notifications
 }: {
   auras: Aura[];
-  friendEvents: FriendActivityEvent[];
+  friend: FriendActivity | null;
   notifications: Notification[];
 }) {
   const router = useRouter();
   const { data: me } = useMe();
-  const today = withinDays(auras, 1);
-  const split = splitOf(today);
-  const days = activityFeed(auras, friendEvents, notifications);
+  const days = activityFeed(auras, friend?.events ?? [], friend?.milestones ?? [], notifications);
+  const pulse = friend?.schoolPulse;
 
   return (
     <>
-      <View className="mt-[14px] rounded-22 bg-surface px-4 py-[15px]">
-        <View className="flex-row items-baseline gap-[9px]">
-          <Text className="font-fredoka-700 text-[38px] leading-[38px]" style={{ color: '#FF5CA8' }}>
-            {today.length}
-          </Text>
-          {/* "Last 24 hours", not "today": this is a rolling window, and the day sections below are
-              calendar days. Calling a rolling count "today" is how a 4 up here ends up sitting above
-              a YESTERDAY heading holding the same four picks. */}
-          <Text className="font-nunito-800 flex-1 text-[13px] leading-[17px] text-ink-secondary">
-            {today.length === 1 ? 'pick in the last\n24 hours' : 'picks in the last\n24 hours'}
-          </Text>
-          <View className="items-end">
-            <Text className="font-fredoka-700 text-[19px] leading-[19px]" style={{ color: '#6BF2C2' }}>
-              {me?.streak ?? 0}
+      {/* The school, not you.
+
+          What stood here was your own last-24-hours count, your streak and a gender split bar — a
+          summary sitting directly on top of the list it summarised. Every number on it could be got
+          by counting the rows underneath and reading their colours, which is the same redundancy the
+          ungrouped rewrite removed one level down and left standing one level up. Neither fact is
+          lost: the streak is on Me and the Vote tab, the split is on the Receipt.
+
+          The pulse is the one thing on this screen the feed can't tell you, which is exactly why it
+          earns the space. It also carries the days the feed can't: when nobody picked you, everything
+          below is your own zero, and a screen that only reflects you back has nothing to say on the
+          days you most need a reason to open it.
+
+          The delta is the half that makes it worth looking at twice — one number is a fact, two is a
+          direction. */}
+      {!!pulse && (pulse.today > 0 || pulse.yesterday > 0) && (
+        <View className="mt-[14px] rounded-22 bg-surface px-4 py-[15px]">
+          <View className="flex-row items-center gap-[11px]">
+            <Text className="font-fredoka-700 text-[38px] leading-[38px]" style={{ color: '#6BF2C2' }}>
+              {pulse.today}
             </Text>
-            <Text className="font-nunito-800 mt-[2px] text-[10.5px]" style={{ color: '#848286' }}>
-              DAY STREAK
-            </Text>
+            <View className="min-w-0 flex-1">
+              <Text className="font-nunito-900 text-[14px] leading-[18px] text-white">
+                {`aura vote${pulse.today === 1 ? '' : 's'} at`}
+              </Text>
+              <Text
+                numberOfLines={1}
+                className="font-nunito-900 text-[14px] leading-[18px] text-white"
+              >
+                {me?.school?.name ?? 'your school'}
+              </Text>
+              <Text className="font-nunito-700 mt-[2px] text-[11.5px]" style={{ color: '#848286' }}>
+                in the last 24 hours
+              </Text>
+            </View>
+            <PulseDelta today={pulse.today} yesterday={pulse.yesterday} />
           </View>
         </View>
-
-        {/* The bar is the gender split, so it only earns its place when there is a split to show. A
-            day where every sender is behind the cohort floor would otherwise print one flat grey
-            band that says nothing — the line under it already carries the count. */}
-        {today.length > 0 && !allGendersWithheld(split) && (
-          <>
-            <View className="mt-3 h-[7px] flex-row gap-[3px] overflow-hidden rounded-pill">
-              {split.girls > 0 && <View style={{ flex: split.girls, backgroundColor: GENDER_ACCENT.girl }} />}
-              {split.boys > 0 && <View style={{ flex: split.boys, backgroundColor: GENDER_ACCENT.boy }} />}
-              {split.nb > 0 && <View style={{ flex: split.nb, backgroundColor: GENDER_ACCENT.nonbinary }} />}
-              {split.unknown > 0 && <View style={{ flex: split.unknown, backgroundColor: UNKNOWN_ACCENT }} />}
-            </View>
-            <Text className="font-nunito-800 mt-2 text-[11.5px] text-ink-muted">{pickedYouPhrase(split)}</Text>
-          </>
-        )}
-      </View>
+      )}
 
       {days.map(day => (
         <View key={day.key}>
@@ -331,7 +338,7 @@ function ActivitySegment({
                 onPress={
                   item.kind === 'pick'
                     ? () => router.push({ pathname: '/flip', params: { id: item.id } })
-                    : item.kind === 'friend'
+                    : item.kind === 'friend' || item.kind === 'milestone'
                       ? () => router.push({ pathname: '/u', params: { userId: item.friendId } })
                       : undefined
                 }
@@ -348,48 +355,126 @@ function ActivitySegment({
   );
 }
 
+/* "+7" / "−3" against the 24 hours before this one.
+
+   Silent on a tie and silent when yesterday was empty. A "+13" that only means "yesterday there was
+   no data yet" is a direction the number hasn't earned, and it would show on every school's first
+   day — the one time the figure is least meaningful and most likely to be looked at. */
+function PulseDelta({ today, yesterday }: { today: number; yesterday: number }) {
+  if (yesterday === 0 || today === yesterday) return null;
+  const diff = today - yesterday;
+  const up = diff > 0;
+  return (
+    <View className="items-end">
+      <Text className="font-fredoka-700 text-[17px] leading-[19px]" style={{ color: up ? '#6BF2C2' : '#FF5CA8' }}>
+        {`${up ? '+' : '−'}${Math.abs(diff)}`}
+      </Text>
+      <Text className="font-nunito-800 mt-[2px] text-[10.5px]" style={{ color: '#848286' }}>
+        VS YESTERDAY
+      </Text>
+    </View>
+  );
+}
+
 /* One event.
 
-   The disc is always the *giver*, coloured by their gender — so the colour and the sentence say the
-   same thing twice, which is what lets the feed be skimmed at colour-speed rather than read. A
-   withheld gender takes the grey, the same grey the split bar and the card faces use for it.
+   ## The disc
 
-   Your own rows sit a shade lighter than your friends'. That's the only weighting: the sentence
-   already says "you", and any louder treatment would turn a feed you scroll into a scoreboard where
-   two thirds of the rows are visibly the boring ones. */
+   On your own rows it's the poll's emoji, ringed in the sender's gender colour. Both facts are free on
+   the card and both were being thrown away: the ring still says girl/boy at colour-speed, and the
+   emoji is what stops forty rows looking like one row repeated. Friend rows keep the plain gender disc
+   with the aura mark, because a friend row deliberately carries no superlative to draw.
+
+   ## Weight
+
+   Your own rows sit a shade lighter than your friends'. A card you've never opened gets a pink dot
+   instead of the chevron — the only unread treatment in the feed, and wordless on purpose: an
+   explanatory "tap to flip" would be describing the control next to it (see the copy rule in
+   CLAUDE.md). Nothing else is emphasised. Two thirds of a feed visibly marked as the boring rows is a
+   scoreboard, not a feed. */
 function ActivityRow({ item, onPress }: { item: ActivityItem; onPress?: () => void }) {
   const mine = item.kind === 'pick';
   const isNote = item.kind === 'note';
-  const accent = isNote ? TRACK : GENDER_ACCENT[item.gender] ?? UNKNOWN_ACCENT;
+  const isMilestone = item.kind === 'milestone';
+  /* A milestone is about a friend, not about a voter, so it has no gender to colour by. Streaks take
+     the flame's orange and superlative wins take yellow — the two colours those things already are
+     elsewhere in the app (the streak pill, and a trophy chip on a profile). */
+  const accent = isMilestone
+    ? item.milestone === 'streak'
+      ? '#FF7A3D'
+      : '#FFD84D'
+    : isNote
+      ? TRACK
+      : GENDER_ACCENT[item.gender] ?? UNKNOWN_ACCENT;
 
   const body = (
     <View
       className="flex-row items-center gap-[11px] rounded-18 px-[13px] py-[11px]"
       style={{ backgroundColor: mine ? '#4A474B' : '#3C393E' }}
     >
-      <View
-        className="items-center justify-center"
-        style={{ width: 34, height: 34, borderRadius: 99, backgroundColor: accent }}
-      >
-        {isNote ? (
-          <Text style={{ fontSize: 16 }}>{item.emoji || '🔔'}</Text>
-        ) : (
-          /* Dark ink on the accent rather than white — the gender colours are bright enough that a
-             white mark on mint disappears. Same value the split bar's chips use. */
-          <AuraIcon name="aura" size={17} color="#221F22" filled />
-        )}
-      </View>
+      {mine ? (
+        /* Emoji on the card ground, ringed in the accent — rather than emoji *on* the accent, where a
+           yellow prompt on a pink disc is two bright fills fighting and the glyph stops reading. */
+        <View
+          className="items-center justify-center"
+          style={{ width: 34, height: 34, borderRadius: 99, backgroundColor: '#2C2A2D', borderWidth: 2, borderColor: accent }}
+        >
+          <Text style={{ fontSize: 15 }}>{item.emoji || '✨'}</Text>
+        </View>
+      ) : (
+        <View
+          className="items-center justify-center"
+          style={{ width: 34, height: 34, borderRadius: 99, backgroundColor: accent }}
+        >
+          {isNote ? (
+            <Text style={{ fontSize: 16 }}>{item.emoji || '🔔'}</Text>
+          ) : isMilestone ? (
+            item.milestone === 'streak' ? (
+              <AuraIcon name="flame" size={18} color="#221F22" />
+            ) : (
+              <Text style={{ fontSize: 15 }}>{item.emoji || '🏆'}</Text>
+            )
+          ) : (
+            /* Dark ink on the accent rather than white — the gender colours are bright enough that a
+               white mark on mint disappears. Same value the split bar's chips use. */
+            <AuraIcon name="aura" size={17} color="#221F22" filled />
+          )}
+        </View>
+      )}
       <View className="min-w-0 flex-1">
-        <Text className="font-nunito-900 text-[13px] leading-[17px] text-white">
-          {isNote ? item.text : auraLine(item.gender, mine ? 'you' : item.friendName)}
+        {/* Two lines, then ellipsis. The prompts run long — "The girl every guy wants to date & the
+            guy every girl wants to date" is a real one — and at full length a single row takes three
+            lines and pushes the next event off the screen, which is the opposite of a feed you skim.
+            Nothing is lost: the card this row opens prints the prompt in full. */}
+        <Text numberOfLines={2} className="font-nunito-900 text-[13px] leading-[17px] text-white">
+          {isNote
+            ? item.text
+            : isMilestone
+              ? milestoneLine(item)
+              : mine
+                ? pickLine(item.gender, item.name, item.q)
+                : auraLine(item.gender, item.friendName)}
         </Text>
-        <Text className="font-nunito-700 mt-[2px] text-[11.5px]" style={{ color: '#848286' }}>
-          {relativeTime(item.ts)}
-        </Text>
+        <View className="flex-row items-center gap-[6px]">
+          <Text className="font-nunito-700 mt-[2px] text-[11.5px]" style={{ color: '#848286' }}>
+            {relativeTime(item.ts)}
+          </Text>
+          {/* The one row out of that sender's set that gets to say it — see `repeat` in auraTab. Pink
+              because it's the line the tab is named for, and the only coloured text in the feed. */}
+          {mine && item.repeat && (
+            <Text className="font-nunito-900 mt-[2px] text-[11.5px]" style={{ color: '#FF5CA8' }}>
+              {repeatChip(item.pickCount)}
+            </Text>
+          )}
+        </View>
       </View>
-      {/* Only where there's somewhere to go. A chevron on a notification row would promise a screen
-          that doesn't exist. */}
-      {onPress && <AuraIcon name="chevronRight" size={16} color="#6E6B71" />}
+      {/* A card you've never opened shows a dot instead. Only where there's somewhere to go — a
+          chevron on a notification row would promise a screen that doesn't exist. */}
+      {mine && item.fresh ? (
+        <View style={{ width: 9, height: 9, borderRadius: 99, backgroundColor: '#FF5CA8' }} />
+      ) : (
+        onPress && <AuraIcon name="chevronRight" size={16} color="#6E6B71" />
+      )}
     </View>
   );
 

@@ -1,5 +1,10 @@
 # Activity feed — ideas backlog
 
+> **Status: all five are built.** Kept as the record of why each one is shaped the way it is — in
+> particular the guardrail at the bottom, which #5 looks like it breaks and doesn't. See also the
+> note under #2, which did not turn out to be free.
+
+
 Parked after the ungrouped-feed refactor (Activity leads the segment bar, one row per event,
 friend rows backed by `friendActivity`). Ordered by (impact × cheapness × privacy safety).
 
@@ -29,7 +34,12 @@ mentions it. But the *moment it becomes 6* is the most tantalising thing this ap
 
 > ✨ Someone's picked you **6 times** now 👀
 
-No query, no schema. The row people screenshot.
+**Correction — this was not free.** "No query, no schema" was wrong. `pickCount` is on *all six* of a
+sender's cards and `voterId` is on none of them (deliberately), so a client has no way to tell which
+card made it six, and renders the same line six times — the exact problem the feed rewrite was fixing.
+
+It needed one server boolean, `newestFromSender`, computed in `aurasFor`. Shipping `voterId` instead
+would have let the client group cards by sender, which is precisely what an anonymous card hides.
 
 ## 3. Unflipped rows as the funnel
 
@@ -59,7 +69,18 @@ derive from votes, so both are honest. Unlike 1–3 this is new server surface.
 1–3 first: all client-side, no API change, no migration, and together they fix the actual problem.
 Then 4 as a small server add. Hold 5 until the enriched feed has been seen in use.
 
-## Guardrail — do not enrich friend rows
+## Guardrail — do not enrich friend *event* rows
+
+**Note the word "event".** #5 puts a superlative on a friend milestone row and that is not a breach of
+this rule — the distinction is per-vote versus per-person:
+
+- a friend **event** is one anonymous vote. Naming the prompt on it ties a specific hidden voter to a
+  specific claim about your friend, an object that exists nowhere else and that they never published.
+- a friend **milestone** is the aggregate ("Emma's won Best smile ×5"), which `publicProfile` already
+  returns to anyone at her school. It surfaces something she is already showing.
+
+The rule below is about the first kind and still holds in full.
+
 
 `FriendActivityEvent` carries a gender and a first name and nothing else, deliberately. See the long
 note on `friendActivityFor` in `apps/api/src/auras.ts`. Ideas 1 and 2 apply to **your own rows only**:

@@ -1,8 +1,13 @@
 import { useAuth } from '@clerk/expo';
-import { useFriendActivity as useSharedFriendActivity, type FriendActivityEvent } from '@aura/api-client';
+import {
+  useFriendActivity as useSharedFriendActivity,
+  type FriendActivity,
+  type FriendActivityEvent,
+  type FriendMilestone
+} from '@aura/api-client';
 import { gqlFetch } from '../lib/graphql';
 
-export type { FriendActivityEvent };
+export type { FriendActivity, FriendActivityEvent, FriendMilestone };
 
 export function useFriendActivity() {
   const { getToken, isSignedIn } = useAuth();

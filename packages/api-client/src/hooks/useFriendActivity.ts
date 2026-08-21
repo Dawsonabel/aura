@@ -10,6 +10,9 @@ import type { GqlFetch } from '../client';
    Note what the document can't ask for. There is no superlative field on FriendActivityEvent — see
    friendActivityFor in apps/api/src/auras.ts for why a friend's prompt stays with the friend. */
 
+/* Three fields, one document. All three feed the Activity segment and none is useful without the
+   others, so asking for them together is one round trip instead of three racing requests that make the
+   feed assemble itself in stages on screen. */
 const FRIEND_ACTIVITY_QUERY = /* GraphQL */ `
   query FriendActivity {
     friendActivity {
@@ -18,6 +21,20 @@ const FRIEND_ACTIVITY_QUERY = /* GraphQL */ `
       friendId
       friendName
       gender
+    }
+    friendMilestones {
+      id
+      ts
+      friendId
+      friendName
+      kind
+      count
+      label
+      emoji
+    }
+    schoolPulse {
+      today
+      yesterday
     }
   }
 `;
@@ -31,7 +48,36 @@ export type FriendActivityEvent = {
   gender: string;
 };
 
-type Response = { friendActivity: FriendActivityEvent[] };
+/** Picks across your whole school: the last 24 hours, and the 24 hours before that. */
+export type SchoolPulse = { today: number; yesterday: number };
+
+export type FriendMilestone = {
+  id: string;
+  ts: string;
+  friendId: string;
+  friendName: string;
+  /** "streak" | "superlative" */
+  kind: string;
+  /** Days for a streak, wins for a superlative. */
+  count: number;
+  /** The superlative's prompt and emoji. Empty on a streak. */
+  label: string;
+  emoji: string;
+};
+
+/** Everything the Activity segment needs beyond your own auras and notifications. */
+export type FriendActivity = {
+  events: FriendActivityEvent[];
+  milestones: FriendMilestone[];
+  /** How busy your school has been: last 24h, and the 24h before it. */
+  schoolPulse: SchoolPulse;
+};
+
+type Response = {
+  friendActivity: FriendActivityEvent[];
+  friendMilestones: FriendMilestone[];
+  schoolPulse: SchoolPulse;
+};
 
 export type UseFriendActivityParams = {
   gqlFetch: GqlFetch;
@@ -42,10 +88,14 @@ export type UseFriendActivityParams = {
 export function useFriendActivity({ gqlFetch, getToken, enabled }: UseFriendActivityParams) {
   return useQuery({
     queryKey: ['friendActivity'],
-    queryFn: async () => {
+    queryFn: async (): Promise<FriendActivity> => {
       const token = await getToken();
-      const { friendActivity } = await gqlFetch<Response>(FRIEND_ACTIVITY_QUERY, undefined, token);
-      return friendActivity;
+      const data = await gqlFetch<Response>(FRIEND_ACTIVITY_QUERY, undefined, token);
+      return {
+        events: data.friendActivity,
+        milestones: data.friendMilestones,
+        schoolPulse: data.schoolPulse
+      };
     },
     enabled
   });

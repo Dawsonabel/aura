@@ -4,7 +4,7 @@ import type { RateLimiter } from './ratelimit';
 import type { RoundStore } from './rounds';
 import { buildRound, notBlocked, notify, rerollChoices, servedRound } from './pollRound';
 import { auraBody, sendPush } from './push';
-import { aurasFor, flipState, friendActivityFor } from './auras';
+import { aurasFor, flipState, friendActivityFor, friendMilestonesFor } from './auras';
 import { boardFor, type BoardScope } from './board';
 import { advanceStreak, currentStreak, utcDay } from './streak';
 import { superlativesFor } from './profile';
@@ -186,6 +186,29 @@ const typeDefs = /* GraphQL */ `
     friendName: String!
     gender: String!
   }
+  # Something a friend has done, rather than something done to them. Unlike FriendActivityEvent this
+  # may name a superlative — a milestone is the aggregate ("Emma's won Best smile x5"), which already
+  # sits on her publicProfile, where a per-vote prompt would be a new fact about a hidden card.
+  # See friendMilestonesFor in auras.ts.
+  type FriendMilestone {
+    id: ID!
+    ts: String!
+    friendId: ID!
+    friendName: String!
+    # "streak" | "superlative"
+    kind: String!
+    # Days for a streak, wins for a superlative.
+    count: Int!
+    # The superlative's prompt and emoji. Empty on a streak.
+    label: String!
+    emoji: String!
+  }
+  # Picks received across the caller's whole school, last 24h and the 24h before it. The pair is the
+  # point: one number is a fact, two is a direction.
+  type SchoolPulse {
+    today: Int!
+    yesterday: Int!
+  }
   type Suggestions {
     contacts: [User!]!
     fof: [User!]!
@@ -296,6 +319,10 @@ const typeDefs = /* GraphQL */ `
     # Null until flipped. The flip is the only thing that fills this in.
     name: String
     repeatAdmirer: Boolean!
+    # The most recent card from its sender. Lets the Activity feed print "that's 6 times" once rather
+    # than on all six of that sender's cards — which the client can't work out for itself, since
+    # pickCount is on every one of them and voterId is on none. Always false on an anonymous card.
+    newestFromSender: Boolean!
     pickCount: Int!
     ts: String!
     # Whether you have already opened this card at full size. NOT the same as flipped: a protected
@@ -481,6 +508,12 @@ const typeDefs = /* GraphQL */ `
     # Your friends' picks, for the Activity feed. Self-only — there is no argument to ask for anyone
     # else's, the same as the friends field above.
     friendActivity: [FriendActivityEvent!]!
+    # Friend streaks and superlative wins, for the same feed. Self-only, same as friendActivity.
+    friendMilestones: [FriendMilestone!]!
+    # How busy your school has been. Bare counts — nothing about who, so no privacy surface at all.
+    # Its job is the quiet day: a feed that only reflects you back has nothing to say on exactly the
+    # days you most need a reason to open it.
+    schoolPulse: SchoolPulse!
     shop: Shop!
   }
   # Each field is tri-state: omitted leaves it alone, a handle sets it, null clears it.
@@ -778,6 +811,19 @@ const resolvers = {
     notifications: (_: unknown, __: unknown, ctx: GraphQLContext) => (requireMe(ctx).notifications as unknown[]) || [],
     friendActivity: (_: unknown, __: unknown, ctx: GraphQLContext) =>
       friendActivityFor(ctx.db, requireMe(ctx), ctx.tuning),
+    friendMilestones: (_: unknown, __: unknown, ctx: GraphQLContext) =>
+      friendMilestonesFor(ctx.db, requireMe(ctx), ctx.tuning),
+    schoolPulse: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      // Nobody has joined a school yet — zeroes rather than a whole-table count.
+      if (!me.schoolId) return { today: 0, yesterday: 0 };
+      const now = Date.now();
+      return ctx.db.schoolPulseCounts(
+        me.schoolId as string,
+        new Date(now - 86400_000).toISOString(),
+        new Date(now - 2 * 86400_000).toISOString()
+      );
+    },
     pollRound: (_: unknown, __: unknown, ctx: GraphQLContext) => servedRound(ctx.db, ctx.rounds, requireMe(ctx), ctx.tuning),
 
     /* One object rather than a dozen loose fields: the Shop screen needs all of it at once, and keeping

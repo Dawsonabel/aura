@@ -20,7 +20,9 @@ export { useMarkAuraOpened, type UseMarkAuraOpenedParams } from './hooks/useMark
 export { useNotifications, type Notification, type UseNotificationsParams } from './hooks/useNotifications';
 export {
   useFriendActivity,
+  type FriendActivity,
   type FriendActivityEvent,
+  type FriendMilestone,
   type UseFriendActivityParams
 } from './hooks/useFriendActivity';
 export { useMarkNotificationsRead, type UseMarkNotificationsReadParams } from './hooks/useMarkNotificationsRead';

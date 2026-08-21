@@ -589,7 +589,15 @@ function FlipCard({ aura, accent }: { aura: Aura; accent: string }) {
           ) : (
             /* How many times this person has voted for you.
 
-               The prompt used to sit here and it's gone — that's the other side's to give. What
+               The prompt used to sit here and it's gone — that's the other side's to give.
+
+               **The Activity feed does print it, though**, on the row that opens this card (see
+               pickLine in auraTab). That asymmetry is known and deliberate — the feed needs the one
+               detail that differs between rows or it reads as the same line repeated — but it does
+               mean this card is less specific than the row you tapped to reach it. If that ever grates,
+               the answer is to put the prompt back on this face rather than to take it out of the feed.
+
+               What
                replaced it is the one fact that actually argues for spending a flip on *this* card
                rather than the one beside it: someone who voted for you four times is a different
                proposition from someone who voted once.

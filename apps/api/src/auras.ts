@@ -18,7 +18,10 @@ export type Aura = {
   infiniteAura: boolean; unread: boolean; anonymous: boolean;
   /** Null until flipped. */
   name: string | null;
-  repeatAdmirer: boolean; pickCount: number; ts: string;
+  repeatAdmirer: boolean; pickCount: number;
+  /** The most recent card from its sender — so the feed says "6 times" once, not six times. */
+  newestFromSender: boolean;
+  ts: string;
   /** Whether this card has been opened at full size. Not the same as flipped — see migrations.ts. */
   opened: boolean;
   /** True when the voter's gender was withheld because their cohort is too small to hide in. */
@@ -130,6 +133,28 @@ export async function aurasFor(db: Db, user: User, tuning: Tuning): Promise<Aura
   const countsByVoter = new Map<string, number>();
   for (const v of votes) countsByVoter.set(v.voterId, (countsByVoter.get(v.voterId) || 0) + 1);
 
+  /* Which card is the most recent one from its sender — the Activity feed's repeat-admirer line.
+
+     The feed wants to say "that's 6 times from the same person" exactly once, on the card that made it
+     6. It cannot work that out for itself: `pickCount` is on all six of that sender's cards and
+     `voterId` is deliberately not on any of them, so a client has no way to tell the six apart and
+     would print the same line six times.
+
+     Computing it here rather than shipping voterId is the point. This is a boolean about the reader's
+     own grid — "is this the newest of a set you already hold" — and it says nothing about the sender
+     that `pickCount` didn't already say. Handing over voterId to let the client group them would leak
+     which anonymous cards came from one person, which is the entire thing a card is hiding.
+
+     `votes` arrives newest-first (getRawVotesForTarget orders by ts DESC), so the first id seen for a
+     voter is their most recent. */
+  const newestFromSender = new Set<string>();
+  const seenVoter = new Set<string>();
+  for (const v of votes) {
+    if (seenVoter.has(v.voterId)) continue;
+    seenVoter.add(v.voterId);
+    newestFromSender.add(v.id);
+  }
+
   const auras = votes.map(v => {
     const voter = voterOf.get(v.voterId) || null;
     const gm = !!user.infiniteAura;
@@ -167,6 +192,9 @@ export async function aurasFor(db: Db, user: User, tuning: Tuning): Promise<Aura
       infiniteAura: gm, unread: v.unread, anonymous,
       name: nameShown ? `${voter!.firstName} ${voter!.lastName}` : null,
       repeatAdmirer: pickCount >= 2 && !anonymous, pickCount,
+      /* True on one card per sender — see newestFromSender above. Always false on an anonymous card,
+         matching repeatAdmirer: a protected sender's cards don't advertise that they're a set. */
+      newestFromSender: newestFromSender.has(v.id) && !anonymous,
       ts: v.ts,
       /* Straight through — no privacy logic to apply. This is a fact about the *reader's* own
          behaviour ("have I looked at this card"), not about the sender, so unlike gender and grade
@@ -274,4 +302,97 @@ export async function friendActivityFor(db: Db, user: User, tuning: Tuning): Pro
     });
   }
   return events;
+}
+
+/* Things your friends have done, rather than things done to them — the feed's second friend row.
+
+   ## Why this one may carry a superlative when friendActivityFor may not
+
+   That looks like a contradiction and isn't. A friend *event* is one anonymous vote, and naming the
+   prompt on it ("a boy gave Emma aura for X") ties a specific hidden voter to a specific claim about
+   Emma — an object that exists nowhere else and that Emma never published.
+
+   A *milestone* is the aggregate: "Emma's won Best smile ×5". That already sits on her public profile
+   — `publicProfile` returns `superlatives` to anyone at her school (see profile.ts) — so this surfaces
+   something she is already showing, rather than deriving something new from cards she can't see. The
+   line between the two is per-vote versus per-person, and it is the same line `pickCount` sits on.
+
+   ## Floors
+
+   `MIN_WINS` and `MIN_STREAK` exist to keep this a milestone rather than a status readout. Every
+   friend has *some* top superlative and *some* streak; emitting them all would put a permanent block
+   of friend rows at the top of every feed, which is a leaderboard, not news. Only one of each kind per
+   friend, and only once it's worth remarking on. */
+export type FriendMilestone = {
+  id: string; ts: string; friendId: string; friendName: string;
+  /** "streak" | "superlative" */
+  kind: string;
+  /** Days for a streak, wins for a superlative. */
+  count: number;
+  /** The superlative's prompt and emoji. Empty on a streak. */
+  label: string; emoji: string;
+};
+
+const MIN_WINS = 3;
+const MIN_STREAK = 3;
+
+export async function friendMilestonesFor(db: Db, user: User, tuning: Tuning): Promise<FriendMilestone[]> {
+  const friendIds = (user.friends as string[]) || [];
+  if (!friendIds.length) return [];
+
+  const friends = (await db.getUsersByIds(friendIds)).filter(f => notBlocked(user, f));
+  if (!friends.length) return [];
+
+  const nameOf = (f: User) => String(f.firstName || '').trim() || 'A friend';
+  const out: FriendMilestone[] = [];
+
+  /* Dated to the day they last played, not to now. A streak is a claim about a run of days, and
+     stamping it "just now" would float it to the top of the feed every time the query ran, whether or
+     not anything about it had changed. `lastPlayedOn` is a calendar day (see streak.ts), so it's
+     pinned to midday UTC — far enough from either boundary that the reader's timezone can't shift it
+     onto the wrong day heading. */
+  for (const f of friends) {
+    const streak = typeof f.streak === 'number' ? f.streak : 0;
+    const day = typeof f.lastPlayedOn === 'string' ? f.lastPlayedOn : null;
+    if (streak < MIN_STREAK || !day) continue;
+    out.push({
+      id: `streak-${f.id}-${day}`,
+      ts: `${day}T12:00:00.000Z`,
+      friendId: String(f.id),
+      friendName: nameOf(f),
+      kind: 'streak',
+      count: streak,
+      label: '',
+      emoji: ''
+    });
+  }
+
+  const cutoffIso = new Date(Date.now() - tuning.auraLifetimeDays * 86400_000).toISOString();
+  const tallies = await db.getSuperlativeCountsForTargets(friends.map(f => String(f.id)), cutoffIso);
+
+  // Best per friend, ties broken by recency so the feed shows the one that just moved.
+  const best = new Map<string, (typeof tallies)[number]>();
+  for (const t of tallies) {
+    if (t.n < MIN_WINS) continue;
+    const held = best.get(t.targetId);
+    if (!held || t.n > held.n || (t.n === held.n && t.lastTs > held.lastTs)) best.set(t.targetId, t);
+  }
+
+  const friendOf = new Map(friends.map(f => [String(f.id), f]));
+  for (const [targetId, t] of best) {
+    const friend = friendOf.get(targetId);
+    if (!friend) continue;
+    out.push({
+      id: `sup-${targetId}-${t.text}`,
+      ts: t.lastTs,
+      friendId: targetId,
+      friendName: nameOf(friend),
+      kind: 'superlative',
+      count: t.n,
+      label: t.text,
+      emoji: t.emoji
+    });
+  }
+
+  return out;
 }

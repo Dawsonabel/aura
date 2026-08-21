@@ -85,8 +85,8 @@ function SparkCounter({ total, top }: { total: number; top: number }) {
       className="flex-row items-center gap-[6px] rounded-pill px-[13px] py-[7px]"
       style={{ position: 'absolute', right: 21, top, backgroundColor: 'rgba(64,62,65,0.72)', zIndex: 5 }}
     >
-      <AuraIcon name="bolt" size={18} color={SPARK_FILL} />
-      <Text className="font-nunito-900 text-[16px]" style={{ color: SPARK_FILL }}>
+      <AuraIcon name="bolt" size={22} color={SPARK_FILL} />
+      <Text className="font-nunito-900 text-[19px]" style={{ color: SPARK_FILL }}>
         {total}
       </Text>
     </View>
@@ -536,22 +536,35 @@ function UtilityRow({
           /* Dimmed only while a vote is in flight. Not for affordability — see the price chip below. */
           style={locked ? { opacity: 0.6 } : undefined}
         >
-          {/* Sized to fill the button rather than float in it. At full width this row was three small
-              things centred in a lot of nothing; the label carries the width now. */}
-          <View className="flex-row items-center justify-center gap-[12px] py-[14px]">
+          {/* Centred as one group, with a fixed gap before the price.
+
+              This was briefly justified apart — dice and label hard left, price hard right — on the
+              theory that a button should read like a shelf label. It doesn't work at this width: the
+              pill is 80% of the row, so a greedy spacer strands the price against the far edge with a
+              band of nothing in the middle, and the two halves stop looking like one control. The gap
+              is a fixed 18pt instead, which is enough to keep the price from reading as part of the
+              label ("Re-Roll 5") without letting it drift off on its own. */}
+          <View className="flex-row items-center justify-center px-[20px] py-[14px]">
             {/* The dice, not the circular-arrow `reroll` glyph: this swaps four people for four other
                 people, which is a roll rather than a retry. Same icon the Shop's random boost uses. */}
             <AuraIcon name="dice" size={27} color="#FFFFFF" />
-            <Text className="font-fredoka-700 text-[21px] text-white">Re-Roll</Text>
-            {/* The price, in white, and nothing else.
+            <Text className="font-fredoka-700 ml-[12px] text-[21px] text-white">Re-Roll</Text>
+            <View style={{ width: 18 }} />
+            {/* The price: a yellow bolt and a white number, and nothing else.
 
                 It briefly carried the balance too and turned pink when you couldn't cover it. Both are
                 gone: the balance lives in the counter pinned top-right, where it's visible on every
                 question rather than only next to this button, and colouring the price pink pre-judged
                 a tap that still does something useful — being short opens the sheet that explains the
-                shortfall. A button that looks broken teaches less than one that answers. */}
+                shortfall. A button that looks broken teaches less than one that answers.
+
+                The bolt is SPARK_FILL rather than white so the currency is one colour everywhere it
+                appears — the counter above, the Shop, and here. A white bolt read as a generic glyph
+                on a grey pill; yellow makes the price and the balance visibly the same unit. The
+                *number* stays white, because pricing the reroll in the currency's own colour would
+                make the pill look like a balance rather than a cost. */}
             <View className="flex-row items-center gap-[5px] rounded-pill px-[11px] py-[5px]" style={{ backgroundColor: '#645F67' }}>
-              <AuraIcon name="bolt" size={16} color="#FFFFFF" />
+              <AuraIcon name="bolt" size={16} color={SPARK_FILL} />
               <Text className="font-nunito-900 text-[15.5px] text-white">{rerollCost}</Text>
             </View>
           </View>

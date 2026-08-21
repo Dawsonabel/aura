@@ -101,3 +101,36 @@ test('completing a round with zero answers is rejected', async () => {
   const r = await callApi('mutation($r:ID!){ completeRound(roundId:$r){ coins } }', { r: roundRes.body.data.pollRound.roundId }, me.token);
   assert.match(r.body.errors[0].message, /answer at least one/);
 });
+
+const REROLL = 'mutation($r:ID!,$q:ID!){ rerollQuestion(roundId:$r, questionId:$q){ coins } }';
+
+test('rerolling an answered question is refused — it would sell a second vote on it', async () => {
+  const roundRes = await callApi('{ pollRound { roundId polls { questionId choices { id } } } }', undefined, me.token);
+  const { roundId, polls } = roundRes.body.data.pollRound;
+  await callApi(
+    'mutation($q:ID!,$t:ID!,$r:ID!){ vote(questionId:$q, targetId:$t, roundId:$r){ ok } }',
+    { q: polls[0].questionId, t: polls[0].choices[0].id, r: roundId },
+    me.token
+  );
+
+  const r = await callApi(REROLL, { r: roundId, q: polls[0].questionId }, me.token);
+  assert.match(r.body.errors[0].message, /already answered/);
+
+  const notMine = await callApi(REROLL, { r: roundId, q: 'pol_nonexistent' }, me.token);
+  assert.match(notMine.body.errors[0].message, /not in this round/);
+});
+
+/* The candidates are computed before the charge, so a school with nobody left to show refuses
+   instead of taking the coins and handing back the same faces. This school has two students — the
+   round already shows `me` everyone there is. */
+test('a reroll that can find nobody new charges nothing', async () => {
+  const roundRes = await callApi('{ pollRound { roundId polls { questionId } } }', undefined, me.token);
+  const { roundId, polls } = roundRes.body.data.pollRound;
+  const before = (await callApi('{ me { coins } }', undefined, me.token)).body.data.me.coins;
+
+  const r = await callApi(REROLL, { r: roundId, q: polls[polls.length - 1].questionId }, me.token);
+  assert.match(r.body.errors[0].message, /Nobody new/);
+
+  const after = (await callApi('{ me { coins } }', undefined, me.token)).body.data.me.coins;
+  assert.equal(after, before, 'a failed reroll must not move the balance');
+});
