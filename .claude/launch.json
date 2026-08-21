@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "nix",
+      "runtimeArgs": ["develop", "--command", "pnpm", "--filter", "api", "dev"],
+      "port": 8787
+    },
+    {
+      "name": "mobile",
+      "runtimeExecutable": "nix",
+      "runtimeArgs": ["develop", "--command", "pnpm", "--filter", "mobile", "start"],
+      "port": 8081
+    }
+  ]
+}

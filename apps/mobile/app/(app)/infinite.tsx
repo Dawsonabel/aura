@@ -3,39 +3,35 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShop } from '../../src/hooks/useShop';
-import { useActivateGodMode } from '../../src/hooks/useActivateGodMode';
+import { useActivateInfiniteAura } from '../../src/hooks/useActivateInfiniteAura';
 import { AuraIcon } from '../../src/components/AuraIcon';
-import { ScratchTile } from '../../src/components/scratch/ScratchTile';
 import { ToyShadow } from '../../src/components/ToyShadow';
 import { Wobble } from '../../src/components/Wobble';
 import { AuthError } from '../../src/components/authKit';
 
-/* 15A's Infinite Aura paywall — what replaced God Mode.
+/* The Infinite Aura paywall — what replaced Infinite Aura.
 
    The design's argument for the change, worth keeping next to the code: the old paywall sold *the
    answer*, and an answer is spent once. Nothing renewed, so there was no reason for a second month.
-   Infinite Aura sells unlimited clues and first names instead — and a first name still isn't a whole
-   person at a 300-student school, so the guessing survives the purchase.
+   This sells a daily allowance instead — two flips, back tomorrow — and a first name still isn't a
+   whole person at a 300-student school, so the guessing survives the purchase.
 
-   The scratch card is the pitch, not decoration: one clue free, two behind a coin, and the name on the
-   rung coins can't reach. You can see the shape of what you don't have. */
+   The pitch used to be a scratch card: one clue free, two behind a coin, and the name on the rung
+   coins couldn't reach. The clue ladder is gone, and with it the reason to render foil here. What
+   sells now is the only transaction left in the product — a card face down, and the same card turned
+   over — so the pitch is those two states side by side. */
 
-/* A sample flame, not the reader's. The paywall has to show the ladder before you own any of it, and
-   using someone's real locked flame here would mean rendering a clue we haven't been paid for. */
-const SAMPLE = { poll: '🥵 HOTTEST IN THE JUNIOR CLASS', who: 'A girl', grade: '11th', initial: 'M', name: 'Maya' };
+/* A sample card, not the reader's. The paywall has to show the before and after without opening
+   anything real: rendering someone's actual locked card here would hand over a name nobody paid for. */
+const SAMPLE = { poll: '🥵 HOTTEST IN THE JUNIOR CLASS', who: 'Girl', grade: '11th grade', name: 'Maya' };
 
 export default function InfiniteAura() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data: shop } = useShop();
-  const activate = useActivateGodMode();
-  /* Demo-only. Scratching a tile here reveals the sample, spends nothing, and resets when the screen is
-     left — it exists to show what a coin buys, not to hand one over. */
-  const [demo, setDemo] = useState({ grade: false, initial: false });
+  const activate = useActivateInfiniteAura();
 
-  const gradeCost = shop?.clueGradeCost ?? 1;
-  const initialCost = shop?.clueInitialCost ?? 1;
-
+  const flips = shop?.dailyFlips ?? 2;
   // Already a member: this screen has nothing to sell, so send them to where the state is shown.
   const member = !!shop?.infiniteAura;
 
@@ -61,56 +57,25 @@ export default function InfiniteAura() {
           Aura
         </Text>
         <Text className="font-nunito-700 mt-2 text-[15px] leading-[21px] text-ink-secondary">
-          Every clue on every flame, as many as you want — and their first name.
+          {flips} flips a day. Each one turns a card over and keeps the name.
         </Text>
 
-        {/* The ladder, as a scratch card. */}
-        <View className="mt-4">
-          <ToyShadow depth={6} shadowColor="#D9C7AF" backgroundColor="#FFF6E8" radius={26}>
-            <View className="p-4">
-              <Text className="font-nunito-900 text-[11.5px]" style={{ color: '#8B888D' }}>
-                {SAMPLE.poll}
-              </Text>
-              {/* The two priced rungs are real, tappable scratch tiles rather than pictures of them.
-
-                  Nothing is charged here — `demo` is local state and no mutation fires. That's the point:
-                  the pitch is the feeling of the thing, and letting someone scratch one before paying
-                  demonstrates it far better than a still image of foil. Tapping a tile on a paywall must
-                  never take money, so the handler deliberately does nothing but flip local state. */}
-              <View className="mt-3 gap-2">
-                <View className="flex-row gap-2">
-                  <ClueTile tone="free" caption="WHO" emoji="👧" value={SAMPLE.who} badge="FREE" />
-                  <ScratchTile
-                    open={demo.grade}
-                    label="GRADE|SCRATCH IT OFF"
-                    seed={4}
-                    cost={gradeCost}
-                    onScratch={() => setDemo(d => ({ ...d, grade: true }))}
-                  >
-                    <ClueFace tone="grade" caption="GRADE" emoji="🎓" value={SAMPLE.grade} />
-                  </ScratchTile>
-                </View>
-                <View className="flex-row gap-2">
-                  <ScratchTile
-                    open={demo.initial}
-                    label="INITIAL|SCRATCH IT OFF"
-                    seed={19}
-                    cost={initialCost}
-                    onScratch={() => setDemo(d => ({ ...d, initial: true }))}
-                  >
-                    <ClueFace tone="initial" caption="INITIAL" emoji="🔤" value={SAMPLE.initial} />
-                  </ScratchTile>
-                  <ClueTile tone="infinite" caption="FIRST NAME" emoji="🙋" value={SAMPLE.name} badge="INFINITE" />
-                </View>
-              </View>
-            </View>
-          </ToyShadow>
+        {/* Before and after, side by side. The whole product in one row: what everybody sees, and what
+            a flip turns it into. Static — nothing here is tappable, because there is nothing to demo
+            any more and a paywall that looks like it opened a card would be lying about what it did. */}
+        <View className="mt-4 flex-row items-center gap-[10px]">
+          <SampleCard state="down" />
+          <View className="items-center" style={{ width: 26 }}>
+            <AuraIcon name="chevronRight" size={18} color="#6BF2C2" />
+          </View>
+          <SampleCard state="up" />
         </View>
 
         <View className="mt-4 gap-2">
-          <Benefit>Unlimited clues, no coins spent</Benefit>
-          <Benefit>First names on every flame you get</Benefit>
-          <Benefit>Works on the flames already sitting there</Benefit>
+          <Benefit>{`${flips} name reveals every day, back again tomorrow`}</Benefit>
+          <Benefit>Their grade comes with the name</Benefit>
+          <Benefit>Works on the cards already waiting for you</Benefit>
+          <Benefit>They never find out you flipped them</Benefit>
         </View>
 
         {/* Tiers without dollar amounts.
@@ -201,84 +166,59 @@ function Benefit({ children }: { children: string }) {
   );
 }
 
-/* A revealed rung. Mint for the free one, pink for the one only a member reaches — the same two colours
-   the rest of the app uses for "safe/included" and "the thing being sold". */
-function ClueTile({
-  tone,
-  caption,
-  emoji,
-  value,
-  badge
-}: {
-  tone: 'free' | 'infinite';
-  caption: string;
-  emoji: string;
-  value: string;
-  badge: string;
-}) {
-  const free = tone === 'free';
-  /* Square, matching the scratch tiles beside it. These carried a fixed 104pt height from before the
-     tiles became squares — the mint one got away with it because a plain View stretches to the row, but
-     the pink one is wrapped in a ToyShadow that doesn't, so it sat two-thirds height next to its
-     neighbours. All four tiles now derive their size the same way. */
-  const body = (
-    <View className="flex-1 items-center justify-center gap-[7px] px-[11px]" style={{ aspectRatio: 1 }}>
-      <Text className="font-nunito-900 text-[9.5px]" style={{ color: free ? '#12664C' : '#FFD6E9', letterSpacing: 0.6 }}>
-        {caption}
-      </Text>
-      <Text style={{ fontSize: 19 }}>{emoji}</Text>
-      <Text className="font-fredoka-700 text-[21px] leading-[23px]" style={{ color: free ? '#0A3B2C' : '#FFFFFF' }}>
-        {value}
-      </Text>
-      <Text className="font-nunito-900 text-[9px]" style={{ color: free ? '#12664C' : '#FFD6E9' }}>
-        {badge}
-      </Text>
-    </View>
-  );
-  if (free) {
+/* The two states of a card, drawn to match the real ones on the Aura tab.
+
+   Face down is the dark card with the sender's accent and their gender — what everyone gets for free.
+   Turned over is the cream card the app uses for good news, carrying the name, the grade and the
+   superlative. Deliberately the same shapes and colours as the live grid: a paywall that invents its
+   own illustration is selling something the app doesn't then deliver. */
+function SampleCard({ state }: { state: 'down' | 'up' }) {
+  const accent = '#FF5CA8'; // the sample sender is a girl; the real cards take this from her gender
+
+  if (state === 'down') {
     return (
-      <View className="flex-1 overflow-hidden rounded-22" style={{ backgroundColor: '#6BF2C2' }}>
-        {body}
+      <View
+        className="flex-1 items-center justify-center gap-[7px] px-[10px]"
+        style={{ height: 148, borderRadius: 18, backgroundColor: '#2C2A2D', borderWidth: 2.5, borderColor: accent }}
+      >
+        <View
+          className="items-center justify-center"
+          style={{ width: 40, height: 40, borderRadius: 99, backgroundColor: '#403E41' }}
+        >
+          <Text style={{ fontSize: 17 }}>🥵</Text>
+        </View>
+        <Text className="font-fredoka-700 text-[19px] leading-[21px]" style={{ color: accent }}>
+          {SAMPLE.who}
+        </Text>
       </View>
     );
   }
-  return (
-    <View className="flex-1 overflow-hidden rounded-22" style={{ backgroundColor: '#FF5CA8' }}>
-      {body}
-    </View>
-  );
-}
 
-/* What sits *under* the foil on a priced rung. Yellow for the grade, purple for the initial — 16A's
-   colours, and both distinct from the free tile's mint and the members-only pink, so the four squares
-   read as four different kinds of thing before any of them is opened. */
-function ClueFace({
-  tone,
-  caption,
-  emoji,
-  value
-}: {
-  tone: 'grade' | 'initial';
-  caption: string;
-  emoji: string;
-  value: string;
-}) {
-  const grade = tone === 'grade';
   return (
-    <View
-      className="flex-1 items-center justify-center gap-[7px] px-[11px]"
-      style={{ backgroundColor: grade ? '#FFD84D' : '#7C5CFF' }}
-    >
-      <Text className="font-nunito-900 text-[9.5px]" style={{ color: grade ? '#7A5A00' : '#D6CBFF', letterSpacing: 0.6 }}>
-        {caption}
-      </Text>
-      <Text style={{ fontSize: 19 }}>{emoji}</Text>
-      <Text
-        className="font-fredoka-700"
-        style={{ fontSize: grade ? 21 : 28, lineHeight: grade ? 23 : 30, color: grade ? '#3A2A00' : '#FFFFFF' }}
-      >
-        {value}
-      </Text>
+    <View className="flex-1">
+      <ToyShadow depth={5} shadowColor="#D9C7AF" backgroundColor="#FFF6E8" radius={18}>
+        <View className="items-center justify-center gap-[5px] px-[10px]" style={{ height: 143 }}>
+          <View
+            className="items-center justify-center"
+            style={{ width: 40, height: 40, borderRadius: 99, backgroundColor: accent }}
+          >
+            <Text className="font-fredoka-700 text-[18px] text-white">{SAMPLE.name.charAt(0)}</Text>
+          </View>
+          <Text className="font-fredoka-700 text-[19px] leading-[21px]" style={{ color: '#2D2A2E' }}>
+            {SAMPLE.name}
+          </Text>
+          <Text className="font-nunito-900 text-[10.5px]" style={{ color: '#6F6552', letterSpacing: 0.4 }}>
+            {SAMPLE.grade.toUpperCase()}
+          </Text>
+          <Text
+            className="font-nunito-900 text-[8.5px]"
+            numberOfLines={1}
+            style={{ color: '#A79B86', letterSpacing: 0.4 }}
+          >
+            {SAMPLE.poll.replace('🥵 ', '')}
+          </Text>
+        </View>
+      </ToyShadow>
     </View>
   );
 }

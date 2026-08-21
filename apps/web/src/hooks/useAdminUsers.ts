@@ -13,7 +13,7 @@ const USERS_QUERY = /* GraphQL */ `
       gender
       grade
       coins
-      godMode
+      infiniteAura
     }
   }
 `;
@@ -27,7 +27,7 @@ export type AdminUser = {
   gender: string | null;
   grade: string | null;
   coins: number;
-  godMode: boolean | null;
+  infiniteAura: boolean | null;
 };
 type Response = { users: AdminUser[] };
 

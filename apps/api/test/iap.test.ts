@@ -12,7 +12,7 @@ before(async () => {
 });
 after(async () => { await user.cleanup(); });
 
-const VALIDATE = 'mutation($tx:String!){ validateIap(signedTransaction:$tx){ godMode } }';
+const VALIDATE = 'mutation($tx:String!){ validateIap(signedTransaction:$tx){ infiniteAura } }';
 
 test('rejects a transaction that is not a 3-part JWS', async () => {
   const r = await callApi(VALIDATE, { tx: 'not-a-real-jws' }, user.token);

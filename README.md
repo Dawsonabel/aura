@@ -1,10 +1,10 @@
 # Aura
 
-Aura is a school-scoped social app for teens built around anonymous positivity. Each round, a student is shown a short set of compliment-style prompts ("Who has the best smile?", "Who would you want as a lab partner?") paired with a handful of classmates from their own school, and picks one — anonymously. The picks are never shown live; instead they accumulate as "flames" on the receiving student's profile, so what you see is just *that people picked you*, not who, turning a normal school day into a slow drip of anonymous validation instead of a popularity contest played out in public.
+Aura is a school-scoped social app for teens built around anonymous positivity. Each round, a student is shown a short set of compliment-style prompts ("Who has the best smile?", "Who would you want as a lab partner?") paired with a handful of classmates from their own school, and picks one — anonymously. The picks are never shown live; instead they accumulate as "auras" on the receiving student's profile, so what you see is just *that people picked you*, not who, turning a normal school day into a slow drip of anonymous validation instead of a popularity contest played out in public.
 
-The tension that drives engagement is curiosity about the "who": every flame is a small mystery. Students earn or buy **coins** and can spend them to reveal hints about an admirer (school, grade, a partial name) rather than their identity outright, and a paid **God Mode** tier unlocks stronger reveals and lets a student see more of who's been picking them. Underneath the fun mechanic sits a real safety surface, because the userbase skews to minors: every account is age-gated at sign-up, students can block or report anyone, and a full admin dashboard gives school/site moderators visibility into schools, poll content, individual votes, and filed reports.
+The tension that drives engagement is curiosity about the "who": every aura is a small mystery. A face-down card shows the poll and the sender's gender and grade for free; the **Infinite Aura** membership grants a daily allowance of "flips" that turn a card over and reveal the sender's name. **Coins** (earned by playing, or bought in packs) buy boosts and rerolls — never a name. Underneath the fun mechanic sits a real safety surface, because the userbase skews to minors: every account is age-gated at sign-up, students can block or report anyone, and a full admin dashboard gives school/site moderators visibility into schools, poll content, individual votes, and filed reports.
 
-Technically: a GraphQL backend on Cloudflare Workers (`apps/api`), a TanStack Start web app (`apps/web`) for students and admins, and a native Expo/React Native app (`apps/mobile`) for students, sharing a common GraphQL data layer (`packages/api-client`). Clerk handles auth (phone-number + SMS code), Neon Postgres is the database, and Upstash Redis backs rate limiting and ephemeral poll-round state.
+Technically: a GraphQL backend on Cloudflare Workers (`apps/api`), a TanStack Start web app (`apps/web`) — admin dashboard only, the consumer product ships in the native app — and a native Expo/React Native app (`apps/mobile`) for students, sharing a common GraphQL data layer (`packages/api-client`). Clerk handles auth (phone-number + SMS code), Neon Postgres is the database, and Upstash Redis backs rate limiting and ephemeral poll-round state.
 
 > Working in here with Claude Code? See [CLAUDE.md](CLAUDE.md) for environment gotchas (running
 > commands via `nix develop --command`), standing collaboration rules, and house conventions.
@@ -37,7 +37,7 @@ pnpm --filter @aura/mobile start   # apps/mobile has its own dev server (Expo)
 
 | Path | Purpose |
 |------|---------|
-| `apps/api` | GraphQL API (GraphQL Yoga) on Cloudflare Workers — schools/polls/votes/flames/friends/admin, Clerk auth, Neon Postgres, Upstash Redis |
+| `apps/api` | GraphQL API (GraphQL Yoga) on Cloudflare Workers — schools/polls/votes/auras/friends/admin, Clerk auth, Neon Postgres, Upstash Redis |
 | `apps/web` | Student + admin frontend, TanStack Start (SPA mode), TanStack Query, Clerk |
 | `apps/mobile` | Native student app, Expo + Expo Router, NativeWind, Clerk |
 | `packages/api-client` | Shared GraphQL data layer (`createGqlFetch`, query hooks) used by both `apps/web` and `apps/mobile` |
@@ -55,3 +55,5 @@ pnpm --filter web test  # apps/web only
 ## Admin dashboard
 
 Sign in with a Clerk identity whose `publicMetadata.role` is `"admin"` (and whose session token has the `role` custom claim configured — see the Clerk dashboard's Sessions settings) to land on `/admin` instead of the student app. Covers schools, users, poll questions, vote moderation, and safety reports.
+
+:)

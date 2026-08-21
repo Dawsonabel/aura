@@ -3,102 +3,90 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { Inbox } from './_app.inbox';
 
 const {
-  useFlamesMock,
-  markFlamesReadMock,
+  useAurasMock,
+  markAurasReadMock,
   useNotificationsMock,
   markNotificationsReadMock,
-  revealFlameMock,
-  revealFlameNameMock,
-  activateGodModeMutateMock
+  activateInfiniteAuraMutateMock
 } = vi.hoisted(() => ({
-  useFlamesMock: vi.fn(),
-  markFlamesReadMock: vi.fn(),
+  useAurasMock: vi.fn(),
+  markAurasReadMock: vi.fn(),
   useNotificationsMock: vi.fn(),
   markNotificationsReadMock: vi.fn(),
-  revealFlameMock: vi.fn(),
-  revealFlameNameMock: vi.fn(),
-  activateGodModeMutateMock: vi.fn()
+  activateInfiniteAuraMutateMock: vi.fn()
 }));
 
 vi.mock('@tanstack/react-router', () => ({ createFileRoute: () => (opts: unknown) => opts }));
-vi.mock('../hooks/useFlames', () => ({ useFlames: useFlamesMock }));
-vi.mock('../hooks/useMarkFlamesRead', () => ({ useMarkFlamesRead: () => ({ mutate: markFlamesReadMock }) }));
+vi.mock('../hooks/useAuras', () => ({ useAuras: useAurasMock }));
+vi.mock('../hooks/useMarkAurasRead', () => ({ useMarkAurasRead: () => ({ mutate: markAurasReadMock }) }));
 vi.mock('../hooks/useNotifications', () => ({ useNotifications: useNotificationsMock }));
 vi.mock('../hooks/useMarkNotificationsRead', () => ({ useMarkNotificationsRead: () => ({ mutate: markNotificationsReadMock }) }));
-vi.mock('../hooks/useRevealFlame', () => ({ useRevealFlame: () => ({ mutate: revealFlameMock, isError: false }) }));
-vi.mock('../hooks/useRevealFlameName', () => ({ useRevealFlameName: () => ({ mutate: revealFlameNameMock, isError: false }) }));
-vi.mock('../hooks/useActivateGodMode', () => ({ useActivateGodMode: () => ({ mutate: activateGodModeMutateMock, isError: false }) }));
+vi.mock('../hooks/useActivateInfiniteAura', () => ({ useActivateInfiniteAura: () => ({ mutate: activateInfiniteAuraMutateMock, isError: false }) }));
 
-const NAMED_FLAME = {
+/* Two states, matching the payload: a flipped card carries the name and grade, a face-down one carries
+   neither. The old fixtures also set `revealed`/`initial` for the clue ladder's middle rungs; there are
+   no middle rungs now. */
+const NAMED_AURA = {
   id: 'vote_1', emoji: '🔥', q: 'Best smile', color: '#000', gender: 'girl', grade: '10th',
-  revealed: true, godMode: false, unread: false, anonymous: false, initial: null, name: 'Sam Lee',
-  repeatAdmirer: false, pickCount: 1, ts: '2026-01-01T00:00:00Z'
+  infiniteAura: false, unread: false, anonymous: false, name: 'Sam Lee',
+  repeatAdmirer: false, pickCount: 1, ts: '2026-01-01T00:00:00Z', detailHidden: false
 };
-const HIDDEN_FLAME = { ...NAMED_FLAME, id: 'vote_2', revealed: false, name: null, q: 'Smartest' };
-const ANON_FLAME = { ...NAMED_FLAME, id: 'vote_3', anonymous: true, godMode: true, name: null, q: 'Funniest' };
+const HIDDEN_AURA = { ...NAMED_AURA, id: 'vote_2', name: null, grade: '', q: 'Smartest' };
+const ANON_AURA = { ...NAMED_AURA, id: 'vote_3', anonymous: true, infiniteAura: true, name: null, grade: '', q: 'Funniest' };
 
 beforeEach(() => {
-  useFlamesMock.mockReset();
-  markFlamesReadMock.mockReset();
+  useAurasMock.mockReset();
+  markAurasReadMock.mockReset();
   useNotificationsMock.mockReset();
   markNotificationsReadMock.mockReset();
-  revealFlameMock.mockReset();
-  revealFlameNameMock.mockReset();
-  activateGodModeMutateMock.mockReset();
+  activateInfiniteAuraMutateMock.mockReset();
   useNotificationsMock.mockReturnValue({ data: [] });
 });
 
 describe('Inbox', () => {
-  test('marks flames read on mount', () => {
-    useFlamesMock.mockReturnValue({ data: { flames: [], coins: 2, godMode: false, bonusRevealsLeft: 0 }, isLoading: false });
+  test('marks auras read on mount', () => {
+    useAurasMock.mockReturnValue({ data: { auras: [], coins: 2, infiniteAura: false }, isLoading: false });
     render(<Inbox />);
-    expect(markFlamesReadMock).toHaveBeenCalled();
+    expect(markAurasReadMock).toHaveBeenCalled();
   });
 
-  test('renders the empty state when there are no flames', () => {
-    useFlamesMock.mockReturnValue({ data: { flames: [], coins: 2, godMode: false, bonusRevealsLeft: 0 }, isLoading: false });
+  test('renders the empty state when there are no auras', () => {
+    useAurasMock.mockReturnValue({ data: { auras: [], coins: 2, infiniteAura: false }, isLoading: false });
     render(<Inbox />);
-    expect(screen.getByText(/No flames yet/)).toBeInTheDocument();
+    expect(screen.getByText(/No auras yet/)).toBeInTheDocument();
   });
 
-  test('renders named, hinted, and anonymous flame states correctly', () => {
-    useFlamesMock.mockReturnValue({
-      data: { flames: [NAMED_FLAME, HIDDEN_FLAME, ANON_FLAME], coins: 2, godMode: false, bonusRevealsLeft: 0 },
+  test('renders flipped, face-down and anonymous cards correctly', () => {
+    useAurasMock.mockReturnValue({
+      data: { auras: [NAMED_AURA, HIDDEN_AURA, ANON_AURA], coins: 2, infiniteAura: false },
       isLoading: false
     });
     render(<Inbox />);
     expect(screen.getByText(/From Sam Lee/)).toBeInTheDocument();
-    expect(screen.getByText(/Someone in/)).toBeInTheDocument();
+    expect(screen.getByText(/Girl picked you/)).toBeInTheDocument();
     expect(screen.getByText(/Anonymous/)).toBeInTheDocument();
   });
 
-  test('tapping a hidden flame and revealing a hint calls revealFlame', () => {
-    useFlamesMock.mockReturnValue({
-      data: { flames: [HIDDEN_FLAME], coins: 2, godMode: false, bonusRevealsLeft: 0 },
+  /* This screen is read-only now. Opening a card is a flip — a mobile flow with a daily allowance and a
+     paywall behind it — and apps/web is the admin dashboard, so it shows state and offers no way to
+     spend anything. The two tests that used to click "Reveal a hint" and "Reveal their full name" went
+     with the buttons; this one pins that no such affordance came back. */
+  test('a face-down card offers no way to open it', () => {
+    useAurasMock.mockReturnValue({
+      data: { auras: [HIDDEN_AURA], coins: 2, infiniteAura: false },
       isLoading: false
     });
     render(<Inbox />);
     fireEvent.click(screen.getByText('Smartest'));
-    fireEvent.click(screen.getByText('Reveal a hint · 🪙 1'));
-    expect(revealFlameMock).toHaveBeenCalledWith('vote_2');
+    expect(screen.getByText(/Face down/)).toBeInTheDocument();
+    expect(screen.queryByText(/Reveal/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/🪙/)).not.toBeInTheDocument();
   });
 
-  test('God Mode user with a repeat admirer and bonus reveals left can reveal the full name', () => {
-    const repeatFlame = { ...HIDDEN_FLAME, revealed: true, godMode: true, repeatAdmirer: true, pickCount: 2 };
-    useFlamesMock.mockReturnValue({
-      data: { flames: [repeatFlame], coins: 2, godMode: true, bonusRevealsLeft: 1 },
-      isLoading: false
-    });
-    render(<Inbox />);
-    fireEvent.click(screen.getByText('Smartest'));
-    fireEvent.click(screen.getByText(/Reveal their full name/));
-    expect(revealFlameNameMock).toHaveBeenCalledWith('vote_2');
-  });
-
-  test('"See Who Likes You" opens the God Mode overlay', () => {
-    useFlamesMock.mockReturnValue({ data: { flames: [], coins: 2, godMode: false, bonusRevealsLeft: 0 }, isLoading: false });
+  test('"See Who Likes You" opens the Infinite Aura overlay', () => {
+    useAurasMock.mockReturnValue({ data: { auras: [], coins: 2, infiniteAura: false }, isLoading: false });
     render(<Inbox />);
     fireEvent.click(screen.getByText('👀 See Who Likes You'));
-    expect(screen.getByText('GOD MODE')).toBeInTheDocument();
+    expect(screen.getByText('INFINITE AURA')).toBeInTheDocument();
   });
 });

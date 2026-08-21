@@ -21,7 +21,7 @@ beforeEach(() => {
 
 describe('useAdminUsers', () => {
   test('fetches users, passing the schoolId filter through', async () => {
-    const users = [{ id: 'usr_1', schoolId: 'sch_1', firstName: 'Alex', lastName: 'Kim', username: 'alexk', gender: 'girl', grade: '10', coins: 2, godMode: false }];
+    const users = [{ id: 'usr_1', schoolId: 'sch_1', firstName: 'Alex', lastName: 'Kim', username: 'alexk', gender: 'girl', grade: '10', coins: 2, infiniteAura: false }];
     gqlFetchMock.mockResolvedValue({ users });
 
     const { result } = renderHook(() => useAdminUsers('sch_1'), { wrapper });

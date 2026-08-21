@@ -9,13 +9,13 @@ const ADMIN_STATS_QUERY = /* GraphQL */ `
       users
       polls
       votes
-      godMode
+      infiniteAura
       reports
     }
   }
 `;
 
-export type AdminStats = { schools: number; users: number; polls: number; votes: number; godMode: number; reports: number };
+export type AdminStats = { schools: number; users: number; polls: number; votes: number; infiniteAura: number; reports: number };
 type Response = { adminStats: AdminStats };
 
 /* Doubles as the "am I admin" signal used throughout the admin dashboard: this query is

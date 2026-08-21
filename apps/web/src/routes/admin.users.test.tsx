@@ -24,7 +24,7 @@ vi.mock('../hooks/useAdminDeleteUser', () => ({ useAdminDeleteUser: () => ({ mut
 const SCHOOL = { id: 'sch_1', name: 'Test High', city: 'Testville' };
 const STUDENT = {
   id: 'usr_1', schoolId: 'sch_1', firstName: 'Alex', lastName: 'Kim', username: 'alexk',
-  gender: 'girl', grade: '10', coins: 2, godMode: false
+  gender: 'girl', grade: '10', coins: 2, infiniteAura: false
 };
 
 beforeEach(() => {
@@ -51,10 +51,10 @@ describe('Users (admin)', () => {
     expect(screen.queryByText('Alex Kim')).not.toBeInTheDocument();
   });
 
-  test('toggling God Mode calls adminUpdateUser', () => {
+  test('toggling Infinite Aura calls adminUpdateUser', () => {
     render(<Users />);
     fireEvent.click(screen.getByRole('checkbox'));
-    expect(updateUserMutateMock).toHaveBeenCalledWith({ id: 'usr_1', godMode: true });
+    expect(updateUserMutateMock).toHaveBeenCalledWith({ id: 'usr_1', infiniteAura: true });
   });
 
   test('editing coins on blur calls adminUpdateUser', () => {

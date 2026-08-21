@@ -21,7 +21,7 @@ beforeEach(() => {
 
 describe('useAdminStats', () => {
   test('fetches admin stats with the Clerk token', async () => {
-    const stats = { schools: 2, users: 10, polls: 4, votes: 30, godMode: 1, reports: 0 };
+    const stats = { schools: 2, users: 10, polls: 4, votes: 30, infiniteAura: 1, reports: 0 };
     gqlFetchMock.mockResolvedValue({ adminStats: stats });
 
     const { result } = renderHook(() => useAdminStats(), { wrapper });

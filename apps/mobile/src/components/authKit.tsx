@@ -85,19 +85,31 @@ export function AuthBrand({
 }
 
 /** Welcome hero: `surface` card with a rotated yellow sticker badge breaking its top edge. */
-export function AuthHero({ badge, title, body }: { badge: string; title: string; body: string }) {
+/* The badged card at the top of the welcome screen. It used to own a headline and a body; both are
+   gone — the wordmark is the whole card now — so it takes children instead of copy props. The badge
+   is still its own argument because it's the one piece of chrome that's always there, and it hangs
+   off the corner rather than sitting in the flow.
+
+   `centerY` fills the card's height and centres the children in it, which is what lets the card
+   absorb the space the standalone wordmark used to occupy above it. */
+export function AuthHero({ badge, centerY = false, children }: { badge: string; centerY?: boolean; children: ReactNode }) {
   return (
-    <View className="mt-[26px] rounded-26 bg-surface px-5 py-[22px]" style={{ position: 'relative' }}>
+    <View
+      /* The centred variant runs tight to the wordmark. The padding is the only thing setting this
+         card's height, and every point of it is one the tiles below don't get — they're flex-1, so
+         whatever this card doesn't take, they do. */
+      className={`mt-[26px] rounded-26 bg-surface px-5 ${centerY ? 'items-center justify-center py-[18px]' : 'py-[22px]'}`}
+      style={{ position: 'relative' }}
+    >
       <View
         className="rounded-pill bg-yellow px-3 py-[5px]"
-        style={{ position: 'absolute', top: -14, left: 20, transform: [{ rotate: '-3deg' }] }}
+        style={{ position: 'absolute', top: -14, left: 20, transform: [{ rotate: '-3deg' }], zIndex: 1 }}
       >
         <Text className="font-nunito-900 text-[12px]" style={{ color: '#3A2A00' }}>
           {badge}
         </Text>
       </View>
-      <Text className="font-fredoka-700 text-[33px] leading-[36px] text-white">{title}</Text>
-      <Text className="font-nunito-700 mt-[9px] text-[13.5px] leading-[19px] text-ink-muted">{body}</Text>
+      {children}
     </View>
   );
 }

@@ -26,9 +26,13 @@ vi.mock('@clerk/tanstack-react-start', () => ({ useAuth: () => ({ getToken: vi.f
 vi.mock('../lib/graphql', () => ({ gqlFetch: gqlFetchMock }));
 vi.mock('../hooks/useMe', () => ({ useMe: useMeMock }));
 
+/* `answeredQuestionIds` is non-nullable in the schema, so a real server always sends it — the hook
+   reads it to open a resumed round on the first question actually left to play. Empty here: this mock
+   is a fresh round, and every test below starts from its first poll. */
 const ROUND = {
   roundId: 'rnd_1',
   canPlay: true,
+  answeredQuestionIds: [],
   polls: [
     { questionId: 'pol_1', emoji: '🔥', text: 'Best smile', color: '#000', choices: [{ id: 'usr_a', name: 'Alex', boosted: null }, { id: 'usr_b', name: 'Bailey', boosted: null }] },
     { questionId: 'pol_2', emoji: '🧠', text: 'Smartest', color: '#000', choices: [{ id: 'usr_a', name: 'Alex', boosted: null }, { id: 'usr_b', name: 'Bailey', boosted: null }] }
@@ -38,7 +42,7 @@ const ROUND = {
 beforeEach(() => {
   gqlFetchMock.mockReset();
   useMeMock.mockReset();
-  useMeMock.mockReturnValue({ data: { godMode: false } });
+  useMeMock.mockReturnValue({ data: { infiniteAura: false } });
   gqlFetchMock.mockImplementation((query: string) => {
     if (query.includes('query PollRound')) return Promise.resolve({ pollRound: ROUND });
     if (query.includes('mutation Vote')) return Promise.resolve({ vote: { ok: true, dup: false } });

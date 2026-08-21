@@ -30,8 +30,8 @@ test('admin-gated queries and mutations reject a regular student token', async (
 });
 
 test('adminStats reflects current counts with the right shape', async () => {
-  const r = await callApi('{ adminStats { schools users polls votes godMode reports } }', undefined, admin.token);
-  for (const k of ['schools', 'users', 'polls', 'votes', 'godMode', 'reports']) {
+  const r = await callApi('{ adminStats { schools users polls votes infiniteAura reports } }', undefined, admin.token);
+  for (const k of ['schools', 'users', 'polls', 'votes', 'infiniteAura', 'reports']) {
     assert.equal(typeof r.body.data.adminStats[k], 'number');
   }
 });
@@ -109,12 +109,12 @@ test('users: list (optionally scoped to a school), admin-update, admin-delete', 
   assert.ok(unscoped.body.data.users.some((u: any) => u.id === student.userId));
 
   const updated = await callApi(
-    'mutation($id:ID!,$coins:Int,$godMode:Boolean){ adminUpdateUser(id:$id, coins:$coins, godMode:$godMode){ coins godMode } }',
-    { id: kid.userId, coins: 999, godMode: true },
+    'mutation($id:ID!,$coins:Int,$infiniteAura:Boolean){ adminUpdateUser(id:$id, coins:$coins, infiniteAura:$infiniteAura){ coins infiniteAura } }',
+    { id: kid.userId, coins: 999, infiniteAura: true },
     admin.token
   );
   assert.equal(updated.body.data.adminUpdateUser.coins, 999);
-  assert.equal(updated.body.data.adminUpdateUser.godMode, true);
+  assert.equal(updated.body.data.adminUpdateUser.infiniteAura, true);
 
   const del = await callApi('mutation($id:ID!){ adminDeleteUser(id:$id) }', { id: kid.userId }, admin.token);
   assert.equal(del.body.data.adminDeleteUser, true);

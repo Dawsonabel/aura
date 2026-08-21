@@ -1,8 +1,0 @@
-import { useAuth } from '@clerk/tanstack-react-start';
-import { useRevealFlame as useSharedRevealFlame } from '@aura/api-client';
-import { gqlFetch } from '../lib/graphql';
-
-export function useRevealFlame() {
-  const { getToken } = useAuth();
-  return useSharedRevealFlame({ gqlFetch, getToken });
-}

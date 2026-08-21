@@ -12,11 +12,11 @@ import { AuraIcon, type AuraIconName } from '../../src/components/AuraIcon';
 /* 7A's notification settings — the destination 6A's "Notifications" row never had.
 
    Defaults matter here: a preference the user has never touched comes back null, and the server's
-   sender treats null as its own default (flames/rounds on, friend-joined off). Rendering null as
+   sender treats null as its own default (auras/rounds on, friend-joined off). Rendering null as
    "off" would show a switch that contradicts what actually gets sent, so the fallbacks below mirror
    push.ts exactly. */
 
-const DEFAULTS = { notifyFlames: true, notifyRound: true, notifyFriendJoined: false, quietHours: true };
+const DEFAULTS = { notifyAuras: true, notifyRound: true, notifyFriendJoined: false, quietHours: true };
 
 type PrefKey = keyof typeof DEFAULTS;
 
@@ -112,8 +112,8 @@ export default function NotificationSettings() {
             icon="aura"
             label="Someone picked you"
             sub="The moment someone picks you"
-            on={valueOf('notifyFlames')}
-            onPress={() => toggle('notifyFlames')}
+            on={valueOf('notifyAuras')}
+            onPress={() => toggle('notifyAuras')}
           />
           <PrefRow
             icon="ballot"

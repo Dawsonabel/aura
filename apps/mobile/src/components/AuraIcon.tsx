@@ -29,6 +29,10 @@ const PATHS = {
   // fire, not a candle: two tongues off a wide base
   flame:
     '<path d="M12.4 2.4c.4 2.9 1.9 4.2 3.5 5.9 1.6 1.7 2.5 3.4 2.5 5.4a6.4 6.4 0 0 1-12.8 0c0-1.8.7-3.4 2-4.8.2 1.2.8 2 1.7 2.4C9.7 8 10.9 5.4 12.4 2.4Z"/><path d="M12 13.2c1.4 1.2 2.1 2.1 2.1 3.2a2.1 2.1 0 0 1-4.2 0c0-1.1.7-2 2.1-3.2Z"/>',
+  /* The currency. One closed outline rather than a filled slab, so it reads as drawn chrome like the
+     rest of the set and carries the same 2.2 stroke. `coin` below is the retired glyph — kept until
+     nothing references it, same as any other icon nobody draws any more. */
+  bolt: '<path d="M13.4 2.8 6.6 13.2h4.6l-.6 8 6.8-10.4h-4.6Z"/>',
   // filled disc with the C and bar knocked out (mask, so the cut is truly transparent)
   coin: '<mask id="auraCoinCut"><rect width="24" height="24" fill="#fff"/><g fill="none" stroke="#000" stroke-width="%W%" stroke-linecap="round"><path d="M14.6 8.9a4.2 4.2 0 1 0 0 6.2"/><path d="M12 6.1v11.8"/></g></mask><circle cx="12" cy="12" r="9" fill="%C%" stroke="none" mask="url(#auraCoinCut)"/>',
   coins:
@@ -110,9 +114,16 @@ export type AuraIconProps = {
   size?: number;
   color?: string;
   weight?: number;
+  /* Fills the glyph with its own colour instead of leaving it an outline.
+
+     For counters, where the same mark has to read as "you have this" and "you spent it" at a glance.
+     A colour change alone is weak at 34pt against a dark ground; solid-versus-hollow carries across
+     the room. Only meaningful on closed shapes — an outline-only glyph like `search` fills into a
+     blob. Sub-elements that set their own fill (the coin's disc, the dice pips) are unaffected. */
+  filled?: boolean;
 };
 
-export function AuraIcon({ name, size = 24, color = '#FFFFFF', weight = ICON_WEIGHT }: AuraIconProps) {
+export function AuraIcon({ name, size = 24, color = '#FFFFFF', weight = ICON_WEIGHT, filled = false }: AuraIconProps) {
   /* Memoised because SvgXml re-parses the markup whenever the string identity changes, and these sit
      in list rows and the tab bar — every Inbox row would otherwise re-parse its icon on each render.
      Colour and weight are almost always constant per call site, so this is a near-permanent cache. */
@@ -122,12 +133,12 @@ export function AuraIcon({ name, size = 24, color = '#FFFFFF', weight = ICON_WEI
        reroll price chip lost its "C" entirely and read as a plain disc. */
     const cut = Math.max(weight, (1.7 * 24) / size).toFixed(2);
     return (
-      `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" ` +
+      `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${filled ? color : 'none'}" stroke="${color}" ` +
       `stroke-width="${weight}" stroke-linecap="round" stroke-linejoin="round">` +
       PATHS[name].split('%C%').join(color).split('%W%').join(cut) +
       '</svg>'
     );
-  }, [name, size, color, weight]);
+  }, [name, size, color, weight, filled]);
 
   return <SvgXml xml={xml} width={size} height={size} />;
 }

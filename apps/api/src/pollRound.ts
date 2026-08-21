@@ -4,7 +4,7 @@
    instead of the manual 6h-prune loop the original needs. */
 import type { Db, User } from './db';
 import type { RoundStore } from './rounds';
-import { utcDay } from './streak';
+import { nextHour, utcHour } from './streak';
 import type { Tuning } from './tuning';
 
 export type RoundChoice = { id: string; name: string; grade?: string | null; boosted?: boolean };
@@ -12,9 +12,11 @@ export type RoundPoll = { questionId: string; emoji: string; text: string; color
 export type BuiltRound = { roundId: string; polls: RoundPoll[]; canPlay: boolean; boostedInserts: number };
 export type ServedRound = BuiltRound & {
   roundsLeft: number;
-  dailyLimit: number;
+  roundsPerHour: number;
   nextRoundAt: string;
   rerollCost: number;
+  votePayout: number;
+  answeredQuestionIds: string[];
   roundPayout: number;
   followWeightFactor: number;
 };
@@ -42,7 +44,7 @@ export function notBlocked(a: User, b: User): boolean {
   const bb = (b.blocked as string[]) || [];
   return !ab.includes(b.id) && !bb.includes(a.id);
 }
-/* Exported because report resolution notifies the reporter too (8A: "You'll get a flame-style note
+/* Exported because report resolution notifies the reporter too (8A: "You'll get a aura-style note
    when it's closed"). Same 30-item cap and unread default as the round notifications. */
 export async function notify(db: Db, user: User, text: string, emoji: string): Promise<void> {
   const notifications = [
@@ -59,33 +61,31 @@ export async function notify(db: Db, user: User, text: string, emoji: string): P
    The numbers themselves live in tuning.ts and arrive as a parameter, so they can be changed from the
    Cloudflare dashboard without a deploy. */
 
-/* Candidate weighting. Following someone is a statement that you care who they are, so they should
-   turn up more often — but never *exclusively*, which is what the old `friends.length >= 4 ? friends :
-   mates` rule did. That rule had a cliff: your 4th follow silently replaced the entire school with four
-   people, and everyone below it saw pure strangers. Weights degrade smoothly instead.
+/* Candidate weighting. A friend is someone you both chose, so they should turn up more often — but
+   never *exclusively*, which is what the old `friends.length >= 4 ? friends : mates` rule did. That
+   rule had a cliff: your 4th friend silently replaced the entire school with four people, and everyone
+   below it saw pure strangers. Weights degrade smoothly instead.
 
-   The three numbers live in tuning.ts, because the People screen prints the ratio ("3× likelier to show
-   up in your four") and a constant here plus a literal there is two copies of one rule. */
+   One weight now, not two. Following was one-directional, so it had a stronger number for people you
+   followed and a weaker one for people who followed you — a friendship is symmetric and there is no
+   second case to price. Pending requests are worth nothing: a request you sent says something about
+   who you want to see, but honouring it would leak the request into their round as an unexplained
+   uptick in how often they see you.
+
+   The numbers live in tuning.ts, because the People screen prints the ratio ("3× likelier to show up
+   in your four") and a constant here plus a literal there is two copies of one rule. */
 function weightsFor(user: User, mates: User[], tuning: Tuning): { user: User; weight: number }[] {
-  const following = new Set((user.following as string[]) || []);
-  /* Followers count too, but less: someone following you is a weaker signal about who *you* want to
-     see than someone you chose to follow. Read from their row rather than a stored follower list, so
-     there's one source of truth for the edge. */
-  const followsMe = new Set(mates.filter(m => ((m.following as string[]) || []).includes(user.id)).map(m => m.id));
+  const friends = new Set((user.friends as string[]) || []);
   return mates.map(m => ({
     user: m,
-    weight: following.has(m.id)
-      ? tuning.weightFollowing
-      : followsMe.has(m.id)
-        ? tuning.weightFollower
-        : tuning.weightSchoolmate
+    weight: friends.has(m.id) ? tuning.weightFriend : tuning.weightSchoolmate
   }));
 }
 
-/** How many times likelier a followed classmate is than a stranger — the number the People copy prints. */
+/** How many times likelier a friend is than a stranger — the number the People copy prints. */
 export function followWeightFactor(tuning: Tuning): number {
-  if (tuning.weightSchoolmate <= 0) return tuning.weightFollowing;
-  return Math.max(1, Math.round(tuning.weightFollowing / tuning.weightSchoolmate));
+  if (tuning.weightSchoolmate <= 0) return tuning.weightFriend;
+  return Math.max(1, Math.round(tuning.weightFriend / tuning.weightSchoolmate));
 }
 
 /** Four distinct people, sampled with the weights above. */
@@ -157,7 +157,7 @@ export async function buildRound(db: Db, rounds: RoundStore, user: User, tuning:
 
   await Promise.all(decrements.map(id => db.decrementBoost(id)));
 
-  if (boostedInserts > 0 && user.godMode) {
+  if (boostedInserts > 0 && user.infiniteAura) {
     const n = boosters_used.size;
     await notify(db, user, n > 1 ? `${n} people added themselves to your polls 👀` : 'Someone added themselves to your polls 👀', '👑');
   }
@@ -181,37 +181,49 @@ export async function rerollChoices(db: Db, user: User, exclude: string[], tunin
   return weightedPick(weightsFor(user, mates, tuning), 4).map(c => toChoice(c));
 }
 
-/** Next UTC midnight — when the daily allowance refills. */
-function nextMidnight(now = new Date()): string {
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString();
-}
-
 /* What the Vote screen actually asks for.
 
    Three outcomes, in priority order:
-     1. An unfinished round from today  -> resume it, unchanged.
-     2. Allowance remaining             -> build a new one and count it.
-     3. Out of rounds                   -> no polls, and when they come back.
+     1. An unfinished round from this hour -> resume it, unchanged.
+     2. Allowance remaining                -> build a new one and count it.
+     3. Out of rounds                      -> no polls, and when they come back.
 
-   Resuming first is what makes the daily count honest. Before rounds were resumable, every mount of
-   the Vote screen built a fresh one, so *any* per-day limit would have been spent by navigating rather
-   than by playing — three taps on the tab and you'd be done for the day. */
+   Resuming first is what makes the count honest. Before rounds were resumable, every mount of the Vote
+   screen built a fresh one, so *any* limit would have been spent by navigating rather than by playing —
+   a few taps on the tab and you'd be done.
+
+   The period is an hour (see roundsPerHour in tuning.ts). `roundsOn` holds the hour key the count
+   belongs to and a mismatch resets it, so nothing has to run on the hour. The old daily fields
+   (`roundsPlayedOn`, `roundsToday`) are no longer read; a user carrying them simply starts this hour
+   at zero, which is the correct answer anyway. */
 export async function servedRound(db: Db, rounds: RoundStore, user: User, tuning: Tuning): Promise<ServedRound> {
-  const today = utcDay();
-  const sameDay = user.roundsPlayedOn === today;
-  const used = sameDay ? (user.roundsToday as number) || 0 : 0;
+  const hour = utcHour();
+  const sameHour = user.roundsOn === hour;
+  const used = sameHour ? (user.roundsInHour as number) || 0 : 0;
   const meta = {
-    dailyLimit: tuning.dailyRoundLimit,
-    nextRoundAt: nextMidnight(),
+    roundsPerHour: tuning.roundsPerHour,
+    nextRoundAt: nextHour(),
     rerollCost: tuning.rerollCost,
-    // Same branch completeRound pays out on, so the sheet's "earns N" matches what actually lands.
-    roundPayout: user.godMode ? tuning.roundPayoutGodMode : tuning.roundPayout,
+    votePayout: tuning.votePayout,
     followWeightFactor: followWeightFactor(tuning)
   };
 
-  const currentId = sameDay ? (user.currentRoundId as string | null) : null;
+  /* What a *finished* round is worth end to end — every question's per-vote payout plus the completion
+     bonus. 14A's "can't afford" sheet leads with "Finish this round · earns N", and it's shown to
+     someone who hasn't started voting, so N has to be the whole round rather than whichever half is
+     left to collect.
+
+     Counted off the round's *actual* length, not questionsPerRound. A round is capped at that dial but
+     can be shorter — it only ever contains polls that exist and are enabled — so a school with six
+     questions running against a cap of ten would have been promised four votes' worth of pay that the
+     round had no questions to give. The dial is the ceiling; the round is the fact. */
+  const bonus = user.infiniteAura ? tuning.roundBonusInfiniteAura : tuning.roundBonus;
+  const payoutFor = (questionCount: number) => tuning.votePayout * questionCount + bonus;
+
+  /* Resumable only within the hour that built it. A round left half-finished when the clock rolls is
+     abandoned rather than resumed — the allowance it was drawn against has already been refilled, so
+     resuming it would hand out the old round *and* a new one. */
+  const currentId = sameHour ? (user.currentRoundId as string | null) : null;
   if (currentId) {
     const existing = await rounds.get(currentId);
     const unfinished =
@@ -222,14 +234,16 @@ export async function servedRound(db: Db, rounds: RoundStore, user: User, tuning
         polls: existing.polls,
         canPlay: existing.polls.length > 0,
         boostedInserts: 0,
-        roundsLeft: Math.max(0, tuning.dailyRoundLimit - used),
+        roundsLeft: Math.max(0, tuning.roundsPerHour - used),
+        roundPayout: payoutFor(existing.polls.length),
+        answeredQuestionIds: existing.votedQ,
         ...meta
       };
     }
   }
 
-  if (used >= tuning.dailyRoundLimit) {
-    return { roundId: '', polls: [], canPlay: false, boostedInserts: 0, roundsLeft: 0, ...meta };
+  if (used >= tuning.roundsPerHour) {
+    return { roundId: '', polls: [], canPlay: false, boostedInserts: 0, roundsLeft: 0, roundPayout: payoutFor(tuning.questionsPerRound), answeredQuestionIds: [], ...meta };
   }
 
   const built = await buildRound(db, rounds, user, tuning);
@@ -237,14 +251,14 @@ export async function servedRound(db: Db, rounds: RoundStore, user: User, tuning
   /* A round with no polls doesn't count against the allowance.
 
      It used to. A school with no questions enabled still got a round built — an empty one — and the
-     counter incremented anyway, so three visits to the Vote tab at such a school spent the whole day
-     and the screen switched from "no questions set up yet" to "that's your three", which was false
-     twice over: nothing had been played, and nothing could be. Charging for an empty round is the
-     same error as the pre-resumable version charging for a mount. */
+     counter incremented anyway, so visiting the Vote tab at such a school spent the allowance and the
+     screen switched from "no questions set up yet" to "that's your round", which was false twice over:
+     nothing had been played, and nothing could be. Charging for an empty round is the same error as
+     the pre-resumable version charging for a mount. */
   if (built.polls.length === 0) {
-    return { ...built, roundsLeft: Math.max(0, tuning.dailyRoundLimit - used), ...meta };
+    return { ...built, roundsLeft: Math.max(0, tuning.roundsPerHour - used), roundPayout: payoutFor(tuning.questionsPerRound), answeredQuestionIds: [], ...meta };
   }
 
-  await db.updateUser(user.id, { roundsPlayedOn: today, roundsToday: used + 1, currentRoundId: built.roundId });
-  return { ...built, roundsLeft: Math.max(0, tuning.dailyRoundLimit - (used + 1)), ...meta };
+  await db.updateUser(user.id, { roundsOn: hour, roundsInHour: used + 1, currentRoundId: built.roundId });
+  return { ...built, roundsLeft: Math.max(0, tuning.roundsPerHour - (used + 1)), roundPayout: payoutFor(built.polls.length), answeredQuestionIds: [], ...meta };
 }

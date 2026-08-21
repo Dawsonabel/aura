@@ -19,20 +19,27 @@ export function utcDay(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
-/* Which "clue day" it is — the day key for 16A's one-free-tile-a-day rule.
+/* YYYY-MM-DDTHH in UTC — the round allowance's period key.
 
-   Not utcDay. The free tile is advertised as arriving "every day at 3pm", so the day it belongs to has
-   to roll over at that hour, not at UTC midnight. Keying it to midnight created a dead window: with the
-   drop at 20:00 UTC, a student in US Eastern had no free tile from 8pm until 4pm the next day — most of
-   their waking hours — because "today's" hadn't arrived yet and yesterday's key had already rolled.
-
-   Shifting the boundary instead of gating on the hour means there is always a current clue day, exactly
-   one free tile inside it, and the reset lands at the advertised time. It's also testable, which a
-   wall-clock hour check was not. */
-export function clueDay(hourUtc: number, now = new Date()): string {
-  const shifted = new Date(now.getTime() - hourUtc * 3600_000);
-  return utcDay(shifted);
+   Same shape as utcDay and used the same way: store the key alongside the count, compare on read, and
+   a mismatch means the period rolled and the count starts again. Nothing runs on the hour to reset
+   anything. */
+export function utcHour(now = new Date()): string {
+  return now.toISOString().slice(0, 13);
 }
+
+/** The instant the current hour ends — when the round allowance comes back. */
+export function nextHour(now = new Date()): string {
+  const d = new Date(now);
+  d.setUTCMinutes(0, 0, 0);
+  d.setUTCHours(d.getUTCHours() + 1);
+  return d.toISOString();
+}
+
+/* `clueDay` lived here — the day key for the one-free-scratch-tile-a-day rule, shifted off UTC
+   midnight so the reset landed at the advertised 3pm. The clue ladder is gone and nothing needs a
+   shifted day boundary any more: the flip allowance resets at UTC midnight like the streak, which is
+   what its copy says. */
 
 function dayBefore(day: string): string {
   const d = new Date(`${day}T00:00:00.000Z`);

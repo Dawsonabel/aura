@@ -20,14 +20,14 @@ export type BoardEntry = {
   userId: string;
   name: string;
   grade: string | null;
-  flames: number;
+  auras: number;
   blocked: boolean;
 };
 
 export type Board = {
   entries: BoardEntry[];
   me: BoardEntry | null;
-  flamesToTopTen: number | null;
+  aurasToTopTen: number | null;
   resetsAt: string;
   scope: BoardScope;
   /** People at the school, and the count it takes to unlock the board. */
@@ -37,15 +37,15 @@ export type Board = {
 };
 
 
-/* A public leaderboard needs a crowd to be a leaderboard. Below this, "most flames at your school" is
+/* A public leaderboard needs a crowd to be a leaderboard. Below this, "most auras at your school" is
    a ranking of nearly everybody who's joined — which is useless as social proof and actively unkind in
    a group small enough that everyone can infer who's who. So the board stays locked until the school
    reaches this many people, and the screen shows the progress instead.
 
-   Voting and flames deliberately keep working below it: the way a school reaches the threshold is the
+   Voting and auras deliberately keep working below it: the way a school reaches the threshold is the
    people already there using the app and inviting others, so locking the loop itself would be
    self-defeating. The small-school privacy problem is handled separately, by the anonymity floor in
-   flames.ts. The threshold itself is tuning.schoolUnlockThreshold. */
+   auras.ts. The threshold itself is tuning.schoolUnlockThreshold. */
 
 /** Start of the current UTC Sunday. */
 export function weekStart(now = new Date()): Date {
@@ -72,7 +72,7 @@ export async function boardFor(db: Db, user: User, scope: BoardScope, tuning: Tu
     unlockThreshold: tuning.schoolUnlockThreshold,
     unlocked: false
   };
-  const empty: Board = { entries: [], me: null, flamesToTopTen: null, ...base };
+  const empty: Board = { entries: [], me: null, aurasToTopTen: null, ...base };
   if (!user.schoolId) return empty;
 
   const memberCount = await db.countSchoolUsers(user.schoolId as string);
@@ -106,28 +106,28 @@ export async function boardFor(db: Db, user: User, scope: BoardScope, tuning: Tu
       // Rank and score survive; the name does not. Never the real name for a blocked row.
       name: blocked ? 'Blocked' : name || 'Someone',
       grade: blocked ? null : r.grade,
-      flames: r.flames,
+      auras: r.auras,
       blocked
     };
   });
 
   const mine = ranked.find(e => e.userId === user.id) ?? null;
 
-  /* "6 more flames cracks the top 10" — the gap to 10th place, +1 because matching 10th place on
+  /* "6 more auras cracks the top 10" — the gap to 10th place, +1 because matching 10th place on
      score doesn't overtake it (ties break on id, not in your favour). Null when the caller is
-     already inside the tier, or when the board has fewer than ten ranked people and any flame at all
+     already inside the tier, or when the board has fewer than ten ranked people and any aura at all
      is enough to get in. */
-  let flamesToTopTen: number | null = null;
+  let aurasToTopTen: number | null = null;
   const tenth = ranked[tuning.boardTopTier - 1];
   if (tenth && (!mine || mine.rank > tuning.boardTopTier)) {
-    flamesToTopTen = tenth.flames + 1 - (mine?.flames ?? 0);
+    aurasToTopTen = tenth.auras + 1 - (mine?.auras ?? 0);
   }
 
   return {
     entries: ranked.slice(0, tuning.boardLimit),
     // The caller's own row is pinned regardless of whether it made the returned slice.
     me: mine,
-    flamesToTopTen,
+    aurasToTopTen,
     ...base,
     memberCount,
     unlocked

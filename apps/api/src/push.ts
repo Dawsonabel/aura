@@ -10,12 +10,12 @@ import type { Db, User } from './db';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
-export type PushKind = 'flame' | 'round' | 'friendJoined';
+export type PushKind = 'aura' | 'round' | 'friendJoined';
 
 /* Which stored preference gates each kind, and what it defaults to when the user has never touched
-   it. Defaults mirror the design's own switch states: flames and rounds on, friend-joined off. */
+   it. Defaults mirror the design's own switch states: auras and rounds on, friend-joined off. */
 const PREFS: Record<PushKind, { field: string; fallback: boolean }> = {
-  flame: { field: 'notifyFlames', fallback: true },
+  aura: { field: 'notifyAuras', fallback: true },
   round: { field: 'notifyRound', fallback: true },
   friendJoined: { field: 'notifyFriendJoined', fallback: false }
 };
@@ -34,7 +34,7 @@ function prefEnabled(user: User, kind: PushKind): boolean {
    The server has no idea what timezone anyone is in, so the app sends its UTC offset along with the
    push token and it's stored beside it. A stored offset goes stale across a DST change, but the app
    re-registers on every launch, so it self-corrects within a session rather than drifting forever.
-   With no offset on file we do NOT suppress — silently dropping a flame is worse than sending one an
+   With no offset on file we do NOT suppress — silently dropping a aura is worse than sending one an
    hour early. */
 export function inQuietHours(user: User, now = new Date()): boolean {
   const enabled = (user as Record<string, unknown>).quietHours;
@@ -115,10 +115,10 @@ export async function sendRoundAnnouncement(db: Db): Promise<void> {
   }
 }
 
-/* The flame notification's text. Mirrors what the Inbox already reveals about a voter (gender and
-   grade) and nothing more: an anonymous God Mode voter stays anonymous here too, and the voter's
+/* The aura notification's text. Mirrors what the Inbox already reveals about a voter (gender and
+   grade) and nothing more: an anonymous Infinite Aura voter stays anonymous here too, and the voter's
    name never appears, because the notification can be read off a lock screen by anyone. */
-export function flameBody(voter: User, pollText: string, anonymous: boolean): string {
+export function auraBody(voter: User, pollText: string, anonymous: boolean): string {
   if (anonymous) return `Someone picked you for "${pollText}"`;
   const gender = String(voter.gender ?? '');
   const article =

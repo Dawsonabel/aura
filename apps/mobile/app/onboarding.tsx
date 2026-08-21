@@ -313,7 +313,7 @@ export default function Onboarding() {
       <AuthHeading
         marginTop={30}
         title="Last one"
-        subtitle={'When you pick someone, this is the first clue they get about you — "a girl in 11th picked you."'}
+        subtitle={'When you pick someone, this is all they see about you — "a girl picked you." Your name only ever comes out if they spend a flip on it.'}
       />
       <View className="mt-[22px] gap-[10px]">
         {GENDERS.map(g => (

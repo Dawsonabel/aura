@@ -45,6 +45,55 @@ go through `run_in_background: true` — don't let them eat the 120s foreground 
   third-party account state, etc.), verify what's actually knowable from code/docs first, then
   say plainly what's left for the user to do — don't fabricate that it's handled.
 
+## Naming: the app's vocabulary
+
+The Gas-era words are gone from this codebase. Use the current ones in code, comments, copy and
+GraphQL alike:
+
+| Say | Not |
+| --- | --- |
+| aura / auras (`Aura`, `useAuras`, `aurasFor`) | flame / flames |
+| Infinite Aura (`infiniteAura`) | God Mode / `godMode` |
+| Aura, the app | Gas |
+
+**Three exceptions, all deliberate — do not "finish the job" on these:**
+
+- **`flame` is an icon name and means streak.** It's a literal fire glyph sitting next to a separate
+  `aura` glyph in `AuraIcon`. Renaming it collides the two, *and it typechecks*, because
+  `AuraIconName` derives from the keys — so the key and every caller stay consistent while pointing
+  at the wrong drawing. Nothing else in the repo says "flame".
+- **`aura.godmode.weekly` / `aura.godmode.lifetime` are App Store product IDs** (`schema.ts`).
+  They're registered with Apple and attached to real purchases. Renaming them here doesn't rename
+  them in App Store Connect — it just stops matching incoming receipts, breaking every restore.
+- **`renameLegacyUserKeys` in `migrations.ts` must keep saying the old words**, because its job is to
+  find rows written under them. A repo-wide replace turns it into a statement that strips and re-adds
+  the same keys and migrates nothing, silently and with a green typecheck. (This happened during the
+  original rename.)
+
+`godMode`, `godModeExpires` and `notifyFlames` were **persisted JSONB keys**, migrated by
+`renameLegacyUserKeys`. `User` is `{ [key: string]: unknown }`, so the compiler cannot catch a missed
+JSONB key — it reads back `undefined`, which looks exactly like a user who never had the value. If
+you add a key to that blob, remember it is outside the type system.
+
+## UI copy: stop writing helper text
+
+**Default to no explanatory line.** Blake has cut these repeatedly — "gender is free, the name never
+is", "name locked" on every face-down card, "no cards from that group yet", "tap outside to close" —
+and the pattern behind every cut is the same: the line explained something the screen was already
+showing, and it cost layout to do it. The last one pushed the pager off its alignment.
+
+Before adding a caption, subtitle, hint or empty-state sentence, ask what it says that the controls and
+the data don't. If the answer is "it restates them", leave it out. An empty grid with a `0` on the chip
+you just tapped is already an empty state. A face-down card already looks face down.
+
+What *does* earn a line: something the user can't see and would otherwise get wrong — "They'll never
+know you flipped their card", "Names are stripped from anything you post", "NOTHING SPENT" on a blank
+reveal. Those carry a fact about consequences, not a description of the pixels.
+
+Same rule for headers. The Aura tab's "Your aura" title, its status subtitle and its INFINITE pill all
+came off for this reason: three elements and a fifth of the screen spent telling you which tab you had
+just tapped.
+
 ## React: Effects
 
 House rule, from an audit against https://react.dev/learn/you-might-not-need-an-effect:
@@ -108,4 +157,4 @@ House rule, from an audit against https://react.dev/learn/you-might-not-need-an-
 - **Admin dashboard is web-only by design.** `apps/web`'s `/admin` covers it; there's no plan to
   build a mobile admin UI (not a real need for a phone-sized screen).
 - **Mobile roadmap** (approved, phase-by-phase): 1) Foundation ✅ 2) Onboarding ✅
-  3) Main app shell + Aura (core voting loop) ✅ 4) Inbox/Flames 5) Add+/Profile/Shop+God Mode.
+  3) Main app shell + Aura (core voting loop) ✅ 4) Inbox/Auras 5) Add+/Profile/Shop+Infinite Aura.

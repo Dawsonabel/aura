@@ -40,7 +40,7 @@ describe('AdminLayout', () => {
 
   test('confirmed admin: renders the nav and outlet, does not navigate away', () => {
     useAuthMock.mockReturnValue({ isSignedIn: true });
-    useAdminStatsMock.mockReturnValue({ data: { schools: 1, users: 1, polls: 1, votes: 1, godMode: 0, reports: 0 }, isError: false });
+    useAdminStatsMock.mockReturnValue({ data: { schools: 1, users: 1, polls: 1, votes: 1, infiniteAura: 0, reports: 0 }, isError: false });
     render(<AdminLayout />);
     expect(screen.getByText('Aura Admin')).toBeInTheDocument();
     expect(screen.getByTestId('outlet')).toBeInTheDocument();

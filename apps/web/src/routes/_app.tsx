@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/rea
 import { useAuth } from '@clerk/tanstack-react-start';
 import { useEffect } from 'react';
 import { useMe } from '../hooks/useMe';
-import { useFlames } from '../hooks/useFlames';
+import { useAuras } from '../hooks/useAuras';
 import { TabHeader, type Tab } from '../components/TabHeader';
 
 export const Route = createFileRoute('/_app')({
@@ -24,8 +24,8 @@ function AppLayout() {
   const current = (pathname.split('/').pop() || 'aura') as Tab;
 
   // Fetched here (not just inside the Inbox route) so the header badge shows from any tab.
-  const { data: flames } = useFlames();
-  const unreadCount = flames?.flames.filter(f => f.unread).length ?? 0;
+  const { data: auras } = useAuras();
+  const unreadCount = auras?.auras.filter(f => f.unread).length ?? 0;
 
   return (
     <div className="flex min-h-screen flex-col">

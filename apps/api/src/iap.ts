@@ -1,7 +1,7 @@
 /* Apple In-App Purchase verification (StoreKit 2) — ported from root iap.js essentially as-is.
-   The iOS app buys God Mode via StoreKit 2 and sends the *signed transaction* (a JWS) to the
+   The iOS app buys Infinite Aura via StoreKit 2 and sends the *signed transaction* (a JWS) to the
    validateIap mutation. We verify it here, server-side, before granting the entitlement —
-   clients can never self-grant God Mode.
+   clients can never self-grant Infinite Aura.
 
    Verification steps (per Apple's JWS / App Store Server format):
      1. Parse the JWS header; it carries an x5c cert chain [leaf, intermediate, root].

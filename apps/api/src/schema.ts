@@ -1,15 +1,26 @@
 import { createSchema } from 'graphql-yoga';
-import type { Db, User } from './db';
+import { FRIEND_LISTS, type Db, type FriendList, type User } from './db';
 import type { RateLimiter } from './ratelimit';
 import type { RoundStore } from './rounds';
 import { buildRound, notBlocked, notify, rerollChoices, servedRound } from './pollRound';
-import { flameBody, sendPush } from './push';
-import { flamesFor } from './flames';
+import { auraBody, sendPush } from './push';
+import { aurasFor, flipState, friendActivityFor } from './auras';
 import { boardFor, type BoardScope } from './board';
-import { advanceStreak, clueDay, currentStreak, utcDay } from './streak';
+import { advanceStreak, currentStreak, utcDay } from './streak';
 import { superlativesFor } from './profile';
 import { verifySignedTransaction } from './iap';
 import { POLL_LIB } from './pollLibrary';
+import {
+  requireDevTools,
+  devResetFlips,
+  devSeedVotes,
+  devAnonymousVote,
+  devSeedFriendActivity,
+  devClearCards,
+  devGrantSparks,
+  devResetRounds,
+  devSetStreak
+} from './devTools';
 import type { Tuning } from './tuning';
 
 export interface Env {
@@ -20,13 +31,23 @@ export interface Env {
   ALLOWED_ORIGIN?: string; // apps/web's origin, for CORS — see index.ts. Unset in dev, falls back to localhost.
   REDIS_KEY_PREFIX?: string; // scopes Upstash keys per environment — see makeRateLimiter/makeRoundStore.
   APPLE_ROOT_CA?: string; // Apple's root cert PEM — see iap.ts. Unset in dev/sandbox (relaxed trust anchor).
-  GODMODE_PRODUCT_IDS?: string; // comma-separated StoreKit product IDs, mirrors server.js's GODMODE_PRODUCTS
+  INFINITE_AURA_PRODUCT_IDS?: string; // comma-separated StoreKit product IDs, mirrors server.js's INFINITE_AURA_PRODUCTS
   /* Gameplay/economy dials, all optional — see tuning.ts for the full list and defaults. Indexed
      rather than enumerated so adding a dial there doesn't need a matching edit here. */
   [tuningVar: string]: unknown;
 }
 
-const DEFAULT_GODMODE_PRODUCTS = 'aura.godmode.weekly,aura.godmode.lifetime';
+/* Deliberately still says "godmode", and must keep saying it.
+
+   These are App Store product identifiers — registered with Apple, attached to real purchases, and
+   immutable once created. They are an external contract that happens to contain a word this codebase
+   no longer uses anywhere else; renaming them here doesn't rename them in App Store Connect, it just
+   stops matching the `productId` on incoming receipts, which fails every restore and every renewal.
+
+   Left out of the Flame->Aura / God Mode->Infinite Aura sweep on purpose. If the naming ever has to
+   match, that's a new pair of products in App Store Connect plus both strings kept here for anyone
+   holding the old ones — not an edit to this line. */
+const DEFAULT_INFINITE_AURA_PRODUCTS = 'aura.godmode.weekly,aura.godmode.lifetime';
 
 const MIN_AGE = 13; // COPPA-safe floor — mirrors server.js's MIN_AGE exactly, same reasoning
 
@@ -53,9 +74,22 @@ export type GraphQLContext = {
   waitUntil: (p: Promise<unknown>) => void;
 };
 
-/** One accessor for the follow list, since it's read in a dozen places. */
-function followingOf(user: User): string[] {
-  return ((user.following as string[]) || []).filter(id => typeof id === 'string');
+/** One accessor per friend list, since each is read in a dozen places. */
+function idList(user: User, key: FriendList): string[] {
+  return ((user[key] as string[]) || []).filter(id => typeof id === 'string');
+}
+const friendsOf = (user: User) => idList(user, 'friends');
+
+/* Where the caller stands with someone. The only thing the friend graph exposes about another person,
+   and it's about the *pair*, never about them: it says whether you two are connected, not who else
+   they know or how many. */
+function friendStateOf(parent: User, me: User | null): string {
+  if (!me) return 'none';
+  if (parent.id === me.id) return 'self';
+  if (friendsOf(me).includes(parent.id)) return 'friends';
+  if (idList(me, 'requestsOut').includes(parent.id)) return 'sent';
+  if (idList(me, 'requestsIn').includes(parent.id)) return 'received';
+  return 'none';
 }
 
 function requireMe(ctx: GraphQLContext): User {
@@ -93,30 +127,27 @@ const typeDefs = /* GraphQL */ `
     age: Int
     onboarded: Boolean
     coins: Int
-    godMode: Boolean
-    # Who this user follows. One-directional and unapproved — following someone weights them into your
-    # polls, it doesn't grant them anything. "friendIds" is the retired mutual-friend field.
+    infiniteAura: Boolean
+    # Your friends. Mutual and approved: a request is sent, then accepted or denied, and only then does
+    # the edge exist. Replaces the old one-directional "following".
     #
-    # Only ever populated for yourself (or for an admin). 14A: "Nobody can see who you follow" — that
-    # promise is printed on the People screen, so the field enforces it rather than trusting callers
-    # not to select it on somebody else.
-    following: [ID!]
-    # Whether THIS user follows the caller. Viewer-relative, which is why it's a boolean rather than a
-    # readable list: 14A's "Follows you" group needs the single bit, and nothing more than that bit.
-    followsMe: Boolean!
-    # How many people follow you. **Only ever your own** — 0 for anyone else, same rule as "following".
-    # 14A bans follower counts because in a 200-person school a public one is a popularity score; your
-    # own is self-knowledge, and it's still a count, never a list of who.
-    followerCount: Int!
+    # **Only ever populated for yourself** (or for an admin), and there is deliberately no count field
+    # for anyone else either. In a 200-person school a visible friend list is a map of the social
+    # graph and a visible count is a popularity score; your own is self-knowledge. The field enforces
+    # that rather than trusting callers not to select it on somebody else.
+    friends: [ID!]
+    # Where you and this person stand, from the caller's side: "self" | "friends" | "sent" (you asked
+    # them) | "received" (they asked you) | "none". Viewer-relative and a single value, which is what
+    # lets the People screen draw the right button without ever reading anyone's list.
+    friendState: String!
     # Rounds ever completed. Drives the "✋ HOLD" teaching chip, which 14A retires after three rounds.
     roundsTotal: Int!
-    friendIds: [ID!]
     blocked: [ID!]
-    hideTopFlames: Boolean
+    hideTopAuras: Boolean
     photo: String
     # 7A notification preferences. Null means "never set", which the sender reads as its own default
-    # (flames/rounds on, friend-joined off) rather than as off — see PREFS in push.ts.
-    notifyFlames: Boolean
+    # (auras/rounds on, friend-joined off) rather than as off — see PREFS in push.ts.
+    notifyAuras: Boolean
     notifyRound: Boolean
     notifyFriendJoined: Boolean
     quietHours: Boolean
@@ -143,6 +174,18 @@ const typeDefs = /* GraphQL */ `
     ts: String!
     read: Boolean!
   }
+  # One friend of yours getting picked. Deliberately thin — see friendActivityFor in auras.ts.
+  # There is no superlative here and no field to put one in: what a friend was picked *for* is theirs
+  # to share, not yours to read. Gender is "private" whenever a card would have withheld it, and also
+  # whenever the voter has Infinite Aura.
+  type FriendActivityEvent {
+    id: ID!
+    ts: String!
+    friendId: ID!
+    # First name only.
+    friendName: String!
+    gender: String!
+  }
   type Suggestions {
     contacts: [User!]!
     fof: [User!]!
@@ -167,14 +210,24 @@ const typeDefs = /* GraphQL */ `
     polls: [RoundPoll!]!
     canPlay: Boolean!
     boostedInserts: Int!
-    # Rounds left today, out of dailyLimit, and when the allowance refills (next UTC midnight).
+    # Rounds left this hour, out of roundsPerHour, and when the allowance refills (the next UTC hour).
     # roundsLeft 0 with no polls is the "out of rounds" state.
     roundsLeft: Int!
-    dailyLimit: Int!
+    roundsPerHour: Int!
     nextRoundAt: String!
     # What a reroll costs, so the button can show a price without hardcoding one.
     rerollCost: Int!
-    # What finishing this round pays, God Mode rate included. 14A's "can't afford" sheet leads with
+    # What a single vote pays, so the "+1" that pops on each vote is the served number rather than a
+    # literal in the client — same rule as rerollCost above.
+    votePayout: Int!
+    # Questions already answered in this round.
+    #
+    # A resumed round hands back *all* of its polls, answered or not, so a client that opens at the
+    # first one lands on a question it has already voted on — where voting is a silent no-op and
+    # rerolling fails outright with "you already answered that one". The client uses this to open on
+    # the first question actually left to play.
+    answeredQuestionIds: [ID!]!
+    # What finishing this round pays, Infinite Aura rate included. 14A's "can't afford" sheet leads with
     # "Finish this round · earns N", and that N has to be the real one or the sheet is a lie.
     roundPayout: Int!
     # How many times likelier a followed classmate is to appear than a stranger. Served rather than
@@ -198,15 +251,9 @@ const typeDefs = /* GraphQL */ `
   # changes. The client shows the store's price next to these coin amounts.
   type Shop {
     coins: Int!
-    # Clue ladder: who is free, grade and initial are priced, the first name is Infinite Aura only.
-    clueGradeCost: Int!
-    clueInitialCost: Int!
-    # UTC hour the one free daily clue lands. 24 means the free clue is switched off.
-    freeClueHourUtc: Int!
-    # Whether the free tile is available *right now* — today's isn't spent and the hour has passed.
-    # Derived server-side because the client can't know either half reliably: it doesn't have the
-    # spent-marker, and trusting the device clock for the cutoff would let anyone claim it early.
-    freeClueReady: Boolean!
+    # Name reveals a member gets a day. Not a coin price — coins can never buy a name, which is the
+    # one thing Infinite Aura sells. Here so the Shop can say what the membership actually gives.
+    dailyFlips: Int!
     # EARN IT.
     roundPayout: Int!
     streakBonus: Int!
@@ -234,62 +281,64 @@ const typeDefs = /* GraphQL */ `
     earned: Int!
     already: Boolean
   }
-  type Flame {
+  type Aura {
     id: ID!
     emoji: String!
     q: String!
     color: String!
+    # Both free on every card — "a girl in 11th grade" is what a face-down card tells you. Blanked
+    # together when detailHidden is set (see below). The flip buys the name and only the name.
     gender: String!
     grade: String!
-    revealed: Boolean!
-    # 16A: the grade tile is bought separately. Until it is, the grade field above comes back empty.
-    gradeRevealed: Boolean!
-    godMode: Boolean!
+    infiniteAura: Boolean!
     unread: Boolean!
     anonymous: Boolean!
-    initial: String
+    # Null until flipped. The flip is the only thing that fills this in.
     name: String
     repeatAdmirer: Boolean!
     pickCount: Int!
     ts: String!
-    # True when gender/grade were withheld because too few people at the school share that cohort to
-    # keep the sender anonymous — see COHORT_FLOOR in flames.ts. Those fields are blanked in the
-    # payload too, so a client that ignores this flag still can't leak them.
+    # Whether you have already opened this card at full size. NOT the same as flipped: a protected
+    # sender's card and one you ran out of flips on can both be opened without ever turning over, and
+    # this is what lets the grid stop them looking untouched. Set by markAuraOpened.
+    opened: Boolean!
+    # True when gender and grade were withheld because too few people at the school share this
+    # sender's cohort — see the anonymity floor in auras.ts. Off by default. Both fields are blanked
+    # in the payload too, so a client that ignores this flag still can't leak them.
     detailHidden: Boolean!
   }
-  type FlamesResult {
-    flames: [Flame!]!
+  type AurasResult {
+    auras: [Aura!]!
     coins: Int!
-    godMode: Boolean!
-    bonusRevealsLeft: Int!
-    # Legacy — always 0. Infinite Aura gives unlimited first names, so there is no remaining count to
-    # report. Kept until the clients stop selecting it.
+    infiniteAura: Boolean!
     # Distinct people who picked you in the last 7 days — the Inbox subtitle's number. A count only:
     # deriving it server-side is what keeps voter ids out of the client while still letting the
-    # screen say "7 people" instead of "7 flames" (one person can send several).
+    # screen say "7 people" instead of "7 auras" (one person can send several).
     admirerCount: Int!
-  }
-  # 16A. usedFreeClue tells the client the daily free tile was spent rather than coins, so the balance
-  # not moving isn't mistaken for a failed charge.
-  type ClueResult {
-    ok: Boolean!
-    coins: Int!
-    usedFreeClue: Boolean!
-  }
-  type RevealResult {
-    ok: Boolean!
-    coins: Int!
+    # Name reveals left today, and the daily allowance they count down from. Zero for a non-member —
+    # the allowance is what Infinite Aura buys, so there is nothing to count down before that.
+    flipsLeft: Int!
+    flipsPerDay: Int!
   }
   type RevealNameResult {
     name: String!
-    bonusRevealsLeft: Int!
+    # Flips left after this one. Unchanged when the card was already open — reopening a reveal costs
+    # nothing.
+    flipsLeft: Int!
   }
   type CoinResult {
     coins: Int!
     message: String
   }
+  # What every dev tool returns. One shape for all of them because the client renders them all the
+  # same way — a line of text under the button that was just pressed. ok: false is a refusal the
+  # tester can act on (no classmates to vote for you, no enabled polls), not a server error.
+  type DevResult {
+    ok: Boolean!
+    message: String!
+  }
   type IapResult {
-    godMode: Boolean!
+    infiniteAura: Boolean!
     expired: Boolean
     expires: String
     environment: String
@@ -317,7 +366,6 @@ const typeDefs = /* GraphQL */ `
     emoji: String!
     text: String!
     color: String!
-    revealed: Boolean!
     unread: Boolean!
     ts: String!
     voterName: String!
@@ -342,22 +390,22 @@ const typeDefs = /* GraphQL */ `
     blockedAt: String
     reportOpen: Boolean!
   }
-  # 12A / README §5's Ranks board. A row's rank and flame count are always the true ones; only the
+  # 12A / README §5's Ranks board. A row's rank and aura count are always the true ones; only the
   # identity is masked when the caller has blocked that person (8A "Blocked on the board").
   type BoardEntry {
     rank: Int!
     userId: ID!
     name: String!
     grade: String
-    flames: Int!
+    auras: Int!
     blocked: Boolean!
   }
   type Board {
     entries: [BoardEntry!]!
-    # The caller's own pinned row — null when they have no flames in the window at all.
+    # The caller's own pinned row — null when they have no auras in the window at all.
     me: BoardEntry
-    # Flames needed to reach the top 10, or null when already there / nobody's ranked deep enough.
-    flamesToTopTen: Int
+    # Auras needed to reach the top 10, or null when already there / nobody's ranked deep enough.
+    aurasToTopTen: Int
     # When the weekly board resets (next UTC Sunday) — the countdown pill reads from this.
     resetsAt: String!
     scope: String!
@@ -383,7 +431,7 @@ const typeDefs = /* GraphQL */ `
     grade: String
     gender: String
     schoolName: String
-    flames: Int!
+    auras: Int!
     rank: Int
     superlatives: [Superlative!]!
     socials: Socials!
@@ -394,7 +442,7 @@ const typeDefs = /* GraphQL */ `
     users: Int!
     polls: Int!
     votes: Int!
-    godMode: Int!
+    infiniteAura: Int!
     reports: Int!
   }
   type Query {
@@ -422,11 +470,17 @@ const typeDefs = /* GraphQL */ `
     # Handle availability for the edit sheet. Case-insensitive; your own current handle counts as free.
     usernameAvailable(username: String!): Boolean!
     suggestions: Suggestions!
+    # Your own friends, and the people waiting on your answer. Both self-only by construction — there
+    # is no argument to ask for anybody else's.
     friends: [User!]!
+    friendRequests: [User!]!
     blocked: [User!]!
     notifications: [Notification!]!
     pollRound: PollRound!
-    flames: FlamesResult!
+    auras: AurasResult!
+    # Your friends' picks, for the Activity feed. Self-only — there is no argument to ask for anyone
+    # else's, the same as the friends field above.
+    friendActivity: [FriendActivityEvent!]!
     shop: Shop!
   }
   # Each field is tri-state: omitted leaves it alone, a handle sets it, null clears it.
@@ -449,15 +503,15 @@ const typeDefs = /* GraphQL */ `
     deleteVote(id: ID!): Boolean!
     resolveReport(id: ID!): Report
     adminUpdateUser(
-      id: ID!, schoolId: ID, grade: String, coins: Int, godMode: Boolean,
+      id: ID!, schoolId: ID, grade: String, coins: Int, infiniteAura: Boolean,
       firstName: String, lastName: String, username: String
     ): User
     adminDeleteUser(id: ID!): Boolean!
 
     updateMe(
       firstName: String, lastName: String, username: String, gender: String, grade: String,
-      age: Int, schoolId: ID, photo: String, onboarded: Boolean, hideTopFlames: Boolean,
-      notifyFlames: Boolean, notifyRound: Boolean, notifyFriendJoined: Boolean, quietHours: Boolean,
+      age: Int, schoolId: ID, photo: String, onboarded: Boolean, hideTopAuras: Boolean,
+      notifyAuras: Boolean, notifyRound: Boolean, notifyFriendJoined: Boolean, quietHours: Boolean,
       socials: SocialsInput
     ): User!
     # 7A: one device's Expo push token, plus its UTC offset so quiet hours can be evaluated in the
@@ -467,14 +521,15 @@ const typeDefs = /* GraphQL */ `
     deleteMe: Boolean!
     block(userId: ID!): [ID!]!
     unblock(userId: ID!): [ID!]!
-    # follow/unfollow are the real names; addFriend/removeFriend are kept as aliases so apps/web keeps
-    # working, and both write the same one-directional "following" list.
-    follow(userId: ID!): [ID!]!
-    unfollow(userId: ID!): [ID!]!
-    # 14A's "Follow all of 11th grade" row. One call rather than 86, and idempotent: people you already
-    # follow (or have blocked) are skipped, so tapping it twice is harmless.
-    followGrade(grade: String!): [ID!]!
-    addFriend(userId: ID!): [ID!]!
+    # The friendship lifecycle. Every one of these returns the caller's own friend list, so a client
+    # never has to guess at the new state or refetch to find out.
+    #
+    # sendFriendRequest is idempotent and self-completing: asking someone who has already asked you
+    # accepts theirs instead of leaving two requests crossed in the post.
+    sendFriendRequest(userId: ID!): [ID!]!
+    cancelFriendRequest(userId: ID!): [ID!]!
+    acceptFriendRequest(userId: ID!): [ID!]!
+    denyFriendRequest(userId: ID!): [ID!]!
     removeFriend(userId: ID!): [ID!]!
     # Costs coins and replaces one question's four candidates with four different ones.
     rerollQuestion(roundId: ID!, questionId: ID!): RerollResult!
@@ -482,17 +537,41 @@ const typeDefs = /* GraphQL */ `
     markNotificationsRead: Boolean!
     vote(questionId: ID!, targetId: ID!, roundId: ID!): VoteResult!
     completeRound(roundId: ID!): RoundCompleteResult!
-    markFlamesRead: Boolean!
+    markAurasRead: Boolean!
+    # Records that you opened one card at full size. Free, idempotent, and scoped to your own cards.
+    markAuraOpened(id: ID!): Boolean!
     # 16A's clue ladder. clue: "grade" | "initial". Free for Infinite Aura, then the one free daily
     # tile, then coins. Idempotent — re-tapping an open tile never charges twice.
-    revealClue(id: ID!, clue: String!): ClueResult!
-    revealFlame(id: ID!): RevealResult!
-    revealFlameName(id: ID!): RevealNameResult!
+    revealAuraName(id: ID!): RevealNameResult!
     boostRandom: CoinResult!
     boostCrush(targetId: ID!): CoinResult!
-    shopBoost(cost: Int!): CoinResult!
-    legacyGodMode: Boolean!
+    # Dev/demo switch for Infinite Aura. Passing on: false turns it back off, which is the only way to
+    # see the free experience once you've granted yourself membership.
+    # (No backticks in here — typeDefs is a template literal and they would close it.)
+    legacyInfiniteAura(on: Boolean): Boolean!
     validateIap(signedTransaction: String!): IapResult!
+
+    # ---- dev tools ----
+    #
+    # Every one of these throws unless AURA_DEV_TOOLS is exactly "1", which is set in .dev.vars and
+    # deliberately absent from wrangler.toml — production is off because the variable is not there.
+    # See devTools.ts for what each does and why it is not reachable any other way.
+    #
+    # They stay in the schema rather than being spliced in conditionally: a schema that changes shape
+    # per environment means the dev and production APIs are not the same API, and an introspection of
+    # a locked-down endpoint showing these is not a leak — calling them still throws.
+    devResetFlips: DevResult!
+    devSeedVotes(count: Int): DevResult!
+    # Grants a classmate Infinite Aura so their card reads as anonymous — see devTools.ts. One of the
+    # two dev tools that write to an account other than your own, which is why it says whose.
+    devAnonymousVote: DevResult!
+    # Befriends up to three classmates and seeds picks for them, so the Activity feed has friend rows.
+    # Also writes to other people's accounts, and also names them.
+    devSeedFriendActivity(count: Int): DevResult!
+    devClearCards: DevResult!
+    devGrantSparks(amount: Int): DevResult!
+    devResetRounds: DevResult!
+    devSetStreak(days: Int!): DevResult!
   }
 `;
 
@@ -506,31 +585,60 @@ const resolvers = {
   User: {
     school: (parent: { schoolId: string | null }, _: unknown, ctx: GraphQLContext) =>
       parent.schoolId ? ctx.db.getSchool(parent.schoolId) : null,
-    // Derived, so the raw tokens never leave the server.
-    pushEnabled: (parent: { pushTokens?: unknown }) =>
-      Array.isArray(parent.pushTokens) && parent.pushTokens.length > 0,
-    // Always an object, so clients don't need a null check per platform.
-    socials: (parent: { socials?: unknown }) => (parent.socials && typeof parent.socials === 'object' ? parent.socials : {}),
-    /* Always an array — a user who has never followed anyone otherwise returns null, and every caller
-       would need its own fallback.
+    /* ---- self-only fields ----
 
-       Scoped to yourself (admins excepted, since the admin screens list raw rows). The People screen
-       prints "Nobody can see who you follow"; before this, any signed-in student could have selected
-       `schoolmates { following }` and read the whole school's follow graph. Empty rather than an error
-       so a client that over-selects degrades quietly instead of failing the whole query. */
-    following: (parent: User, _: unknown, ctx: GraphQLContext) =>
-      parent.id === ctx.me?.id || ctx.isAdmin ? followingOf(parent) : [],
-    /* The one viewer-relative bit the follow graph does expose: does this person follow *me*. Safe in a
-       way the list isn't — you already learn it the moment you see their "Follow back" button, and it's
-       your own edge being reported, not somebody else's. */
-    followsMe: (parent: User, _: unknown, ctx: GraphQLContext) =>
-      !!ctx.me && parent.id !== ctx.me.id && followingOf(parent).includes(ctx.me.id),
-    /* Self-only, and a real query — so it costs nothing unless the Me tab actually selects it, and
-       there is no path to anybody else's number (publicProfile doesn't expose it at all). */
-    followerCount: (parent: User, _: unknown, ctx: GraphQLContext) =>
-      parent.id === ctx.me?.id || ctx.isAdmin ? ctx.db.countFollowers(parent.id) : 0,
-    roundsTotal: (parent: User) => (typeof parent.roundsTotal === 'number' ? parent.roundsTotal : 0),
-    streak: (parent: User) => currentStreak(parent)
+       The User type is returned for *other people* too (schoolmates, friends, suggestions), and the
+       default resolver hands back whatever sits on the row. Without these gates any signed-in student
+       could select `schoolmates { blocked coins infiniteAura age }` and read the school's block graph, wallet
+       balances, membership status ("nobody can see you have it" is a product promise), ages and
+       notification settings in one query. Same shape as the `friends` gate below: your own row (or an
+       admin) gets the value, anyone else gets an empty/absent one rather than an error, so a client that
+       over-selects degrades quietly. */
+    blocked: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id || ctx.isAdmin ? ((parent.blocked as string[]) || []) : [],
+    coins: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id || ctx.isAdmin ? ((parent.coins as number) ?? 0) : null,
+    infiniteAura: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id || ctx.isAdmin ? !!parent.infiniteAura : null,
+    age: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id || ctx.isAdmin ? ((parent.age as number) ?? null) : null,
+    hideTopAuras: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id || ctx.isAdmin ? ((parent.hideTopAuras as boolean) ?? null) : null,
+    notifyAuras: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id ? ((parent.notifyAuras as boolean) ?? null) : null,
+    notifyRound: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id ? ((parent.notifyRound as boolean) ?? null) : null,
+    notifyFriendJoined: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id ? ((parent.notifyFriendJoined as boolean) ?? null) : null,
+    quietHours: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id ? ((parent.quietHours as boolean) ?? null) : null,
+    // Derived, so the raw tokens never leave the server. Self-only like the prefs it sits beside.
+    pushEnabled: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id && Array.isArray(parent.pushTokens) && parent.pushTokens.length > 0,
+    streak: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id || ctx.isAdmin ? currentStreak(parent) : 0,
+    /* Always an object, so clients don't need a null check per platform. Self-only on the User type:
+       the sanctioned way to read someone *else's* handles is publicProfile, which checks school and
+       blocks first. */
+    socials: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id || ctx.isAdmin
+        ? (parent.socials && typeof parent.socials === 'object' ? parent.socials : {})
+        : {},
+    /* Always an array — a user with no friends otherwise returns null and every caller needs its own
+       fallback.
+
+       Scoped to yourself (admins excepted, since the admin screens list raw rows). Without this gate
+       any signed-in student could select `schoolmates { friends }` and read the whole school's social
+       graph in one query. Empty rather than an error so a client that over-selects degrades quietly
+       instead of failing everything else in the request.
+
+       There is no `friendCount` companion, deliberately. A count is not a list, but in a school this
+       size it is still a popularity score, and the number you'd want it for — your own — you can get
+       by counting the list you're already allowed to read. */
+    friends: (parent: User, _: unknown, ctx: GraphQLContext) =>
+      parent.id === ctx.me?.id || ctx.isAdmin ? friendsOf(parent) : [],
+    friendState: (parent: User, _: unknown, ctx: GraphQLContext) => friendStateOf(parent, ctx.me ?? null),
+    roundsTotal: (parent: User) => (typeof parent.roundsTotal === 'number' ? parent.roundsTotal : 0)
   },
 
   /* Field resolver, not part of servedRound: it's a second database round trip, and this way the Vote
@@ -601,7 +709,7 @@ const resolvers = {
       const blocked = !notBlocked(me, other);
 
       const superlatives = blocked ? [] : await superlativesFor(ctx.db, other.id, ctx.tuning);
-      const flames = superlatives.reduce((sum, s) => sum + s.count, 0);
+      const auras = superlatives.reduce((sum, s) => sum + s.count, 0);
 
       /* Rank comes from the same board the Ranks tab shows, so the two can't disagree — including
          staying null while the school is still locked. */
@@ -619,7 +727,7 @@ const resolvers = {
         grade: blocked ? null : (other.grade as string | null) || null,
         gender: blocked ? null : (other.gender as string | null) || null,
         schoolName: school?.name ?? null,
-        flames,
+        auras,
         rank,
         superlatives,
         socials: blocked ? {} : (other.socials as Record<string, string>) || {},
@@ -646,21 +754,30 @@ const resolvers = {
     suggestions: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
       if (!me.schoolId) return { contacts: [], fof: [] };
-      const friendIds = (me.friendIds as string[]) || [];
+      // `friends`, not the retired `friendIds` — reading the dead field meant existing friends were
+      // never filtered out and kept showing up as suggestions.
+      const friendIds = friendsOf(me);
       const mates = (await ctx.db.getUsersBySchool(me.schoolId, me.id)).filter(u => !friendIds.includes(u.id) && notBlocked(me, u));
       const half = Math.ceil(mates.length / 2);
       return { contacts: mates.slice(0, half), fof: mates.slice(half) };
     },
-    // "Friends" is now "people you follow" — same query, one-directional data underneath.
     friends: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
-      return ctx.db.getUsersByIds(followingOf(me));
+      return ctx.db.getUsersByIds(friendsOf(me));
+    },
+    /* People waiting on you. Incoming only — your own outgoing requests are readable through
+       `friendState` on the person you sent them to, which is where you'd actually look. */
+    friendRequests: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      return ctx.db.getUsersByIds(idList(me, 'requestsIn'));
     },
     blocked: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
       return ctx.db.getUsersByIds((me.blocked as string[]) || []);
     },
     notifications: (_: unknown, __: unknown, ctx: GraphQLContext) => (requireMe(ctx).notifications as unknown[]) || [],
+    friendActivity: (_: unknown, __: unknown, ctx: GraphQLContext) =>
+      friendActivityFor(ctx.db, requireMe(ctx), ctx.tuning),
     pollRound: (_: unknown, __: unknown, ctx: GraphQLContext) => servedRound(ctx.db, ctx.rounds, requireMe(ctx), ctx.tuning),
 
     /* One object rather than a dozen loose fields: the Shop screen needs all of it at once, and keeping
@@ -669,18 +786,14 @@ const resolvers = {
     shop: (_: unknown, __: unknown, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
       const t = ctx.tuning;
-      const expires = typeof me.godModeExpires === 'string' ? me.godModeExpires : null;
+      const expires = typeof me.infiniteAuraExpires === 'string' ? me.infiniteAuraExpires : null;
       return {
         coins: (me.coins as number) ?? 0,
-        clueGradeCost: t.clueGradeCost,
-        clueInitialCost: t.clueInitialCost,
-        freeClueHourUtc: t.freeClueHourUtc,
-        /* The same condition revealClue checks — one source of truth for "is the free tile live", so the
-           screen can't offer one the mutation would then charge for. */
-        freeClueReady:
-          t.freeClueHourUtc < 24 &&
-          (typeof me.freeClueOn === 'string' ? me.freeClueOn : null) !== clueDay(t.freeClueHourUtc),
-        roundPayout: me.godMode ? t.roundPayoutGodMode : t.roundPayout,
+        dailyFlips: t.dailyFlips,
+        /* The whole-round take, not one of its two parts: a full round pays per vote *and* a completion
+           bonus, and the Shop's "Finish today's round +N" is a promise about finishing one. Serving
+           just the bonus here would advertise half of what the round actually gives. */
+        roundPayout: t.votePayout * t.questionsPerRound + (me.infiniteAura ? t.roundBonusInfiniteAura : t.roundBonus),
         streakBonus: t.streakBonus,
         inviteBonus: t.inviteBonus,
         coinPackSmall: t.coinPackSmall,
@@ -690,21 +803,23 @@ const resolvers = {
         boostRandomUses: t.boostRandomUses,
         boostCrushCost: t.boostCrushCost,
         boostCrushUses: t.boostCrushUses,
-        /* `godMode` is still the stored column — 15A renamed the product, not the database. Renaming it
+        /* `infiniteAura` is still the stored column — 15A renamed the product, not the database. Renaming it
            would be a migration across live rows for no behavioural gain, so the boundary is here. */
-        infiniteAura: !!me.godMode,
+        infiniteAura: !!me.infiniteAura,
         infiniteAuraExpires: expires
       };
     },
-    flames: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+    auras: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
-      const { flames: list, admirerCount } = await flamesFor(ctx.db, me, ctx.tuning);
+      const { auras: list, admirerCount } = await aurasFor(ctx.db, me, ctx.tuning);
+      const flips = flipState(me, ctx.tuning);
       return {
-        flames: list,
+        auras: list,
         coins: me.coins as number,
-        godMode: !!me.godMode,
-        bonusRevealsLeft: 0, // legacy: names are unlimited for members now, so there is nothing to count down
-        admirerCount
+        infiniteAura: !!me.infiniteAura,
+        admirerCount,
+        flipsLeft: flips.left,
+        flipsPerDay: ctx.tuning.dailyFlips
       };
     }
   },
@@ -775,13 +890,13 @@ const resolvers = {
     },
 
     // Thin wrappers over db.updateUser/deleteUser — those already do everything needed (generic
-    // JSONB merge covers coins/godMode/grade/names; deleteUser already cascades votes via FKs).
+    // JSONB merge covers coins/infiniteAura/grade/names; deleteUser already cascades votes via FKs).
     // Prefixed "admin" (unlike updateSchool/deletePoll etc.) specifically so this doesn't read like
     // a self-service pair with updateMe/deleteMe — it edits/deletes *any* user, admin-gated.
     adminUpdateUser: (
       _: unknown,
       args: {
-        id: string; schoolId?: string; grade?: string; coins?: number; godMode?: boolean;
+        id: string; schoolId?: string; grade?: string; coins?: number; infiniteAura?: boolean;
         firstName?: string; lastName?: string; username?: string;
       },
       ctx: GraphQLContext
@@ -791,7 +906,7 @@ const resolvers = {
       if (args.schoolId !== undefined) fields.schoolId = args.schoolId || null;
       if (args.grade !== undefined) fields.grade = args.grade;
       if (args.coins !== undefined) fields.coins = args.coins;
-      if (args.godMode !== undefined) fields.godMode = args.godMode;
+      if (args.infiniteAura !== undefined) fields.infiniteAura = args.infiniteAura;
       if (args.firstName !== undefined) fields.firstName = args.firstName;
       if (args.lastName !== undefined) fields.lastName = args.lastName;
       if (args.username !== undefined) fields.username = args.username;
@@ -807,8 +922,8 @@ const resolvers = {
       _: unknown,
       args: {
         firstName?: string; lastName?: string; username?: string; gender?: string; grade?: string;
-        age?: number; schoolId?: string; photo?: string; onboarded?: boolean; hideTopFlames?: boolean;
-        notifyFlames?: boolean; notifyRound?: boolean; notifyFriendJoined?: boolean; quietHours?: boolean;
+        age?: number; schoolId?: string; photo?: string; onboarded?: boolean; hideTopAuras?: boolean;
+        notifyAuras?: boolean; notifyRound?: boolean; notifyFriendJoined?: boolean; quietHours?: boolean;
         socials?: Record<string, string | null>;
       },
       ctx: GraphQLContext
@@ -852,10 +967,10 @@ const resolvers = {
         }
         fields.onboarded = willBeOnboarded;
       }
-      if (args.hideTopFlames !== undefined) fields.hideTopFlames = !!args.hideTopFlames;
+      if (args.hideTopAuras !== undefined) fields.hideTopAuras = !!args.hideTopAuras;
       // 7A prefs. Only written when the client actually sends one, so "never set" stays
       // distinguishable from "set to false" — push.ts's defaults depend on that difference.
-      if (args.notifyFlames !== undefined) fields.notifyFlames = !!args.notifyFlames;
+      if (args.notifyAuras !== undefined) fields.notifyAuras = !!args.notifyAuras;
       if (args.notifyRound !== undefined) fields.notifyRound = !!args.notifyRound;
       if (args.notifyFriendJoined !== undefined) fields.notifyFriendJoined = !!args.notifyFriendJoined;
       if (args.quietHours !== undefined) fields.quietHours = !!args.quietHours;
@@ -918,19 +1033,20 @@ const resolvers = {
       const meBlocked = (me.blocked as string[]) || [];
       if (target && args.userId !== me.id && !meBlocked.includes(args.userId)) {
         const blocked = [...meBlocked, args.userId];
-        const friendIds = ((me.friendIds as string[]) || []).filter(id => id !== args.userId);
         /* When each block happened, for 8A's blocked list ("Blocked 3 weeks ago"). Kept in a
            parallel map rather than turning `blocked` into a list of objects: `blocked` is read as
            `string[]` by notBlocked() and every vote/round eligibility check, and reshaping it would
            mean touching all of them plus backfilling live JSONB. Anyone blocked before this shipped
            simply has no entry, which the UI renders as an undated row. */
         const blockedAt = { ...((me.blockedAt as Record<string, string>) || {}), [args.userId]: new Date().toISOString() };
-        /* Blocking severs the follow edge in *both* directions. Leaving their follow of you in place
-           would keep weighting you into each other's polls, which is the one thing a block must stop. */
-        const following = followingOf(me).filter(id => id !== args.userId);
-        await ctx.db.updateUser(me.id, { blocked, friendIds, following, blockedAt });
-        const targetFollowing = followingOf(target).filter(id => id !== me.id);
-        await ctx.db.updateUser(target.id, { following: targetFollowing });
+        await ctx.db.updateUser(me.id, { blocked, blockedAt });
+        /* Blocking severs the friendship and any request in either direction. Leaving the edge in place
+           would keep weighting you into each other's polls, which is the one thing a block must stop —
+           and would leave a pending request the blocked person could still accept. */
+        for (const key of FRIEND_LISTS) {
+          await ctx.db.removeFromIdList(me.id, key, target.id);
+          await ctx.db.removeFromIdList(target.id, key, me.id);
+        }
         return blocked;
       }
       return meBlocked;
@@ -945,52 +1061,76 @@ const resolvers = {
       await ctx.db.updateUser(me.id, { blocked, blockedAt });
       return blocked;
     },
-    /* Following is one-directional and needs no approval, so this writes exactly one row — unlike the
-       old addFriend, which wrote both users' lists to keep a mutual edge in sync. Same school only:
-       the whole app is school-scoped, and a cross-school follow would weight someone into polls they
-       can't appear in. */
-    follow: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
+    /* ---------- friendship ----------
+
+       A friendship is symmetric and approved, which means every one of these writes *both* users' rows.
+       They all go through addToIdList/removeFromIdList rather than updateUser: accepting a request
+       touches four lists across two rows, and read-modify-write would let two people accepting each
+       other at the same moment each save a copy of the graph that omits the other's change.
+
+       Same school only, in the one place it can be enforced — the whole app is school-scoped, and a
+       cross-school friendship would weight someone into polls they can't appear in. */
+    sendFriendRequest: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
       const other = await ctx.db.getUserById(args.userId);
-      const current = followingOf(me);
       if (!other || other.id === me.id) throw new Error('Pick a valid person');
-      if (!me.schoolId || other.schoolId !== me.schoolId) throw new Error('You can only follow people at your school');
-      if (!notBlocked(me, other)) throw new Error('You can\'t follow someone you blocked');
-      if (current.includes(other.id)) return current;
-      // Appended in SQL, not read-modify-write: see addFollowing. Two follows a few hundred ms apart
-      // used to lose one of each other.
-      return ctx.db.addFollowing(me.id, [other.id]);
-    },
-    unfollow: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
-      const me = requireMe(ctx);
-      return ctx.db.removeFollowing(me.id, args.userId);
-    },
-    /* Follow a whole grade at once — 14A's "Follow all of 11th grade · 86 people".
+      if (!me.schoolId || other.schoolId !== me.schoolId) throw new Error('You can only add people at your school');
+      if (!notBlocked(me, other)) throw new Error("You can't add someone you blocked");
+      if (friendsOf(me).includes(other.id)) return friendsOf(me);
 
-       A server mutation rather than a loop of `follow` calls on the client, for two reasons: 86 round
-       trips over a school-wifi connection is not a tap, and each one would rewrite the same JSONB list
-       with a stale copy of it, so concurrent writes would drop follows at random. */
-    followGrade: async (_: unknown, args: { grade: string }, ctx: GraphQLContext) => {
-      const me = requireMe(ctx);
-      /* Matched on the grade *number*, not the raw string. Grade is free text and live rows hold both
-         "11" (onboarding) and "Grade 11" (admin screens) — an exact match would follow half the class
-         and silently skip the rest. Mirrored client-side by profileKit's gradeNumber. */
-      const want = gradeKey(str(args.grade, 30));
-      const current = followingOf(me);
-      if (!me.schoolId || want === null) return current;
-      const mates = await ctx.db.getUsersBySchool(me.schoolId, me.id);
-      const add = mates
-        .filter(m => gradeKey(m.grade) === want && notBlocked(me, m) && !current.includes(m.id))
-        .map(m => m.id);
-      if (add.length === 0) return current;
-      return ctx.db.addFollowing(me.id, add);
+      /* They already asked you — so this accepts rather than queuing a second request pointing the
+         other way. Two people tapping Add on each other within a few seconds is common enough that
+         leaving both stuck as "sent" would be a dead end neither of them could see the way out of. */
+      if (idList(me, 'requestsIn').includes(other.id)) {
+        return (resolvers.Mutation as any).acceptFriendRequest(_, args, ctx);
+      }
+      await ctx.db.addToIdList(other.id, 'requestsIn', [me.id]);
+      await ctx.db.addToIdList(me.id, 'requestsOut', [other.id]);
+      return friendsOf(me);
     },
-    /* Kept so apps/web's existing friend screens keep working; they now follow/unfollow underneath.
-       Deliberately not deleted-and-migrated in the same change as the mechanic itself. */
-    addFriend: (_: unknown, args: { userId: string }, ctx: GraphQLContext) =>
-      (resolvers.Mutation as any).follow(_, args, ctx),
-    removeFriend: (_: unknown, args: { userId: string }, ctx: GraphQLContext) =>
-      (resolvers.Mutation as any).unfollow(_, args, ctx),
+
+    /* Withdrawing your own request. Clears both sides, so a cancelled request leaves nothing behind on
+       the other person's screen. */
+    cancelFriendRequest: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      await ctx.db.removeFromIdList(me.id, 'requestsOut', args.userId);
+      await ctx.db.removeFromIdList(args.userId, 'requestsIn', me.id);
+      return friendsOf(me);
+    },
+
+    acceptFriendRequest: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      const other = await ctx.db.getUserById(args.userId);
+      if (!other) throw new Error('Pick a valid person');
+      /* Checked against the row as it is now, not the one this request started with: a request that
+         was cancelled or denied in the meantime must not still be acceptable. */
+      if (!idList(me, 'requestsIn').includes(other.id)) throw new Error('No request from that person');
+      if (!notBlocked(me, other)) throw new Error("You can't add someone you blocked");
+
+      // The pending edge goes first, so a failure halfway can't leave a friendship with a live request
+      // still attached to it.
+      await ctx.db.removeFromIdList(me.id, 'requestsIn', other.id);
+      await ctx.db.removeFromIdList(other.id, 'requestsOut', me.id);
+      await ctx.db.addToIdList(other.id, 'friends', [me.id]);
+      return ctx.db.addToIdList(me.id, 'friends', [other.id]);
+    },
+
+    /* Denying is silent by design: it clears the request and tells the sender nothing. A "denied"
+       notification is a rejection delivered to a teenager by a machine, and the sender can already see
+       the request is no longer pending. */
+    denyFriendRequest: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      await ctx.db.removeFromIdList(me.id, 'requestsIn', args.userId);
+      await ctx.db.removeFromIdList(args.userId, 'requestsOut', me.id);
+      return friendsOf(me);
+    },
+
+    /** Unfriending is mutual — there is no version of this where one side keeps the edge. */
+    removeFriend: async (_: unknown, args: { userId: string }, ctx: GraphQLContext) => {
+      const me = requireMe(ctx);
+      await ctx.db.removeFromIdList(args.userId, 'friends', me.id);
+      return ctx.db.removeFromIdList(me.id, 'friends', args.userId);
+    },
 
     rerollQuestion: async (_: unknown, args: { roundId: string; questionId: string }, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
@@ -1033,33 +1173,44 @@ const resolvers = {
 
     vote: async (_: unknown, args: { questionId: string; targetId: string; roundId: string }, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
+      /* The round is required, not optional. It used to be `if (round) {...}` — which meant a request
+         with a made-up roundId skipped every round check *and still created the vote*: unlimited
+         ballot stuffing for a friend, off any screen, with no allowance spent. */
+      const round = await ctx.rounds.get(args.roundId);
+      if (!round || round.userId !== me.id) throw new Error('no active round');
       const polls = await ctx.db.getPolls();
       const q = polls.find(p => p.id === args.questionId && p.enabled);
       const target = await ctx.db.getUserById(args.targetId);
       if (!q || !target) throw new Error('bad vote');
       if (target.id === me.id) throw new Error('cannot vote for yourself');
-      // integrity: target must be an eligible schoolmate (or someone boosted into your polls) and not blocked
-      const eligible = target.schoolId === me.schoolId || (await ctx.db.hasActiveBoostFor(target.id, me.id));
-      if (!eligible || !notBlocked(me, target)) throw new Error('not eligible');
-      const round = await ctx.rounds.get(args.roundId);
-      if (round) {
-        if (round.userId !== me.id) throw new Error('not your round');
-        if (round.votedQ.includes(args.questionId)) return { ok: true, dup: true };
-        /* Against the round's own length, not a hardcoded 12: questionsPerRound is a tunable dial, and
-           raising it used to make every vote past the twelfth throw "round full". */
-        if (round.votedQ.length >= round.polls.length) throw new Error('round full');
-        round.votedQ.push(args.questionId);
-        round.answered = round.votedQ.length;
-        await ctx.rounds.save(args.roundId, round);
-      }
+      /* Integrity: the target must be one of the candidates this round actually served for this
+         question. The old check (same school, or ever boosted) let a script vote for anyone at the
+         school on every question regardless of who was on the card — and `hasActiveBoostFor` matched
+         spent boosts (`remaining >= 0`), so one boost purchase made its buyer votable forever. The
+         served choices already encode every eligibility rule the round build enforces. */
+      const servedPoll = round.polls.find(p => p.questionId === args.questionId);
+      if (!servedPoll || !servedPoll.choices.some(c => c.id === target.id)) throw new Error('not eligible');
+      // Still re-checked at vote time: a block placed mid-round must win over the built round.
+      if (!notBlocked(me, target)) throw new Error('not eligible');
+      if (round.votedQ.includes(args.questionId)) return { ok: true, dup: true };
+      /* Against the round's own length, not a hardcoded 12: questionsPerRound is a tunable dial, and
+         raising it used to make every vote past the twelfth throw "round full". */
+      if (round.votedQ.length >= round.polls.length) throw new Error('round full');
+      round.votedQ.push(args.questionId);
+      round.answered = round.votedQ.length;
+      await ctx.rounds.save(args.roundId, round);
       await ctx.db.createVote({
         id: 'vote_' + crypto.randomUUID().slice(0, 12),
         voterId: me.id, targetId: args.targetId, questionId: args.questionId, emoji: q.emoji, text: q.text, color: q.color
       });
-      /* "Know the second someone picks you" — the flame push, 7A's whole argument for notifications.
+      /* Paid per vote, after the row exists. Every guard that could reject this vote has already run —
+         a duplicate returned above and never reaches here, so a question can only ever pay once, and
+         the round's own `votedQ` is what enforces that rather than anything in the wallet. */
+      if (ctx.tuning.votePayout > 0) await ctx.db.adjustCoins(me.id, ctx.tuning.votePayout);
+      /* "Know the second someone picks you" — the aura push, 7A's whole argument for notifications.
          Inside waitUntil so it never delays or fails the vote (see index.ts), and anonymous exactly
-         when the Inbox would be: a God Mode voter stays hidden here too. */
-      ctx.waitUntil(sendPush(ctx.db, target, 'flame', flameBody(me, q.text as string, !!me.godMode), { targetId: target.id }));
+         when the Inbox would be: a Infinite Aura voter stays hidden here too. */
+      ctx.waitUntil(sendPush(ctx.db, target, 'aura', auraBody(me, q.text as string, !!me.infiniteAura), { targetId: target.id }));
       return { ok: true, dup: false };
     },
     completeRound: async (_: unknown, args: { roundId: string }, ctx: GraphQLContext) => {
@@ -1070,12 +1221,26 @@ const resolvers = {
       if ((round.answered || 0) < 1) throw new Error('answer at least one poll first');
       round.claimed = true;
       await ctx.rounds.save(args.roundId, round);
-      const earned = me.godMode ? ctx.tuning.roundPayoutGodMode : ctx.tuning.roundPayout;
-      const newCoins = await ctx.db.adjustCoins(me.id, earned);
       /* Completing a round is what "played today" means, so the streak advances here rather than on
-         opening the app — otherwise it would count visits, which is not what the flame says. Returns
+         opening the app — otherwise it would count visits, which is not what the aura says. Returns
          null for a second round on the same day, in which case there's nothing to write. */
       const nextStreak = advanceStreak(me);
+      /* The Shop's "Keep your streak" row. It was advertised and never credited — the bonus lands on
+         the completion that *extends* a run (streak 2 and up), not on day one, which is just the round
+         doing its job. */
+      const keptStreak = nextStreak !== null && nextStreak.streak >= 2;
+      /* The completion bonus is for answering *every* question, not for pressing the button. A partial
+         round keeps what its votes already paid and earns none of this — otherwise one vote and a tap
+         would be worth the same as ten. */
+      const answeredAll = round.votedQ.length >= round.polls.length;
+      const bonus = answeredAll ? (me.infiniteAura ? ctx.tuning.roundBonusInfiniteAura : ctx.tuning.roundBonus) : 0;
+      const streak = keptStreak ? ctx.tuning.streakBonus : 0;
+      const newCoins = await ctx.db.adjustCoins(me.id, bonus + streak);
+      /* Reported, not credited: the votes were paid as they were cast, so this call only moves the
+         bonus and the streak. `earned` is the whole round's take because that's the number the congrats
+         screen is answering — "what did this round get me" — and quoting only the bonus there would
+         understate it by everything the player just did. */
+      const earned = ctx.tuning.votePayout * round.votedQ.length + bonus + streak;
       /* Lifetime completed rounds, written in the same update as the streak so a completion costs one
          write either way. Only used to retire 14A's "✋ HOLD" chip after three rounds — a client-side
          counter would reset on reinstall and re-teach the gesture to someone who already knows it. */
@@ -1084,95 +1249,59 @@ const resolvers = {
       return { coins: newCoins, earned, already: false };
     },
 
-    markFlamesRead: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+    markAurasRead: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
       await ctx.db.markAllVotesReadForTarget(me.id);
       return true;
     },
-    /* 16A's clue ladder in one mutation: `clue` is "grade" or "initial".
 
-       One entry point rather than two, because the interesting logic is shared and must not diverge —
-       who pays, whether the free daily tile applies, and the order the three payment routes are tried:
-
-         1. Infinite Aura  — free, unlimited, no daily wait
-         2. the free tile  — one a day, whichever clue you spend it on
-         3. coins          — the priced fallback
-
-       The free tile is checked *before* coins on purpose: charging someone who had a free one banked
-       would be taking money we said was free, and they have no way to see which route was used. */
-    revealClue: async (_: unknown, args: { id: string; clue: string }, ctx: GraphQLContext) => {
+    /* One card, opened. The scope is in the WHERE clause (id AND target_id), so passing someone
+       else's vote id updates nothing rather than erroring — there is no state to leak either way,
+       and a 'not found' would confirm whether an id exists. */
+    markAuraOpened: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
-      const which = args.clue === 'grade' ? 'grade' : args.clue === 'initial' ? 'initial' : null;
-      if (!which) throw new Error('Unknown clue');
-
-      const v = await ctx.db.getVoteForTarget(args.id, me.id);
-      if (!v) throw new Error('no flame');
-      const voter = await ctx.db.getUserById(v.voterId);
-      if (voter && voter.godMode) throw new Error('This admirer is anonymous 🔒');
-
-      const already = which === 'grade' ? v.gradeRevealed : v.revealed;
-      const mark = () =>
-        which === 'grade' ? ctx.db.markVoteGradeRevealed(v.id) : ctx.db.markVoteRevealed(v.id);
-      // Idempotent: re-tapping an open tile must never charge a second time.
-      if (already) return { ok: true, coins: me.coins as number, usedFreeClue: false };
-
-      if (me.godMode) {
-        await mark();
-        return { ok: true, coins: me.coins as number, usedFreeClue: false };
-      }
-
-      const day = clueDay(ctx.tuning.freeClueHourUtc);
-      const freeClueOn = typeof me.freeClueOn === 'string' ? me.freeClueOn : null;
-      if (ctx.tuning.freeClueHourUtc < 24 && freeClueOn !== day) {
-        await ctx.db.updateUser(me.id, { freeClueOn: day });
-        await mark();
-        return { ok: true, coins: me.coins as number, usedFreeClue: true };
-      }
-
-      const cost = which === 'grade' ? ctx.tuning.clueGradeCost : ctx.tuning.clueInitialCost;
-      const newCoins = await ctx.db.adjustCoins(me.id, -cost);
-      if (newCoins === null) throw new Error(`You need ${cost} ${cost === 1 ? 'coin' : 'coins'} for that clue`);
-      await mark();
-      return { ok: true, coins: newCoins, usedFreeClue: false };
+      await ctx.db.markVoteOpened(args.id, me.id);
+      return true;
     },
-
-    /** Kept as the initial-clue alias so apps/web keeps working; revealClue is the real entry point. */
-    revealFlame: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
+    /* `revealClue` and `revealAura` lived here — 16A's clue ladder, where coins and a free daily tile
+       bought the sender's grade and first initial one scratch-off at a time. The whole ladder is gone:
+       a card is face down or it is turned over, and the flip is the only thing that turns it. What that
+       removed, in order: the grade and initial tiles, the coin prices on them, the one-free-tile-a-day
+       clock, and the two mutations that spent all three. Coins now buy boosts and rerolls only. */
+    revealAuraName: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
       const v = await ctx.db.getVoteForTarget(args.id, me.id);
-      if (!v) throw new Error('no flame');
-      const voter = await ctx.db.getUserById(v.voterId);
-      if (voter && voter.godMode) throw new Error('This admirer is anonymous 🔒');
-      if (me.godMode) {
-        await ctx.db.markVoteRevealed(v.id);
-        return { ok: true, coins: me.coins as number };
-      }
-      const newCoins = await ctx.db.adjustCoins(me.id, -ctx.tuning.clueInitialCost);
-      if (newCoins === null) {
-        const n = ctx.tuning.clueInitialCost;
-        throw new Error(`You need ${n} ${n === 1 ? 'coin' : 'coins'} for that clue`);
-      }
-      await ctx.db.markVoteRevealed(v.id);
-      return { ok: true, coins: newCoins };
-    },
-    revealFlameName: async (_: unknown, args: { id: string }, ctx: GraphQLContext) => {
-      const me = requireMe(ctx);
-      const v = await ctx.db.getVoteForTarget(args.id, me.id);
-      if (!v) throw new Error('no flame');
-      if (!me.godMode) throw new Error('Infinite Aura required');
+      if (!v) throw new Error('no aura');
+      if (!me.infiniteAura) throw new Error('Infinite Aura required');
       const voter = await ctx.db.getUserById(v.voterId);
       if (!voter) throw new Error('voter gone');
-      if (voter.godMode) throw new Error('This admirer is anonymous 🔒');
-      /* 15A: **unlimited**, and on every flame. Two rules died here — a cap of two names, and a
-         requirement that the person had picked you twice. Infinite Aura's promise on the paywall is
-         "first names on every flame you get" and "works on the flames already sitting there", so any
-         surviving limit would make that copy false. `bonusRevealsUsed` is no longer read or written;
-         old rows keep the field harmlessly. */
-      const revealedVoters = (me.revealedVoters as string[]) || [];
-      if (!revealedVoters.includes(v.voterId)) {
-        await ctx.db.updateUser(me.id, { revealedVoters: [...revealedVoters, v.voterId] });
+      if (voter.infiniteAura) throw new Error('This admirer is anonymous 🔒');
+
+      /* The daily flip allowance.
+
+         Membership buys *access* to names, not all of them at once. Two a day is what gives the top
+         rung a tomorrow — and it's counted per card, so a classmate who picked you five times costs
+         five flips rather than collapsing into one.
+
+         Order matters here. An already-open card returns free and unchanged before the allowance is
+         even read, so re-opening the reveal screen or tapping a flipped card can never cost anything;
+         the counter only moves on the write that actually turned a card over (markVoteNameRevealed
+         reports that). Nothing is charged for a blocked flip either — the anonymous check above
+         throws first, which is what makes the protected screen's "nothing spent" true. */
+      const flips = flipState(me, ctx.tuning);
+      if (v.nameRevealed) {
+        return { name: `${voter.firstName} ${voter.lastName}`, flipsLeft: flips.left };
       }
-      return { name: `${voter.firstName} ${voter.lastName}`, bonusRevealsLeft: 0 };
+      if (flips.left <= 0) {
+        throw new Error(
+          ctx.tuning.dailyFlips === 0 ? 'Flips are switched off' : "That's both your flips for today — they reset at midnight"
+        );
+      }
+      const opened = await ctx.db.markVoteNameRevealed(v.id);
+      // `opened` false means another request turned this card over first; don't bill for it twice.
+      const left = opened ? flips.left - 1 : flips.left;
+      if (opened) await ctx.db.updateUser(me.id, { flipsOn: flips.day, flipsUsed: flips.used + 1 });
+      return { name: `${voter.firstName} ${voter.lastName}`, flipsLeft: left };
     },
 
     boostRandom: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
@@ -1193,20 +1322,26 @@ const resolvers = {
       await ctx.db.createBoost({ id: 'bst_' + crypto.randomUUID().slice(0, 12), byUserId: me.id, targetId: t.id, remaining: boostCrushUses });
       return { coins: newCoins, message: `You'll show up in ${t.firstName}'s polls 💘` };
     },
-    shopBoost: async (_: unknown, args: { cost: number }, ctx: GraphQLContext) => {
+    /* `shopBoost(cost: Int!)` lived here — a "charge me whatever the client says" mutation. No client
+       ever called it, and a client-supplied cost is backwards twice over: a negative cost *minted*
+       coins, and a zero cost bought the charge row for free. Prices only ever flow server → client. */
+    /* Legacy/dev instant unlock — kept for the web demo. Real iOS uses validateIap below.
+
+       Now takes a direction. It only ever granted membership, which meant that once anyone flipped it
+       on there was no way back to the free experience short of editing the database — so the half of
+       the product most users will actually see was the half nobody on the team could look at.
+
+       LAUNCH BLOCKER: remove (or admin-gate) this before StoreKit purchases go live, or the paywall
+       stays a free button forever. Adding the off switch doesn't widen that hole — the on switch is
+       the hole — but it does mean the whole mutation has to go, not just half of it. */
+    legacyInfiniteAura: async (_: unknown, args: { on?: boolean }, ctx: GraphQLContext) => {
       const me = requireMe(ctx);
-      const newCoins = await ctx.db.adjustCoins(me.id, -(args.cost | 0));
-      if (newCoins === null) throw new Error('not enough coins');
-      return { coins: newCoins, message: null };
-    },
-    // Legacy/dev instant unlock — kept for the web demo. Real iOS uses validateIap below.
-    legacyGodMode: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
-      const me = requireMe(ctx);
-      await ctx.db.updateUser(me.id, { godMode: true, godModeExpires: null });
-      return true;
+      const on = args.on ?? true;
+      await ctx.db.updateUser(me.id, { infiniteAura: on, infiniteAuraExpires: null });
+      return on;
     },
 
-    // Real Apple In-App Purchase: verify the StoreKit2 signed transaction, then grant God Mode.
+    // Real Apple In-App Purchase: verify the StoreKit2 signed transaction, then grant Infinite Aura.
     // Mirrors server.js's /api/iap/validate exactly — same replay protection (each StoreKit
     // transactionId is single-use; renewals get new ids) and expiry handling.
     validateIap: async (_: unknown, args: { signedTransaction: string }, ctx: GraphQLContext) => {
@@ -1217,8 +1352,8 @@ const resolvers = {
       } catch (e: any) {
         throw new Error('Invalid receipt: ' + e.message);
       }
-      const godmodeProducts = (ctx.env.GODMODE_PRODUCT_IDS || DEFAULT_GODMODE_PRODUCTS).split(',');
-      if (!godmodeProducts.includes(tx.productId)) throw new Error('Unknown product ' + tx.productId);
+      const infiniteAuraProducts = (ctx.env.INFINITE_AURA_PRODUCT_IDS || DEFAULT_INFINITE_AURA_PRODUCTS).split(',');
+      if (!infiniteAuraProducts.includes(tx.productId)) throw new Error('Unknown product ' + tx.productId);
 
       const iapTransactions = (me.iapTransactions as string[]) || [];
       const txId = String(tx.transactionId);
@@ -1228,16 +1363,58 @@ const resolvers = {
       const expMs = tx.expiresDate ? Number(tx.expiresDate) : null;
       if (expMs && expMs <= Date.now()) {
         await ctx.db.updateUser(me.id, { iapTransactions: newIapTransactions });
-        return { godMode: false, expired: true, expires: new Date(expMs).toISOString() };
+        return { infiniteAura: false, expired: true, expires: new Date(expMs).toISOString() };
       }
-      const godModeExpires = expMs ? new Date(expMs).toISOString() : null;
-      await ctx.db.updateUser(me.id, { iapTransactions: newIapTransactions, godModeExpires, godMode: true });
+      const infiniteAuraExpires = expMs ? new Date(expMs).toISOString() : null;
+      await ctx.db.updateUser(me.id, { iapTransactions: newIapTransactions, infiniteAuraExpires, infiniteAura: true });
       return {
-        godMode: true,
-        expires: godModeExpires,
+        infiniteAura: true,
+        expires: infiniteAuraExpires,
         environment: tx.environment || null,
         renewed: !already && newIapTransactions.length > 1
       };
+    },
+
+    /* ---- dev tools ----
+
+       Thin on purpose. Each one is a gate, a signed-in user, and a call into devTools.ts — the logic
+       lives there so this file doesn't grow a second set of rules for writing votes and adjusting
+       balances alongside the real ones.
+
+       `requireDevTools` first, before `requireMe`: on an environment where these are switched off the
+       answer is "these don't exist here", and that shouldn't depend on whether the caller happens to
+       be signed in. */
+    devResetFlips: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      requireDevTools(ctx.env);
+      return devResetFlips(ctx.db, requireMe(ctx), ctx.tuning);
+    },
+    devSeedVotes: async (_: unknown, args: { count?: number }, ctx: GraphQLContext) => {
+      requireDevTools(ctx.env);
+      return devSeedVotes(ctx.db, requireMe(ctx), ctx.tuning, args.count ?? 8);
+    },
+    devAnonymousVote: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      requireDevTools(ctx.env);
+      return devAnonymousVote(ctx.db, requireMe(ctx));
+    },
+    devSeedFriendActivity: async (_: unknown, args: { count?: number }, ctx: GraphQLContext) => {
+      requireDevTools(ctx.env);
+      return devSeedFriendActivity(ctx.db, requireMe(ctx), ctx.tuning, args.count ?? 9);
+    },
+    devClearCards: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      requireDevTools(ctx.env);
+      return devClearCards(ctx.db, requireMe(ctx));
+    },
+    devGrantSparks: async (_: unknown, args: { amount?: number }, ctx: GraphQLContext) => {
+      requireDevTools(ctx.env);
+      return devGrantSparks(ctx.db, requireMe(ctx), args.amount ?? 50);
+    },
+    devResetRounds: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      requireDevTools(ctx.env);
+      return devResetRounds(ctx.db, requireMe(ctx), ctx.tuning);
+    },
+    devSetStreak: async (_: unknown, args: { days: number }, ctx: GraphQLContext) => {
+      requireDevTools(ctx.env);
+      return devSetStreak(ctx.db, requireMe(ctx), args.days);
     }
   }
 };

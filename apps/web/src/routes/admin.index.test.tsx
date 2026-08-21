@@ -10,7 +10,7 @@ beforeEach(() => useAdminStatsMock.mockReset());
 
 describe('Overview', () => {
   test('renders each stat tile with its real count', () => {
-    useAdminStatsMock.mockReturnValue({ data: { schools: 3, users: 42, polls: 7, votes: 200, godMode: 5, reports: 1 } });
+    useAdminStatsMock.mockReturnValue({ data: { schools: 3, users: 42, polls: 7, votes: 200, infiniteAura: 5, reports: 1 } });
     render(<Overview />);
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();

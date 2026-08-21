@@ -1,10 +1,14 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { resetDb, callApi, cleanupAll, createTestUser, joinSchool, seedPolls, type TestUser } from './helpers';
+import { resetDb, callApi, cleanupAll, createTestUser, env, joinSchool, seedPolls, type TestUser } from './helpers';
 
 let admin: TestUser, me: TestUser, mate: TestUser;
 
 before(async () => {
+  /* These tests are about payouts, not about the round allowance, and several of them need a second
+     round for the same user. One round an hour (the real default) would starve them of one, so the
+     dial is turned up for this file only — the allowance has its own coverage in pollRound's tests. */
+  (env as Record<string, unknown>).AURA_ROUNDS_PER_HOUR = '20';
   await resetDb();
   admin = await createTestUser({ admin: true });
   me = await createTestUser();
@@ -15,7 +19,10 @@ before(async () => {
   await joinSchool(mate.token, schoolId);
   await seedPolls(admin.token, 4);
 });
-after(() => cleanupAll(admin, me, mate));
+after(async () => {
+  delete (env as Record<string, unknown>).AURA_ROUNDS_PER_HOUR;
+  await cleanupAll(admin, me, mate);
+});
 
 test('boostRandom is rejected when the user cannot afford it', async () => {
   // fresh users start with 2 coins; boostRandom costs 100
@@ -28,29 +35,65 @@ test('boostCrush is rejected for an invalid target', async () => {
   assert.match(r.body.errors[0].message, /valid crush/);
 });
 
-test('completing a round pays out coins exactly once (no double-claim)', async () => {
-  /* Asserted against `roundPayout` rather than a literal, so raising the dial doesn't break the test —
-     and so the test actually checks the invariant that matters: the number the Shop advertises ("+10")
-     is the number completeRound pays. A literal 2 here silently encoded the old payout. */
-  const roundRes = await callApi('{ pollRound { roundId roundPayout polls { questionId } } }', undefined, me.token);
-  const { roundId, roundPayout, polls } = roundRes.body.data.pollRound;
+/* A full round is worth exactly what the round advertised, however that total is assembled.
 
-  const vote = await callApi(
-    'mutation($q:ID!,$t:ID!,$r:ID!){ vote(questionId:$q, targetId:$t, roundId:$r){ ok } }',
-    { q: polls[0].questionId, t: mate.userId, r: roundId },
+   Asserted against the served `roundPayout` rather than any literal, and end to end rather than on the
+   completion alone: the payout is split now — every vote pays as it lands and finishing adds a bonus —
+   so checking only what completeRound returns would miss the larger half. What has to hold is that
+   playing a whole round moves the balance by the number the Shop and the round both promise. */
+test('a full round pays exactly the advertised total, once', async () => {
+  const roundRes = await callApi(
+    '{ pollRound { roundId roundPayout polls { questionId choices { id } } } }',
+    undefined,
     me.token
   );
-  assert.equal(vote.body.data.vote.ok, true);
+  const { roundId, roundPayout, polls } = roundRes.body.data.pollRound;
+  const before = (await callApi('{ me { coins } }', undefined, me.token)).body.data.me.coins;
 
-  const before1 = await callApi('{ me { coins } }', undefined, me.token);
+  // Every question, so the completion bonus is actually earned — a partial round deliberately isn't.
+  for (const p of polls) {
+    const vote = await callApi(
+      'mutation($q:ID!,$t:ID!,$r:ID!){ vote(questionId:$q, targetId:$t, roundId:$r){ ok } }',
+      { q: p.questionId, t: p.choices[0].id, r: roundId },
+      me.token
+    );
+    assert.equal(vote.body.data.vote.ok, true);
+  }
+
   const first = await callApi('mutation($r:ID!){ completeRound(roundId:$r){ coins earned already } }', { r: roundId }, me.token);
-  assert.equal(first.body.data.completeRound.earned, roundPayout);
-  assert.equal(first.body.data.completeRound.coins, before1.body.data.me.coins + roundPayout);
+  assert.equal(first.body.data.completeRound.earned, roundPayout, 'the round pays what it advertised');
+  assert.equal(first.body.data.completeRound.coins, before + roundPayout, 'votes plus bonus land on the balance');
 
   const second = await callApi('mutation($r:ID!){ completeRound(roundId:$r){ coins earned already } }', { r: roundId }, me.token);
   assert.equal(second.body.data.completeRound.already, true);
   assert.equal(second.body.data.completeRound.earned, 0);
   assert.equal(second.body.data.completeRound.coins, first.body.data.completeRound.coins); // unchanged on the double-claim
+});
+
+/* The bonus is for answering everything, not for pressing the button. */
+test('a partial round keeps its per-vote pay and earns no completion bonus', async () => {
+  const roundRes = await callApi(
+    '{ pollRound { roundId roundPayout polls { questionId choices { id } } } }',
+    undefined,
+    me.token
+  );
+  const { roundId, roundPayout, polls } = roundRes.body.data.pollRound;
+  const before = (await callApi('{ me { coins } }', undefined, me.token)).body.data.me.coins;
+
+  const answered = 2;
+  for (const p of polls.slice(0, answered)) {
+    await callApi(
+      'mutation($q:ID!,$t:ID!,$r:ID!){ vote(questionId:$q, targetId:$t, roundId:$r){ ok } }',
+      { q: p.questionId, t: p.choices[0].id, r: roundId },
+      me.token
+    );
+  }
+
+  const done = await callApi('mutation($r:ID!){ completeRound(roundId:$r){ coins earned } }', { r: roundId }, me.token);
+  const gained = done.body.data.completeRound.coins - before;
+  assert.ok(gained > 0, 'the votes themselves still paid');
+  assert.ok(gained < roundPayout, `a ${answered}-answer round must not pay the full ${roundPayout}`);
+  assert.equal(done.body.data.completeRound.earned, gained, 'earned reports what the round actually moved');
 });
 
 test('completing a round with zero answers is rejected', async () => {

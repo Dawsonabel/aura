@@ -16,6 +16,7 @@ import {
   SocialsList,
   StatRow,
   SuperlativeChips,
+  avatarAccent,
   gradeLabel
 } from '../../src/components/profileKit';
 
@@ -76,6 +77,9 @@ export default function PublicProfileScreen() {
         </View>
       ) : (
         <>
+          {/* Avatar takes their own colour, matching the People row and the candidate sheet. It was a
+              fixed purple, so the person you tapped changed hue on the way to their own profile.
+              Blocked still greys out — that override is the point of the blocked state. */}
           <ProfileIdentity
             name={profile.name}
             meta={[
@@ -85,8 +89,8 @@ export default function PublicProfileScreen() {
             ]
               .filter(Boolean)
               .join(' · ')}
-            avatarColor={profile.blocked ? '#524F53' : '#7C6CF5'}
-            avatarShadow={profile.blocked ? '#3E3B40' : '#5A4BC4'}
+            avatarColor={profile.blocked ? '#524F53' : avatarAccent(profile.id).bg}
+            avatarShadow={profile.blocked ? '#3E3B40' : avatarAccent(profile.id).shadow}
             badge={
               profile.rank === 1 ? (
                 <ProfileBadge label="#1 this week" backgroundColor="#FFD84D" shadowColor="#D4AC17" color="#3A2A00" />
@@ -97,7 +101,7 @@ export default function PublicProfileScreen() {
           {/* Two stats, not three: your balance is yours alone. */}
           <StatRow
             stats={[
-              { value: String(profile.flames), label: 'AURA' },
+              { value: String(profile.auras), label: 'AURA' },
               { value: profile.rank !== null ? `#${profile.rank}` : '—', label: 'IN SCHOOL', color: '#6BF2C2' }
             ]}
           />

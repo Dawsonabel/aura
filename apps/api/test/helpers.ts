@@ -141,6 +141,26 @@ export async function createTestUser(opts: { admin?: boolean } = {}): Promise<Te
   return { userId: me.body.data.me.id, token: jwt, cleanup };
 }
 
+/* Inserts vote rows directly, bypassing the API — for tests about what accumulated votes *become*
+   (auras, boards, superlatives, flips), not about whether a vote is accepted.
+
+   The vote mutation only accepts a target the voter's round actually served, and in a shared test
+   school whether one specific person lands in a question's four weighted-random choices is a coin
+   flip — aiming aggregation tests through the mutation made them flaky by construction. Eligibility
+   itself stays covered black-box in voting.test.ts. Row shape matches db.createVote exactly; each
+   vote lands on a different enabled poll, mirroring one voter answering distinct questions. */
+export async function seedVotes(voterId: string, targetId: string, count: number): Promise<void> {
+  const sql = neon(TEST_DATABASE_URL!);
+  const polls = await sql`SELECT id, emoji, text, color FROM polls WHERE enabled ORDER BY created_at LIMIT ${count}`;
+  if (polls.length < count) throw new Error(`seedVotes: need ${count} enabled polls, found ${polls.length}`);
+  for (const p of polls) {
+    await sql`
+      INSERT INTO votes (id, voter_id, target_id, question_id, emoji, text, color)
+      VALUES (${'vote_' + randomUUID().slice(0, 12)}, ${voterId}, ${targetId}, ${p.id}, ${p.emoji}, ${p.text}, ${p.color})
+    `;
+  }
+}
+
 /** Places a test user at a school via their own updateMe — schoolId is self-settable, same as onboarding. */
 export async function joinSchool(token: string, schoolId: string): Promise<void> {
   const r = await callApi('mutation($schoolId:ID){ updateMe(schoolId:$schoolId){ id } }', { schoolId }, token);

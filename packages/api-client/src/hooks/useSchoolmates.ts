@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { GqlFetch } from '../client';
+import type { FriendState } from './useFriends';
 
 const SCHOOLMATES_QUERY = /* GraphQL */ `
   query Schoolmates {
@@ -9,7 +10,8 @@ const SCHOOLMATES_QUERY = /* GraphQL */ `
       lastName
       username
       grade
-      followsMe
+      photo
+      friendState
     }
   }
 `;
@@ -20,10 +22,11 @@ export type Schoolmate = {
   lastName: string | null;
   username: string | null;
   grade: string | null;
-  /* Whether they follow you — 14A groups those first, because following back is the highest-yield tap
-     on the screen. Only this one bit is exposed: who *they* follow stays private (see the `following`
-     field resolver). */
-  followsMe: boolean;
+  photo: string | null;
+  /* Where you and this person stand: friends, you've asked, they've asked, or nothing. The only thing
+     the friend graph exposes about somebody else, and it describes the pair rather than them — their
+     own friend list and count stay private (see the `friends` field resolver). */
+  friendState: FriendState;
 };
 
 type Response = { schoolmates: Schoolmate[] };

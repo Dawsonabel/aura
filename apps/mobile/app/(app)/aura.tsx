@@ -1,44 +1,96 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Share, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { RoundChoice, RoundPoll } from '@aura/api-client';
+import type { FriendState, RoundChoice, RoundPoll } from '@aura/api-client';
 import { useAuraRound } from '../../src/hooks/useAuraRound';
 import { useMe } from '../../src/hooks/useMe';
+import { useSchoolmates } from '../../src/hooks/useSchoolmates';
 import { usePublicProfile } from '../../src/hooks/useProfile';
-import { useFollow, useUnfollow } from '../../src/hooks/useFollow';
+import { useAcceptFriendRequest, useCancelFriendRequest, useRemoveFriend, useSendFriendRequest } from '../../src/hooks/useFriends';
 import { AuthError } from '../../src/components/authKit';
 import { ToyShadow } from '../../src/components/ToyShadow';
 import { Wobble } from '../../src/components/Wobble';
 import { AuraIcon } from '../../src/components/AuraIcon';
-import { COIN_FILL } from '../../src/components/coin';
-import { gradeShort } from '../../src/components/profileKit';
+import { SPARK_FILL } from '../../src/components/currency';
 import { EmptyState, InlineFailure, SkeletonBlock } from '../../src/components/stateKit';
-import {
-  CandidateSheet,
-  CountdownPill,
-  CreamActionCard,
-  PersonPlusButton,
-  RerollShortSheet,
-  RoundPips
-} from '../../src/components/voteKit';
+import { CandidateSheet, CountdownPill, CreamActionCard, RerollShortSheet } from '../../src/components/voteKit';
 import { useRouter } from 'expo-router';
 
-// Cycles pink -> mint -> purple -> yellow in grid order, per the design tokens' avatar rule.
-const ACCENTS = [
-  { bg: '#FF5CA8', shadow: '#C43A7C', ink: '#FFFFFF' },
-  { bg: '#6BF2C2', shadow: '#3FBF95', ink: '#0A3B2C' },
-  { bg: '#7C5CFF', shadow: '#5334D6', ink: '#FFFFFF' },
-  { bg: '#FFD84D', shadow: '#D4AC17', ink: '#3A2A00' }
-];
+/* The pink/mint/purple/yellow ACCENTS rotation lived here to colour the four candidate avatars. The
+   avatars are gone from the ballot, and nothing else on this screen cycled by grid position, so the
+   table went with them — the accents themselves still exist wherever avatars remain (the candidate
+   sheet, profiles, the People screen). */
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase();
+/* `numberWord` lived here, spelling the daily allowance for "That's your three." There is one round an
+   hour now, so that line is "That's your round." and there is no number to spell. */
+
+/* One "+N ⚡" that appears where a vote landed, then leaves.
+
+   Placed at a random point rather than a fixed one because it fires on every question of every round —
+   a reward that always animates from the same spot stops being noticed by the third one. Kept away from
+   the screen edges and off the very top, where the counter it feeds already sits.
+
+   ~2s end to end: a fast fade in, a beat to be read, a slow fade out while it drifts up. The drift is
+   what makes it read as something leaving rather than something blinking. */
+type SparkPop = { id: number; left: number; top: number };
+
+function SparkPopLabel({ pop, onDone }: { pop: SparkPop; onDone: (id: number) => void }) {
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(progress, { toValue: 1, duration: 260, useNativeDriver: true }),
+      Animated.delay(900),
+      Animated.timing(progress, { toValue: 2, duration: 800, useNativeDriver: true })
+    ]).start(({ finished }) => {
+      // Only retire it on a real finish: an interrupted animation means the screen is going away.
+      if (finished) onDone(pop.id);
+    });
+  }, [progress, pop.id, onDone]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: `${pop.left}%`,
+        top: `${pop.top}%`,
+        /* Above the round, not behind it. Siblings paint in source order in RN, and this renders before
+           the ScrollView — without a zIndex the opaque prompt card and candidate cards draw straight
+           over it, which is exactly where the random position tends to put it. */
+        zIndex: 6,
+        opacity: progress.interpolate({ inputRange: [0, 1, 2], outputRange: [0, 1, 0] }),
+        transform: [
+          { translateY: progress.interpolate({ inputRange: [0, 1, 2], outputRange: [10, 0, -34] }) },
+          { scale: progress.interpolate({ inputRange: [0, 1, 2], outputRange: [0.7, 1, 1] }) }
+        ]
+      }}
+    >
+      {/* The glyph alone — no "+1". The number was saying what the counter in the corner already says
+          a beat later, and the bolt on its own is the thing that reads at a glance mid-vote. */}
+      <AuraIcon name="bolt" size={44} color={SPARK_FILL} />
+    </Animated.View>
+  );
 }
 
-const WORDS = ['none', 'one', 'two', 'three', 'four', 'five', 'six'];
-function numberWord(n: number): string {
-  return WORDS[n] ?? String(n);
+/* The running total, pinned over the round rather than in it.
+
+   Overlaid and semi-transparent on purpose: it has to be readable on every question without competing
+   with the prompt or the four faces, and it is the thing the pops above are counting into — so it can't
+   scroll away with the content. It sits above the ScrollView for that reason, not inside it. */
+function SparkCounter({ total, top }: { total: number; top: number }) {
+  return (
+    <View
+      pointerEvents="none"
+      className="flex-row items-center gap-[6px] rounded-pill px-[13px] py-[7px]"
+      style={{ position: 'absolute', right: 21, top, backgroundColor: 'rgba(64,62,65,0.72)', zIndex: 5 }}
+    >
+      <AuraIcon name="bolt" size={18} color={SPARK_FILL} />
+      <Text className="font-nunito-900 text-[16px]" style={{ color: SPARK_FILL }}>
+        {total}
+      </Text>
+    </View>
+  );
 }
 
 export default function Aura() {
@@ -46,31 +98,38 @@ export default function Aura() {
     mode,
     poll,
     choices,
-    count,
-    total,
     pick,
     reroll,
     advance,
     retry,
     playAgain,
     earned,
-    shuffleUsed,
     roundsLeft,
-    roundNumber,
-    dailyLimit,
     nextRoundAt,
     rerollCost,
     rerollPending,
     rerollError,
+    votePayout,
     roundPayout,
     votesToday,
     followWeightFactor
   } = useAuraRound();
   const { data: me } = useMe();
+  /* Where you stand with each candidate, for the sheet's friend button. Read from the schoolmates list
+     rather than the profile query because that's where `friendState` already lives — and the People
+     screen reads the same cache, so the two screens can't disagree about whether you've asked someone. */
+  const { data: schoolmates } = useSchoolmates();
+  const friendStateFor = (id: string | null): FriendState =>
+    schoolmates?.find(s => s.id === id)?.friendState ?? 'none';
   const router = useRouter();
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [shortSheet, setShortSheet] = useState(false);
+  /* Live "+N" labels. A list rather than one slot because votes land faster than the 2s each label
+     lives — a single slot would cut the previous one off mid-fade on a fast round. The id is a plain
+     counter, not Date.now(), so two votes in the same millisecond can't collide on a React key. */
+  const [pops, setPops] = useState<SparkPop[]>([]);
+  const nextPopId = useRef(0);
   // See AuthShell: the spec's flat "58px top" collides with the Dynamic Island on real hardware.
   const insets = useSafeAreaInsets();
 
@@ -89,12 +148,30 @@ export default function Aura() {
     if (pickedId) return;
     setPickedId(targetId);
     pick(targetId);
+    /* Fired here rather than off the mutation's success, and the counter beside it is not waiting on
+       the refetch either. The vote is already guarded — `pickedId` blocks a second one, and a question
+       already answered comes back as a no-op — so the pay is a foregone conclusion by this point, and
+       an animation that waits on a round trip lands after the next question has already slid in.
+       `votePayout` is the served number, so this can't drift from what actually gets credited. */
+    if (votePayout > 0) {
+      setPops(current => [
+        ...current,
+        {
+          id: nextPopId.current++,
+          // Inset from the edges, and clear of the counter's corner.
+          left: 12 + Math.random() * 58,
+          top: 26 + Math.random() * 38
+        }
+      ]);
+    }
     // 300ms lets the avatar-flash read before the next question slides in.
     setTimeout(() => {
       advance();
       setPickedId(null);
     }, 300);
   }
+
+  const dropPop = (id: number) => setPops(current => current.filter(p => p.id !== id));
 
   /* 14A: "the button stays live and opens this sheet instead of dimming into silence — a disabled
      control teaches nothing". So being short of coins is a branch here, not a disabled prop. */
@@ -105,49 +182,50 @@ export default function Aura() {
 
   return (
     <View className="flex-1 bg-ground px-[21px]" style={{ paddingTop: insets.top + 14 }}>
-      <StatusRow
-        coins={coins}
-        streak={me?.streak ?? 0}
-        onPeople={() => router.push('/add')}
-        onCoins={() => router.push('/shop')}
-      />
-
-      {/* Everything below the status row scrolls.
+      {/* Both of these sit outside the ScrollView so they hold their place while the round moves under
+          them — the counter would otherwise scroll off exactly when a pop is animating into it. Only
+          during a round: on the congrats and out-of-rounds screens there is nothing being earned, and a
+          floating balance there is just furniture. */}
+      {mode === 'poll' && (
+        <>
+          <SparkCounter total={coins} top={insets.top + 14} />
+          {pops.map(p => (
+            <SparkPopLabel key={p.id} pop={p} onDone={dropPop} />
+          ))}
+        </>
+      )}
+      {/* Everything on this screen scrolls.
 
           This screen was the one fixed-height surface in the app, on the assumption that a round fits
           a phone. It doesn't always: a three-line prompt pushes the reroll row under the tab bar and
           there was no way to reach it — no scroll to try, since the content sat in a plain View that
-          simply clipped. The status row stays put because the coin balance is what the reroll row
-          spends, and scrolling one out of view to reach the other is how you get a surprise. */}
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
+          simply clipped. */}
+      {/* `flexGrow: 1` so a round that doesn't fill the screen still stretches to it — the prompt card
+          takes the slack (see PromptCard's flex-1 below) instead of leaving a dead band above the tab
+          bar. It's flexGrow, not flex, so a long prompt still overflows into a real scroll rather than
+          being squeezed: content is *at least* one screen tall, never capped at it. */}
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 10 }}
+      >
         {/* 10A: loading, failed and empty are three different things. They all used to render the
             skeleton, which meant a round that never came back looked like one that was still coming. */}
         {mode === 'poll' && poll ? (
-          <>
-            <ProgressRow
-              count={count}
-              total={total}
-              roundNumber={roundNumber}
-              dailyLimit={dailyLimit}
-            />
+          <View className="flex-1">
             <PromptCard poll={poll} />
+            {/* No "tap someone to see their card" hint under the grid. Four tappable faces under a
+                question is self-evident, and the line was competing with the thing it described. */}
             <CandidateGrid choices={choices} pickedId={pickedId} onOpen={setOpenId} />
-
-            <Text className="font-nunito-800 mt-[11px] text-center text-[12.5px] text-ink-faint">
-              Tap someone to see their card.
-            </Text>
 
             <UtilityRow
               onReroll={handleReroll}
-              onSkip={advance}
               locked={pickedId !== null}
               rerollCost={rerollCost}
-              canAfford={canAffordReroll}
               rerollPending={rerollPending}
-              rerollUsed={shuffleUsed}
             />
             {rerollError && <AuthError message={rerollError} />}
-          </>
+          </View>
         ) : mode === 'congrats' ? (
           /* Every completed round used to land here and render the loading skeleton forever, because
              this screen had no branch for 'congrats' — a dead end at the end of all 12 questions. With
@@ -155,7 +233,7 @@ export default function Aura() {
           <RoundDone
             earned={earned}
             roundsLeft={roundsLeft}
-            godMode={!!me?.godMode}
+            infiniteAura={!!me?.infiniteAura}
             onNext={playAgain}
           />
         ) : mode === 'failed' ? (
@@ -169,9 +247,8 @@ export default function Aura() {
           </View>
         ) : mode === 'out' ? (
           <OutOfRounds
-            dailyLimit={dailyLimit}
             votesToday={votesToday}
-            followingCount={me?.following?.length ?? 0}
+            followingCount={me?.friends?.length ?? 0}
             followWeightFactor={followWeightFactor}
             nextRoundAt={nextRoundAt}
             onPeople={() => router.push('/add')}
@@ -202,7 +279,7 @@ export default function Aura() {
       {openId && (
         <CandidateSheetData
           userId={openId}
-          following={me?.following ?? []}
+          friendState={friendStateFor(openId)}
           onClose={() => setOpenId(null)}
           onVote={() => {
             const id = openId;
@@ -221,7 +298,6 @@ export default function Aura() {
         visible={shortSheet}
         cost={rerollCost}
         balance={coins}
-        questionsLeft={Math.max(0, total - count + 1)}
         payout={roundPayout}
         onKeep={() => setShortSheet(false)}
         onBuy={() => {
@@ -234,33 +310,43 @@ export default function Aura() {
 }
 
 /* The sheet's data, kept in its own component so the profile query mounts with the card and unmounts
-   with it. Follow state comes from `me.following` — the same list the People screen reads, so following
-   from here and following from the list can't disagree. */
+   with it. `friendState` is passed in from the schoolmates list — the same value the People screen
+   reads, so adding someone from here and adding them from the list can't disagree about which of the
+   five states they're in. */
 function CandidateSheetData({
   userId,
-  following,
+  friendState,
   onClose,
   onVote,
   onOpenProfile
 }: {
   userId: string;
-  following: string[];
+  friendState: FriendState;
   onClose: () => void;
   onVote: () => void;
   onOpenProfile: () => void;
 }) {
   const { data: profile, isLoading } = usePublicProfile(userId);
-  const follow = useFollow();
-  const unfollow = useUnfollow();
-  const isFollowing = following.includes(userId);
+  const send = useSendFriendRequest();
+  const cancel = useCancelFriendRequest();
+  const accept = useAcceptFriendRequest();
+  const removeFriend = useRemoveFriend();
+  const busy = send.isPending || cancel.isPending || accept.isPending || removeFriend.isPending;
+
+  function act() {
+    if (friendState === 'friends') return removeFriend.mutate(userId);
+    if (friendState === 'sent') return cancel.mutate(userId);
+    if (friendState === 'received') return accept.mutate(userId);
+    return send.mutate(userId);
+  }
 
   return (
     <CandidateSheet
       profile={profile}
       loading={isLoading}
-      isFollowing={isFollowing}
-      followBusy={follow.isPending || unfollow.isPending}
-      onToggleFollow={() => (isFollowing ? unfollow.mutate(userId) : follow.mutate(userId))}
+      friendState={friendState}
+      friendBusy={busy}
+      onFriendAction={act}
       onVote={onVote}
       onOpenProfile={onOpenProfile}
       onClose={onClose}
@@ -268,118 +354,40 @@ function CandidateSheetData({
   );
 }
 
-function StatusRow({
-  coins,
-  streak,
-  onPeople,
-  onCoins
-}: {
-  coins: number;
-  streak: number;
-  onPeople: () => void;
-  onCoins: () => void;
-}) {
-  return (
-    <View className="flex-row items-center justify-between">
-      {/* The AURA wordmark used to sit centred here. It came out when the Flames tab became the AURA
-          tab: the word would then appear twice on one screen, once as the brand and once as the name
-          of a different thing you can tap. The tab bar carries the name now. */}
+/* `ProgressRow` lived here — ten notches and a "3/10" for the questions answered so far.
 
-      {/* Real streak: `me.streak` is derived server-side (streak.ts) and reads 0 the moment a day is
-          missed. This used to be a hardcoded 12 — an invented number on the app's most-visited screen.
-          At 0 the pill goes quiet rather than announcing a streak of nothing. */}
-      {streak > 0 ? (
-        <ToyShadow depth={3} shadowColor="#C4501E" backgroundColor="#FF7A3D" radius={9999}>
-          <View className="flex-row items-center gap-[7px] px-[14px] py-[7px]">
-            <AuraIcon name="flame" size={18} color="#FFFFFF" />
-            <Text className="font-nunito-900 text-[15px] text-white">{streak}</Text>
-            <Text className="font-nunito-800 text-[13px]" style={{ color: '#FFE0CE' }}>
-              {streak === 1 ? 'day' : 'days'}
-            </Text>
-          </View>
-        </ToyShadow>
-      ) : (
-        <View className="flex-row items-center gap-[7px] rounded-pill bg-surface px-[14px] py-[7px]">
-          <AuraIcon name="flame" size={18} color="#848286" />
-          <Text className="font-nunito-800 text-[13px] text-ink-dim">Start a streak</Text>
-        </View>
-      )}
+   It's gone, and not for layout reasons. A visible end makes the round a task with a finish line: you
+   see two notches left and you're playing to be done rather than because the next question is worth
+   answering. Without it the round just keeps handing you people until it doesn't, which is the same
+   ten questions and a completely different feeling.
 
-      <View className="flex-row items-center gap-[9px]">
-        {/* The balance is the natural door to the Shop — you tap the number you want more of. Keeps the
-            Shop off the tab bar, which 14A already settled at four items. */}
-        <Pressable
-          onPress={onCoins}
-          hitSlop={6}
-          className="flex-row items-center gap-[7px] rounded-pill bg-surface px-[14px] py-[7px]"
-        >
-          <AuraIcon name="coin" size={18} color={COIN_FILL} />
-          <Text className="font-nunito-900 text-[15px] text-white">{coins}</Text>
-        </Pressable>
-        {/* 14A's navigation call: People is not a fifth tab (five 78px items don't fit, and a tab would
-            compete with voting for the session). This button is its primary entry point. */}
-        <PersonPlusButton onPress={onPeople} />
-      </View>
-    </View>
-  );
-}
+   What's left to say "you're partway through something" is nothing at all, deliberately. The round
+   ends when it ends, and the out-of-rounds screen is where the count belongs — after the fact, where
+   it reads as what you did rather than as what's left. */
 
-function ProgressRow({
-  count,
-  total,
-  roundNumber,
-  dailyLimit
-}: {
-  count: number;
-  total: number;
-  roundNumber: number;
-  dailyLimit: number;
-}) {
-  const pct = total > 0 ? (count / total) * 100 : 0;
-  return (
-    <>
-      <View className="mt-[22px] flex-row items-center gap-[10px]">
-        <RoundPips total={dailyLimit} current={roundNumber} />
-        {/* The pips are the glance; the words are the answer. 14A: "Copy names the state in words so it
-            never reads as fuel." */}
-        {dailyLimit > 0 && (
-          <Text className="font-nunito-800 text-[13px] text-ink-muted">
-            Round {roundNumber} of {dailyLimit} today
-          </Text>
-        )}
-        <View className="flex-1" />
-        <Text className="font-nunito-800 text-[13px] text-ink-secondary">
-          {count}/{total}
-        </Text>
-      </View>
-      {/* Still the only bar on the screen — the rounds indicator is pips precisely so there aren't two. */}
-      <View className="mt-2 h-[10px] overflow-hidden rounded-pill bg-surface">
-        <View className="h-full rounded-pill bg-mint" style={{ width: `${pct}%` }} />
-      </View>
-    </>
-  );
-}
+/* The question, centred, and nothing else on the card.
 
+   Two things came off it. The "EVERYONE'S VOTING ON THIS" banner was decoration asserting something
+   the screen already makes obvious — it's the only question on screen and there's a progress bar
+   above it — and it was the one element breaking the card's rectangle, which cost it presence. The
+   "They'll know they got picked. Never that it was you." line explained the anonymity rule on every
+   single question, twelve times a round; onboarding says it once, which is where a rule belongs.
+
+   Bigger and centred because this is the thing being answered. `minHeight` rather than fixed height:
+   a one-line prompt still gets a substantial card instead of a thin strip, and a three-line one grows
+   past it — the enclosing ScrollView is what catches the overflow. */
 function PromptCard({ poll }: { poll: RoundPoll }) {
   return (
-    <View className="mt-[22px] rounded-26 bg-surface p-5" style={{ position: 'relative' }}>
-      <View
-        className="rounded-pill bg-yellow px-3 py-[5px]"
-        style={{ position: 'absolute', top: -14, left: 20, transform: [{ rotate: '-3deg' }] }}
-      >
-        <Text className="font-nunito-900 text-[12px]" style={{ color: '#3A2A00' }}>
-          EVERYONE'S VOTING ON THIS
-        </Text>
-      </View>
-
+    /* No top margin: with the progress row removed this is the first thing on the screen, and a margin
+       stacked on the container's safe-area padding would open the dead band the row used to fill. */
+    <View className="flex-1 items-center justify-center rounded-26 bg-surface px-6 py-7" style={{ minHeight: 210 }}>
       <Wobble>
-        <Text style={{ fontSize: 40 }}>{poll.emoji}</Text>
+        <Text style={{ fontSize: 62 }}>{poll.emoji}</Text>
       </Wobble>
 
-      <Text className="font-fredoka-700 mt-2 text-[31px] leading-[33px] text-white">{poll.text}</Text>
-      <Text className="font-nunito-700 mt-2 text-[13.5px] text-ink-muted">
-        They'll know they got picked. Never that it was you.
-      </Text>
+      {/* Bigger with the progress row's space. This is the thing being answered, and it now has the
+          top of the screen to itself. */}
+      <Text className="font-fredoka-700 mt-3 text-center text-[36px] leading-[40px] text-white">{poll.text}</Text>
     </View>
   );
 }
@@ -403,7 +411,6 @@ function CandidateGrid({
             <CandidateCard
               key={c.id}
               choice={c}
-              accent={ACCENTS[(i * 2 + j) % ACCENTS.length]}
               picked={c.id === pickedId}
               disabled={pickedId !== null}
               onPress={() => onOpen(c.id)}
@@ -417,65 +424,59 @@ function CandidateGrid({
 
 function CandidateCard({
   choice,
-  accent,
   picked,
   disabled,
   onPress
 }: {
   choice: RoundChoice;
-  accent: { bg: string; shadow: string; ink: string };
   picked: boolean;
   disabled: boolean;
   onPress: () => void;
 }) {
-  const avatarAccent = picked ? { bg: '#FF5CA8', shadow: '#C43A7C', ink: '#FFFFFF' } : accent;
-  /* Grade only. This line used to read a hardcoded "11th · Lakeview", then a real "9th · Lincoln High
-     Sch…" — but every candidate is at the viewer's own school by construction, so the school name was
-     a constant that only ever ellipsised the one varying part off the end of the line. */
-  const meta = gradeShort(choice.grade) ?? '';
+  /* Just the name, centred.
 
+     The avatar came off the ballot entirely — it's on the candidate sheet, which is where you land the
+     moment you tap. On the grid it was a 44px disc of pure decoration competing with the one word that
+     actually identifies the person, and four of them made the grid read as a colour swatch chart.
+
+     Long names wrap to a second line and stack — "Kai Robinson" breaks at the space into first name
+     over last. Two lines is the cap; a third would start pushing the grid around mid-round.
+
+     `picked` moved from the avatar onto the whole card. It's the 300ms flash between casting a vote in
+     the sheet and the next question sliding in — the only confirmation that the tap landed on the
+     person you meant — and with the avatar gone it had nothing left to colour. */
   return (
     <View className="flex-1">
       <ToyShadow
         depth={5}
-        shadowColor="#D9C7AF"
-        backgroundColor="#FFF6E8"
+        shadowColor={picked ? '#C43A7C' : '#D9C7AF'}
+        backgroundColor={picked ? '#FF5CA8' : '#FFF6E8'}
         radius={24}
         onPress={onPress}
         disabled={disabled}
       >
-        <View className="gap-[11px] px-[14px] py-4">
-          {/* self-start, or the avatar isn't round.
-
-              ToyShadow's slab and face are plain Views, and this card is a flex *column*, so the default
-              alignItems: stretch pulls them to the full card width — the inner 54×54 keeps its size but
-              the coloured slab behind it becomes a full-width pill. Every other avatar in the app sits in
-              a row (where stretch affects height, not width), which is why this is the only one that
-              needed it, and why it went unnoticed until the grid first rendered with real candidates. */}
-          <View className="self-start">
-            <ToyShadow depth={3} shadowColor={avatarAccent.shadow} backgroundColor={avatarAccent.bg} radius={9999}>
-              <View className="h-[54px] w-[54px] items-center justify-center">
-                <Text className="font-fredoka-700 text-[21px]" style={{ color: avatarAccent.ink }}>
-                  {initials(choice.name)}
-                </Text>
-              </View>
-            </ToyShadow>
-          </View>
-          <View>
-            <Text className="font-nunito-900 text-[17px]" style={{ color: '#2D2A2E' }} numberOfLines={1}>
-              {choice.name}
-            </Text>
-            {meta.length > 0 && (
-              <Text className="font-nunito-700 text-[13px]" style={{ color: '#8B888D' }} numberOfLines={1}>
-                {meta}
-              </Text>
-            )}
-          </View>
+        {/* minHeight, because the card has no avatar to give it size any more — without it the four
+            cards would collapse to two lines of text and the grid would lose its shape. */}
+        <View className="items-center justify-center px-[14px] py-[24px]" style={{ minHeight: 132 }}>
+          <Text
+            className="font-fredoka-700 text-center text-[27px]"
+            numberOfLines={2}
+            style={{ color: picked ? '#FFFFFF' : '#2D2A2E', lineHeight: 31 }}
+          >
+            {choice.name}
+          </Text>
         </View>
       </ToyShadow>
     </View>
   );
 }
+
+/* Re-roll sits the same distance from the grid above it as it does from the tab bar below.
+
+   Below is not this component's to set: the scroll view's own bottom padding (10) plus the tab bar
+   container's top padding (12, in `(app)/_layout.tsx`) already come to 22. So this is 22, and the two
+   gaps match. Anything that changes either of those two numbers has to change this one. */
+const REROLL_GAP = 22;
 
 /* The reroll button's four states, from 14A's state strip:
      affordable       — mint-ink price chip, toy shadow, tappable
@@ -483,85 +484,80 @@ function CandidateCard({
      pending          — "Shuffling…", flat, no shadow
      already rerolled — flat and darker, one per question, no shadow
 
-   `locked` (a vote is mid-flight) is separate from all four: it dims both buttons for 300ms and is
+   `locked` (a vote is mid-flight) is separate from all four: it dims the button for 300ms and is
    never a state the user is meant to read. */
 function UtilityRow({
   onReroll,
-  onSkip,
   locked,
   rerollCost,
-  canAfford,
   rerollPending,
-  rerollUsed
 }: {
   onReroll: () => void;
-  onSkip: () => void;
   locked: boolean;
   rerollCost: number;
-  canAfford: boolean;
   rerollPending: boolean;
-  rerollUsed: boolean;
 }) {
-  const flat = rerollPending || rerollUsed;
+  /* Only "Shuffling…" now. There is no "already rerolled" state — rerolls are unlimited, so the
+     button never retires; the price is the only thing that stops you. */
+  const flat = rerollPending;
 
+  /* Full width, under the whole grid.
+
+     Skip used to sit beside it, splitting this row 1:1 so the seam lined up with the gap between the
+     two columns of cards. Skip is gone — the round advances on a vote, and a button whose only job was
+     to not answer was giving equal billing to doing nothing. Re-roll now takes the width the pair had,
+     which also makes it a much bigger target than half a row. */
   return (
-    <View className="mt-3 flex-row gap-[10px]">
-      {/* flex lives on the wrapper, not the ToyShadow: the shadow sizes itself to its content, so a
-          flex on it would collapse the slab to the width of the label (same as AuthButton). */}
-      <View style={{ flex: 1.35 }}>
-        {flat ? (
-          <View
-            className="items-center rounded-pill py-[13px]"
-            style={{ backgroundColor: rerollUsed ? '#332F35' : '#4E4B50' }}
-          >
-            <Text className="font-nunito-900 text-[14.5px]" style={{ color: rerollUsed ? '#6E6B70' : '#B3B1B4' }}>
-              {rerollPending ? 'Shuffling…' : 'Already rerolled'}
-            </Text>
-          </View>
-        ) : (
-          <ToyShadow
-            depth={4}
-            shadowColor="#2E2C30"
-            backgroundColor="#4E4B50"
-            radius={9999}
-            onPress={onReroll}
-            disabled={locked}
-            style={locked || !canAfford ? { opacity: 0.6 } : undefined}
-          >
-            <View className="flex-row items-center justify-center gap-2 py-[12px]">
-              <AuraIcon name="reroll" size={17} color="#FFFFFF" />
-              <Text className="font-nunito-900 text-[14.5px] text-white">New four</Text>
-              <View className="flex-row items-center gap-1 rounded-pill px-[9px] py-[3px]" style={{ backgroundColor: '#645F67' }}>
-                {/* Pink ink when you can't cover it: the price is the reason the tap will open a sheet
-                    instead of new faces, so the price is what changes colour. */}
-                <AuraIcon name="coin" size={13} color={canAfford ? COIN_FILL : '#FFC9E4'} />
-                <Text className="font-nunito-900 text-[12.5px]" style={{ color: canAfford ? COIN_FILL : '#FFC9E4' }}>
-                  {rerollCost}
-                </Text>
-              </View>
-            </View>
-          </ToyShadow>
-        )}
-      </View>
-
-      <View style={{ flex: 1 }}>
+    /* Centred at 80% of the row rather than edge to edge. Full width made it the widest thing on the
+       screen — wider than the candidate cards it's subordinate to — which read as the primary action
+       when the primary action is picking someone. Narrower keeps it an obvious target without
+       out-ranking the grid. Both states take the same width, or the button would resize mid-shuffle. */
+    <View style={{ marginTop: REROLL_GAP, alignItems: 'center' }}>
+      {flat ? (
+        <View
+          className="items-center rounded-pill py-[18px]"
+          style={{ width: '80%', backgroundColor: '#4E4B50' }}
+        >
+          <Text className="font-fredoka-700 text-[19px]" style={{ color: '#B3B1B4' }}>
+            Shuffling…
+          </Text>
+        </View>
+      ) : (
+        /* Width goes on a wrapper, not on ToyShadow's `style` — that prop lands on the inner face, so
+           sizing through it would leave a full-width shadow slab under an 80% button. */
+        <View style={{ width: '80%' }}>
         <ToyShadow
           depth={4}
           shadowColor="#2E2C30"
           backgroundColor="#4E4B50"
           radius={9999}
-          onPress={onSkip}
+          onPress={onReroll}
           disabled={locked}
+          /* Dimmed only while a vote is in flight. Not for affordability — see the price chip below. */
           style={locked ? { opacity: 0.6 } : undefined}
         >
-          <View className="flex-row items-center justify-center gap-[7px] py-[13px]">
-            <Text className="font-nunito-800 text-[15px]" style={{ color: '#D6D5D6' }}>
-              Skip
-            </Text>
-            <AuraIcon name="skip" size={16} color="#D6D5D6" />
+          {/* Sized to fill the button rather than float in it. At full width this row was three small
+              things centred in a lot of nothing; the label carries the width now. */}
+          <View className="flex-row items-center justify-center gap-[12px] py-[14px]">
+            {/* The dice, not the circular-arrow `reroll` glyph: this swaps four people for four other
+                people, which is a roll rather than a retry. Same icon the Shop's random boost uses. */}
+            <AuraIcon name="dice" size={27} color="#FFFFFF" />
+            <Text className="font-fredoka-700 text-[21px] text-white">Re-Roll</Text>
+            {/* The price, in white, and nothing else.
+
+                It briefly carried the balance too and turned pink when you couldn't cover it. Both are
+                gone: the balance lives in the counter pinned top-right, where it's visible on every
+                question rather than only next to this button, and colouring the price pink pre-judged
+                a tap that still does something useful — being short opens the sheet that explains the
+                shortfall. A button that looks broken teaches less than one that answers. */}
+            <View className="flex-row items-center gap-[5px] rounded-pill px-[11px] py-[5px]" style={{ backgroundColor: '#645F67' }}>
+              <AuraIcon name="bolt" size={16} color="#FFFFFF" />
+              <Text className="font-nunito-900 text-[15.5px] text-white">{rerollCost}</Text>
+            </View>
           </View>
         </ToyShadow>
-      </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -572,12 +568,12 @@ function UtilityRow({
 function RoundDone({
   earned,
   roundsLeft,
-  godMode,
+  infiniteAura,
   onNext
 }: {
   earned: number;
   roundsLeft: number;
-  godMode: boolean;
+  infiniteAura: boolean;
   onNext: () => void;
 }) {
   const more = roundsLeft > 0;
@@ -588,7 +584,10 @@ function RoundDone({
         iconColor="#3FBF95"
         title="Round done"
         body={
-          `You earned ${earned} ${earned === 1 ? 'coin' : 'coins'}${godMode ? ' at the God Mode rate' : ''}. ` +
+          /* No noun. The currency's glyph is a bolt and it has no agreed name yet, so this counts
+             without naming — and the old "at the Infinite Aura rate" is gone twice over: the product is
+             called Infinite Aura, and its rate is deliberately level with everyone else's. */
+          `You earned ${earned} this round. ` +
           (more
             ? `${roundsLeft} more ${roundsLeft === 1 ? 'round' : 'rounds'} today.`
             : "That's your last one today.")
@@ -602,11 +601,14 @@ function RoundDone({
 }
 
 /* 14A screen 3. Not 10A's generic empty state, on purpose: running out of rounds is the designed end of
-   a session rather than a shortage of content, so it gets the purple "see you at midnight" tag, the
-   day's real vote count, a live countdown to the refill, and the two moves that actually change
-   tomorrow's four. The aura line gives the session somewhere to go instead of ending it. */
+   a session rather than a shortage of content, so it gets the purple tag, the day's real vote count, a
+   live countdown to the refill, and the two moves that actually change your next four. The aura line
+   gives the session somewhere to go instead of ending it.
+
+   The wait is an hour now rather than until midnight, which changes what this screen is for: it used
+   to be a goodbye and is now a short interval, so the copy points at the clock rather than at
+   tomorrow. */
 function OutOfRounds({
-  dailyLimit,
   votesToday,
   followingCount,
   followWeightFactor,
@@ -614,7 +616,6 @@ function OutOfRounds({
   onPeople,
   onAura
 }: {
-  dailyLimit: number;
   votesToday: number;
   followingCount: number;
   followWeightFactor: number;
@@ -632,35 +633,29 @@ function OutOfRounds({
 
   return (
     <>
-      <View className="mt-[22px] flex-row items-center gap-[10px]">
-        <RoundPips total={dailyLimit} current={dailyLimit + 1} />
-        <Text className="font-nunito-800 text-[13px] text-ink-muted">
-          All {dailyLimit} {dailyLimit === 1 ? 'round' : 'rounds'} played
-        </Text>
-      </View>
+      {/* No notches here either. They were the finished state of a progress bar the round no longer
+          shows, so they referred to something you never saw. */}
 
       <View className="mt-[30px] rounded-30 bg-surface px-[22px] py-6" style={{ position: 'relative' }}>
         <View style={{ position: 'absolute', top: -14, left: 22, transform: [{ rotate: '-3deg' }] }}>
           <ToyShadow depth={3} shadowColor="#5334D6" backgroundColor="#7C5CFF" radius={9999}>
             <View className="px-3 py-[5px]">
-              <Text className="font-nunito-900 text-[12px] text-white">SEE YOU AT MIDNIGHT</Text>
+              <Text className="font-nunito-900 text-[12px] text-white">BACK ON THE HOUR</Text>
             </View>
           </ToyShadow>
         </View>
 
-        <Text className="font-fredoka-700 mt-2 text-[34px] leading-[36px] text-white">
-          That's your {numberWord(dailyLimit)}.
-        </Text>
+        <Text className="font-fredoka-700 mt-2 text-[34px] leading-[36px] text-white">That's your round.</Text>
         <Text className="font-nunito-700 mt-[10px] text-[14.5px] leading-[22px] text-ink-secondary">
           {votesToday > 0
             ? `${votesToday} ${votesToday === 1 ? 'vote' : 'votes'} cast today. Somebody's inbox is lighting up right now and they'll never know it was you.`
-            : "You skipped every question today, so nobody got aura from you. Tomorrow's four are waiting."}
+            : 'You answered none of them, so nobody got aura from you. The next ten are close.'}
         </Text>
 
-        <CountdownPill untilIso={nextRoundAt} trailing={`until ${dailyLimit} more`} />
+        <CountdownPill untilIso={nextRoundAt} trailing="until the next round" />
       </View>
 
-      <Text className="font-nunito-900 mt-4 text-[12.5px] text-ink-muted">MAKE TOMORROW BETTER</Text>
+      <Text className="font-nunito-900 mt-4 text-[12.5px] text-ink-muted">MAKE THE NEXT ONE BETTER</Text>
 
       <View className="mt-[11px] gap-[10px]">
         <CreamActionCard

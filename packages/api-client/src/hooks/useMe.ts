@@ -8,22 +8,21 @@ const ME_QUERY = /* GraphQL */ `
       id
       coins
       onboarded
-      godMode
+      infiniteAura
       firstName
       lastName
       username
       gender
       grade
-      hideTopFlames
-      notifyFlames
+      hideTopAuras
+      notifyAuras
       notifyRound
       notifyFriendJoined
       quietHours
       pushEnabled
       streak
       roundsTotal
-      following
-      followerCount
+      friends
       socials {
         instagram
         snapchat
@@ -43,17 +42,17 @@ export type Me = {
   id: string;
   coins: number;
   onboarded: boolean;
-  godMode: boolean | null;
+  infiniteAura: boolean | null;
   firstName: string | null;
   lastName: string | null;
   username: string | null;
   gender: string | null;
   grade: string | null;
-  hideTopFlames: boolean | null;
+  hideTopAuras: boolean | null;
   /* 7A notification preferences. `null` means the user has never set that switch, which is NOT the
-     same as off — the server's sender applies its own default (flames/rounds on, friend-joined off),
+     same as off — the server's sender applies its own default (auras/rounds on, friend-joined off),
      so the UI has to render the same fallback rather than showing an unset switch as off. */
-  notifyFlames: boolean | null;
+  notifyAuras: boolean | null;
   notifyRound: boolean | null;
   notifyFriendJoined: boolean | null;
   quietHours: boolean | null;
@@ -63,11 +62,11 @@ export type Me = {
   streak: number;
   /** Rounds ever completed. Only used to retire the Vote grid's "hold to peek" teaching chip. */
   roundsTotal: number;
-  /** Ids this user follows. One-directional; drives candidate weighting in the round. */
-  following: string[] | null;
-  /* How many people follow you. Yours alone — the server returns 0 for anyone else, and no screen shows
-     it on another person's profile. A count, never a list: who follows you stays private. */
-  followerCount: number;
+  /* Your friends. Mutual and approved, and drives candidate weighting in the round.
+
+     Yours alone — the server returns an empty list for anyone else, and there is no count field for
+     another person either. Count this if you need your own number. */
+  friends: string[] | null;
   /** Linktree-style handles shown on the Me tab. Always an object; each platform may be null. */
   socials: Socials;
   schoolId: string | null;

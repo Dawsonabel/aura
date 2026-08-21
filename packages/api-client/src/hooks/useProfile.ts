@@ -22,7 +22,7 @@ const PUBLIC_PROFILE_QUERY = /* GraphQL */ `
       grade
       gender
       schoolName
-      flames
+      auras
       rank
       blocked
       superlatives { ${SUPERLATIVE_FIELDS} }
@@ -47,7 +47,7 @@ export type PublicProfile = {
   grade: string | null;
   gender: string | null;
   schoolName: string | null;
-  flames: number;
+  auras: number;
   /** Null while the school's board is still locked, so this can't disagree with the Ranks tab. */
   rank: number | null;
   blocked: boolean;

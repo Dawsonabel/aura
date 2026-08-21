@@ -3,7 +3,7 @@ import { Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useClerk } from '@clerk/expo';
 import { useMe } from '../../src/hooks/useMe';
-import { useFlames } from '../../src/hooks/useFlames';
+import { useAuras } from '../../src/hooks/useAuras';
 import { useDeleteMe } from '../../src/hooks/useDeleteMe';
 import { AuthBack, AuthError, AuthHeading, AuthShell } from '../../src/components/authKit';
 import { InfoCard, Strong } from '../../src/components/settingsKit';
@@ -38,8 +38,8 @@ export default function DeleteAccount() {
     }
   }
 
-  const { data: flamesData } = useFlames();
-  const flameCount = flamesData?.flames.length ?? 0;
+  const { data: aurasData } = useAuras();
+  const auraCount = aurasData?.auras.length ?? 0;
   const coins = me?.coins ?? 0;
 
   return (
@@ -54,7 +54,7 @@ export default function DeleteAccount() {
       <View className="mt-5 gap-[9px]">
         <InfoCard icon="aura">
           <>
-            Your <Strong>{flameCount} aura</Strong>, your streak and your{' '}
+            Your <Strong>{auraCount} aura</Strong>, your streak and your{' '}
             <Strong>{coins} coins</Strong> are deleted. None of it comes back if you rejoin.
           </>
         </InfoCard>
@@ -63,7 +63,7 @@ export default function DeleteAccount() {
         </InfoCard>
         <InfoCard icon="coin">
           <>
-            God Mode bills through the App Store — <Strong>cancel there too</Strong>, or it keeps charging.
+            Infinite Aura bills through the App Store — <Strong>cancel there too</Strong>, or it keeps charging.
           </>
         </InfoCard>
       </View>

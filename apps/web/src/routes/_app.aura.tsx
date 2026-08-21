@@ -8,7 +8,7 @@ export const Route = createFileRoute('/_app/aura')({
 });
 
 export function Aura() {
-  const { mode, poll, choices, count, total, answered, shuffleUsed, earned, pick, shuffle, advance, cashOut, playAgain, retry } =
+  const { mode, poll, choices, count, total, answered, rerollPending, earned, pick, shuffle, advance, cashOut, playAgain, retry } =
     useAuraRound();
   const { data: me } = useMe();
 
@@ -19,7 +19,7 @@ export function Aura() {
   if (mode === 'failed') return <RoundProblemView title="Today's round didn't load." onRetry={retry} />;
   if (mode === 'empty')
     return <RoundProblemView title="No questions are set up for your school yet." onRetry={retry} />;
-  if (mode === 'congrats') return <CongratsView earned={earned} godMode={!!me?.godMode} onCashOut={cashOut} />;
+  if (mode === 'congrats') return <CongratsView earned={earned} infiniteAura={!!me?.infiniteAura} onCashOut={cashOut} />;
   if (mode === 'playagain') return <PlayAgainView onPlayAgain={playAgain} />;
 
   if (!poll) return <LoadingView />;
@@ -31,7 +31,7 @@ export function Aura() {
       count={count}
       total={total}
       answered={answered}
-      shuffleUsed={shuffleUsed}
+      rerollPending={rerollPending}
       onPick={pick}
       onShuffle={shuffle}
       onAdvance={advance}
@@ -65,7 +65,7 @@ function PollView({
   count,
   total,
   answered,
-  shuffleUsed,
+  rerollPending,
   onPick,
   onShuffle,
   onAdvance
@@ -75,7 +75,7 @@ function PollView({
   count: number;
   total: number;
   answered: boolean;
-  shuffleUsed: boolean;
+  rerollPending: boolean;
   onPick: (targetId: string) => void;
   onShuffle: () => void;
   onAdvance: () => void;
@@ -106,7 +106,7 @@ function PollView({
         </button>
       ) : (
         <div className="flex gap-2">
-          <button type="button" disabled={shuffleUsed} onClick={onShuffle} className="rounded border px-3 py-2 disabled:opacity-40">
+          <button type="button" disabled={rerollPending} onClick={onShuffle} className="rounded border px-3 py-2 disabled:opacity-40">
             ⇄ Shuffle
           </button>
           <button type="button" onClick={onAdvance} className="rounded border px-3 py-2">
@@ -118,13 +118,13 @@ function PollView({
   );
 }
 
-function CongratsView({ earned, godMode, onCashOut }: { earned: number; godMode: boolean; onCashOut: () => void }) {
+function CongratsView({ earned, infiniteAura, onCashOut }: { earned: number; infiniteAura: boolean; onCashOut: () => void }) {
   return (
     <div className="flex flex-col items-center gap-4 text-center">
       <h1 className="text-2xl font-bold">Congrats</h1>
       <div className="text-4xl">🪙</div>
       <p>
-        You earned <b>{earned}</b> coins{godMode ? <span className="text-purple-600"> ⚡2×</span> : null}
+        You earned <b>{earned}</b> coins{infiniteAura ? <span className="text-purple-600"> ⚡2×</span> : null}
       </p>
       <button type="button" onClick={onCashOut} className="rounded-full bg-black px-4 py-2 text-white">
         🤑 Cash Out

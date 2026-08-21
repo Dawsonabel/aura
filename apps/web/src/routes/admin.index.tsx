@@ -5,12 +5,12 @@ export const Route = createFileRoute('/admin/')({
   component: Overview
 });
 
-const TILES: { key: 'schools' | 'users' | 'polls' | 'votes' | 'godMode' | 'reports'; label: string }[] = [
+const TILES: { key: 'schools' | 'users' | 'polls' | 'votes' | 'infiniteAura' | 'reports'; label: string }[] = [
   { key: 'schools', label: 'Schools' },
   { key: 'users', label: 'Users' },
   { key: 'polls', label: 'Poll questions' },
   { key: 'votes', label: 'Votes cast' },
-  { key: 'godMode', label: 'God Mode users' },
+  { key: 'infiniteAura', label: 'Infinite Aura users' },
   { key: 'reports', label: 'Open reports' }
 ];
 

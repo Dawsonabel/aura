@@ -4,11 +4,11 @@ import { gqlFetch } from '../lib/graphql';
 
 const ADMIN_UPDATE_USER_MUTATION = /* GraphQL */ `
   mutation AdminUpdateUser(
-    $id: ID!, $schoolId: ID, $grade: String, $coins: Int, $godMode: Boolean,
+    $id: ID!, $schoolId: ID, $grade: String, $coins: Int, $infiniteAura: Boolean,
     $firstName: String, $lastName: String, $username: String
   ) {
     adminUpdateUser(
-      id: $id, schoolId: $schoolId, grade: $grade, coins: $coins, godMode: $godMode,
+      id: $id, schoolId: $schoolId, grade: $grade, coins: $coins, infiniteAura: $infiniteAura,
       firstName: $firstName, lastName: $lastName, username: $username
     ) {
       id
@@ -18,7 +18,7 @@ const ADMIN_UPDATE_USER_MUTATION = /* GraphQL */ `
       username
       grade
       coins
-      godMode
+      infiniteAura
     }
   }
 `;
@@ -28,7 +28,7 @@ export type AdminUpdateUserInput = {
   schoolId?: string;
   grade?: string;
   coins?: number;
-  godMode?: boolean;
+  infiniteAura?: boolean;
   firstName?: string;
   lastName?: string;
   username?: string;

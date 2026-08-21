@@ -8,7 +8,6 @@
     "@clerk/expo": "^4.3.0",
     "@expo-google-fonts/fredoka": "^0.4.1",
     "@expo-google-fonts/nunito": "^0.4.2",
-    "@shopify/react-native-skia": "2.6.2",
     "@tanstack/react-query": "^5.101.4",
     "expo": "~57.0.13",
     "expo-auth-session": "~57.0.7",
@@ -35,6 +34,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "babel-preset-expo": "~57.0.7",
     "typescript": "~6.0.3"
   },
   "scripts": {

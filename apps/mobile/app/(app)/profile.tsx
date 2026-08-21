@@ -7,7 +7,8 @@ import { useMe } from '../../src/hooks/useMe';
 import { useUpdateMe, type UpdateMeInput } from '../../src/hooks/useUpdateMe';
 import { useMySuperlatives } from '../../src/hooks/useProfile';
 import { useBoard } from '../../src/hooks/useBoard';
-import { useFlames } from '../../src/hooks/useFlames';
+import { useAuras } from '../../src/hooks/useAuras';
+import { useFriendRequests } from '../../src/hooks/useFriends';
 import { AuthError } from '../../src/components/authKit';
 import { InfoCard } from '../../src/components/settingsKit';
 import { ToyShadow } from '../../src/components/ToyShadow';
@@ -15,7 +16,7 @@ import { EditProfileSheet } from '../../src/components/EditProfileSheet';
 import { SkeletonBlock } from '../../src/components/stateKit';
 import { PersonPlusButton } from '../../src/components/voteKit';
 import { AuraIcon } from '../../src/components/AuraIcon';
-import { COIN_FILL } from '../../src/components/coin';
+import { SPARK_FILL } from '../../src/components/currency';
 import { BrandTile } from '../../src/components/BrandMark';
 import {
   ProfileActionRow,
@@ -28,21 +29,26 @@ import {
   gradeLabel
 } from '../../src/components/profileKit';
 
-/* Both numbers on one row, and only on your own profile.
+/* Your own count, and only ever your own.
 
-   14A's rule is that follower and following counts appear nowhere — in a 200-person school a public one
-   is a popularity score by another name. Your own is the stated exception: it's self-knowledge, not a
-   ranking, and it's the number that tells you whether following anyone is working. Nothing renders it on
-   someone else's profile, and the server refuses to compute it for anyone but you. */
-function peopleRowLabel(following: number, followers: number): string {
-  /* Both numbers always show, zero included. Hiding "0 follow you" hid the whole idea that the number
-     existed — and zero is the reading that actually prompts you to do something about it. */
-  return `Following ${following} · ${followers} ${followers === 1 ? 'follows' : 'follow'} you`;
+   14A's rule is that friend counts appear nowhere — in a 200-person school a public one is a popularity
+   score by another name. Your own is the stated exception: it's self-knowledge, not a ranking, and it's
+   the number that tells you whether adding anyone is working. Nothing renders it on someone else's
+   profile, and the server has no field that would let it. */
+function peopleRowLabel(friends: number, requests: number): string {
+  /* Your own friend count, zero included — hiding it hides the whole idea that the number exists, and
+     zero is the reading that actually prompts you to do something about it. This is the *only* place a
+     friend count appears anywhere in the app, and it's your own; the server has no field that would
+     let it be shown about anyone else.
+
+     Waiting requests lead when there are any, because they're the part with somebody on the other end. */
+  if (requests > 0) return `${requests} friend ${requests === 1 ? 'request' : 'requests'} waiting`;
+  return friends === 1 ? '1 friend' : `${friends} friends`;
 }
 
 /* 13A — your own profile, the trophy case.
 
-   How many superlative chips show without God Mode. The design gates the rest behind the paywall
+   How many superlative chips show without Infinite Aura. The design gates the rest behind the paywall
    ("locked superlatives open the paywall"), which only bites once you've actually won more than this. */
 const FREE_CHIPS = 3;
 
@@ -52,7 +58,8 @@ export default function Profile() {
   const { data: me } = useMe();
   const { data: superlatives, isLoading: chipsLoading } = useMySuperlatives();
   const { data: board } = useBoard('overall');
-  const { data: flames } = useFlames();
+  const { data: auras } = useAuras();
+  const { data: friendRequests } = useFriendRequests();
   const updateMe = useUpdateMe();
 
   const [editing, setEditing] = useState(false);
@@ -63,14 +70,14 @@ export default function Profile() {
   const meta = ['@' + (me?.username || 'you'), gradeLabel(me?.grade), me?.school?.name].filter(Boolean).join(' · ');
 
   const all = superlatives ?? [];
-  const godMode = !!me?.godMode;
-  const shown = godMode ? all : all.slice(0, FREE_CHIPS);
-  const locked = godMode ? 0 : Math.max(0, all.length - FREE_CHIPS);
+  const infiniteAura = !!me?.infiniteAura;
+  const shown = infiniteAura ? all : all.slice(0, FREE_CHIPS);
+  const locked = infiniteAura ? 0 : Math.max(0, all.length - FREE_CHIPS);
 
   /* Aura total comes from the Inbox query (the 30-day window), and rank from the board — so the two
      numbers on this screen always match the two screens they came from. Rank is null while the school
      is under the unlock threshold, which renders as a dash rather than a fake position. */
-  const auraCount = flames?.flames.length ?? 0;
+  const auraCount = auras?.auras.length ?? 0;
   const rank = board?.me?.rank ?? null;
 
   function startSocialEdit(key: SocialKey) {
@@ -110,8 +117,8 @@ export default function Profile() {
       >
         <View className="flex-row items-center justify-end gap-[9px]">
           {/* 14A: the People screen's two entry points are the mint person-plus in the Vote and Me
-              headers. The "Following N · find more people" row further down stays — it carries the
-              count, which is the thing that makes the button worth pressing. */}
+              headers. The friend-count row further down stays — it carries the number, which is the
+              thing that makes the button worth pressing. */}
           <PersonPlusButton onPress={() => router.push('/add')} />
           <Pressable
             onPress={() => router.push('/settings')}
@@ -147,7 +154,7 @@ export default function Profile() {
           stats={[
             { value: String(auraCount), label: 'AURA' },
             { value: rank !== null ? `#${rank}` : '—', label: 'IN SCHOOL', color: '#6BF2C2' },
-            { value: String(me?.coins ?? 0), label: 'COINS', color: COIN_FILL }
+            { value: String(me?.coins ?? 0), label: 'SPARKS', color: SPARK_FILL }
           ]}
         />
 
@@ -163,7 +170,7 @@ export default function Profile() {
             </InfoCard>
           </View>
         ) : (
-          /* Locked chips now open 15A's Infinite Aura screen rather than the old God Mode overlay.
+          /* Locked chips now open 15A's Infinite Aura screen rather than the old Infinite Aura overlay.
              Two paywalls selling the same entitlement, in two different visual languages, is worse than
              either one alone. */
           <SuperlativeChips superlatives={shown} lockedCount={locked} onLockedPress={() => router.push('/infinite')} />
@@ -254,10 +261,10 @@ export default function Profile() {
         </View>
 
         <View className="mt-[18px] gap-2">
-          {/* The people surface. Shows the follow count because following is what weights your polls —
-              a user with zero follows is seeing pure strangers and has no way to know that. */}
+          {/* The people surface. Shows your friend count because friendship is what weights your polls —
+              a user with none is seeing pure strangers and has no way to know that. */}
           <ProfileActionRow
-            label={peopleRowLabel(me?.following?.length ?? 0, me?.followerCount ?? 0)}
+            label={peopleRowLabel(me?.friends?.length ?? 0, friendRequests?.length ?? 0)}
             onPress={() => router.push('/add')}
           />
           <ProfileActionRow label="Block or report someone" onPress={() => router.push('/report')} />

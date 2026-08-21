@@ -1,31 +1,38 @@
 import { useEffect, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { useFlames, type Flame } from '../hooks/useFlames';
-import { useMarkFlamesRead } from '../hooks/useMarkFlamesRead';
+import { useAuras, type Aura } from '../hooks/useAuras';
+import { useMarkAurasRead } from '../hooks/useMarkAurasRead';
 import { useNotifications, type Notification } from '../hooks/useNotifications';
 import { useMarkNotificationsRead } from '../hooks/useMarkNotificationsRead';
-import { useRevealFlame } from '../hooks/useRevealFlame';
-import { useRevealFlameName } from '../hooks/useRevealFlameName';
 import { Overlay } from '../components/Overlay';
-import { GodModeOverlay } from '../components/GodModeOverlay';
-import { flameGenderLabel } from '@aura/api-client';
+import { InfiniteAuraOverlay } from '../components/InfiniteAuraOverlay';
+import { auraGenderLabel } from '@aura/api-client';
+
+/* Read-only since the clue ladder was removed.
+
+   apps/web is the admin dashboard; these consumer screens are vestigial and there is no plan to
+   rebuild them (see CLAUDE.md). Opening a card is a *flip* now, which is a mobile flow with a daily
+   allowance, an animation and a paywall behind it — reimplementing all of that here to serve nobody
+   would be the wrong trade. So this screen shows what the payload already contains and offers no way
+   to spend anything. The reveal buttons, and the two hooks behind them, are gone. */
 
 export const Route = createFileRoute('/_app/inbox')({
   component: Inbox
 });
 
-function flameSubtitle(f: Flame): string {
-  if (f.anonymous) return `🔒 Anonymous · ${f.grade}`;
-  // Mirrors mobile: the sender's cohort is too small for gender/grade to be anonymous.
+function auraSubtitle(f: Aura): string {
+  if (f.anonymous) return '🔒 Anonymous';
+  // Mirrors mobile: the sender's cohort is too small for the gender to be anonymous.
   if (f.detailHidden) return f.name ? `From ${f.name}` : 'Someone at your school picked you';
-  let base = f.name ? `From ${f.name} · ${f.grade}` : f.initial ? `From ${f.initial}••• · ${f.grade}` : `Someone in ${f.grade} picked you`;
+  const who = auraGenderLabel(f.gender) ?? 'Someone';
+  let base = f.name ? `From ${f.name} · ${f.grade}` : `${who} picked you`;
   if (f.repeatAdmirer) base += ` · 🔥×${f.pickCount}`;
   return base;
 }
 
 export function Inbox() {
-  const { data, isLoading } = useFlames();
-  const markFlamesRead = useMarkFlamesRead();
+  const { data, isLoading } = useAuras();
+  const markAurasRead = useMarkAurasRead();
   const { data: notifications } = useNotifications();
   const markNotificationsRead = useMarkNotificationsRead();
 
@@ -42,14 +49,14 @@ export function Inbox() {
     }
   }
 
-  const [selectedFlameId, setSelectedFlameId] = useState<string | null>(null);
-  const [godModeOpen, setGodModeOpen] = useState(false);
+  const [selectedAuraId, setSelectedAuraId] = useState<string | null>(null);
+  const [infiniteAuraOpen, setInfiniteAuraOpen] = useState(false);
 
   // Opening the Inbox marks everything read immediately, same as the old app — not gated behind
   // any user action.
   // Runs once on mount only — matches the old app's "opening Inbox marks everything read" behavior.
   useEffect(() => {
-    markFlamesRead.mutate();
+    markAurasRead.mutate();
   }, []);
 
   // Consequence of the frozen unread list appearing — mirrors the mount-only mark-read Effect
@@ -65,17 +72,17 @@ export function Inbox() {
 
   if (isLoading || !data) return <p>Loading…</p>;
 
-  // Excludes anonymous flames — FlameDetailAction always shows the "anonymous (God Mode)" dead
+  // Excludes anonymous auras — AuraDetailAction always shows the "anonymous (Infinite Aura)" dead
   // end for those, never the bonus name-reveal this banner promises.
-  const secretAdmirer = data.flames.some(f => f.repeatAdmirer && !f.name && !f.anonymous);
-  const selectedFlame = data.flames.find(f => f.id === selectedFlameId) || null;
+  const secretAdmirer = data.auras.some(f => f.repeatAdmirer && !f.name && !f.anonymous);
+  const selectedAura = data.auras.find(f => f.id === selectedAuraId) || null;
 
   return (
     <div className="flex flex-col gap-3">
-      {data.godMode ? (
-        <div className="rounded bg-purple-100 p-3 text-sm">👑 God Mode active — hints unlocked</div>
+      {data.infiniteAura ? (
+        <div className="rounded bg-purple-100 p-3 text-sm">👑 Infinite Aura active — hints unlocked</div>
       ) : (
-        <button type="button" onClick={() => setGodModeOpen(true)} className="rounded bg-gray-100 p-3 text-left text-sm">
+        <button type="button" onClick={() => setInfiniteAuraOpen(true)} className="rounded bg-gray-100 p-3 text-left text-sm">
           👀 See Who Likes You
         </button>
       )}
@@ -83,11 +90,11 @@ export function Inbox() {
       {secretAdmirer && (
         <div className="rounded bg-orange-100 p-3 text-sm">
           🔥 <b>You have a secret admirer!</b>{' '}
-          {data.godMode ? (
-            'Open their flame to use a bonus name reveal.'
+          {data.infiniteAura ? (
+            'Open their aura to use a bonus name reveal.'
           ) : (
-            <button type="button" onClick={() => setGodModeOpen(true)} className="underline">
-              Unlock God Mode to reveal them.
+            <button type="button" onClick={() => setInfiniteAuraOpen(true)} className="underline">
+              Unlock Infinite Aura to reveal them.
             </button>
           )}
         </div>
@@ -100,17 +107,17 @@ export function Inbox() {
         </div>
       ))}
 
-      {data.flames.length === 0 ? (
-        <p className="text-gray-500">No flames yet.
+      {data.auras.length === 0 ? (
+        <p className="text-gray-500">No auras yet.
           <br />
-          Answer polls so friends can flame you up! 🔥
+          Answer polls so friends can aura you up! 🔥
         </p>
       ) : (
-        data.flames.map(f => (
+        data.auras.map(f => (
           <button
             key={f.id}
             type="button"
-            onClick={() => setSelectedFlameId(f.id)}
+            onClick={() => setSelectedAuraId(f.id)}
             className="flex items-center justify-between rounded border p-3 text-left"
           >
             <div>
@@ -118,114 +125,58 @@ export function Inbox() {
                 {f.q}
                 {f.repeatAdmirer && !f.name && <span className="ml-2 rounded bg-orange-200 px-1 text-xs">🔥 secret admirer</span>}
               </div>
-              <div className="text-sm text-gray-500">{flameSubtitle(f)}</div>
+              <div className="text-sm text-gray-500">{auraSubtitle(f)}</div>
             </div>
-            <span>{f.anonymous ? '🔒' : f.revealed || f.godMode ? '›' : '🔒'}</span>
+            <span>{f.name ? '›' : '🔒'}</span>
           </button>
         ))
       )}
 
-      {selectedFlame && (
-        <FlameDetail flame={selectedFlame} bonusRevealsLeft={data.bonusRevealsLeft} onClose={() => setSelectedFlameId(null)} />
-      )}
-      {godModeOpen && <GodModeOverlay onClose={() => setGodModeOpen(false)} />}
+      {selectedAura && <AuraDetail aura={selectedAura} onClose={() => setSelectedAuraId(null)} />}
+      {infiniteAuraOpen && <InfiniteAuraOverlay onClose={() => setInfiniteAuraOpen(false)} />}
     </div>
   );
 }
 
-function FlameDetail({ flame, bonusRevealsLeft, onClose }: { flame: Flame; bonusRevealsLeft: number; onClose: () => void }) {
-  const revealFlame = useRevealFlame();
-  const revealFlameName = useRevealFlameName();
-  const shown = flame.revealed || flame.godMode;
-  const genderLabel = flameGenderLabel(flame.gender);
+function AuraDetail({ aura, onClose }: { aura: Aura; onClose: () => void }) {
+  const genderLabel = auraGenderLabel(aura.gender);
 
   return (
-    <Overlay onClose={onClose} style={{ borderTop: `8px solid ${flame.color}` }}>
-      <div className="text-3xl">{flame.emoji}</div>
-      <h2 className="text-lg font-semibold">{flame.q}</h2>
-      {flame.repeatAdmirer && <p className="text-sm text-orange-600">🔥 This person flamed you {flame.pickCount}×</p>}
+    <Overlay onClose={onClose} style={{ borderTop: `8px solid ${aura.color}` }}>
+      <div className="text-3xl">{aura.emoji}</div>
+      <h2 className="text-lg font-semibold">{aura.q}</h2>
+      {aura.repeatAdmirer && <p className="text-sm text-orange-600">🔥 This person aurad you {aura.pickCount}×</p>}
 
       <dl className="my-4 grid grid-cols-2 gap-y-1 text-sm">
-        {/* Dropped when the voter chose "Rather not say" — see flameGenderLabel. */}
+        {/* Dropped when the voter chose "Rather not say" — see auraGenderLabel. */}
         {genderLabel && (
           <>
             <dt>Gender</dt>
             <dd>{genderLabel}</dd>
           </>
         )}
-        {/* Withheld along with gender when the sender's cohort is too small — see COHORT_FLOOR. */}
-        {!flame.detailHidden && (
-          <>
-            <dt>Grade</dt>
-            <dd>{flame.grade}</dd>
-          </>
-        )}
-        <dt>First initial</dt>
-        <dd>{flame.anonymous ? '🔒' : shown ? flame.initial || '?' : 'X'}</dd>
-        {flame.name && (
+        {/* Both only exist on a flipped card — the flip is what puts them in the payload. */}
+        {aura.name && (
           <>
             <dt>Name</dt>
-            <dd>{flame.name}</dd>
+            <dd>{aura.name}</dd>
+            <dt>Grade</dt>
+            <dd>{aura.grade}</dd>
           </>
         )}
       </dl>
 
-      <FlameDetailAction
-        flame={flame}
-        shown={shown}
-        bonusRevealsLeft={bonusRevealsLeft}
-        revealFlame={revealFlame}
-        revealFlameName={revealFlameName}
-      />
+      {aura.anonymous ? (
+        <p className="text-sm">🔒 This admirer has Infinite Aura — their name is off limits</p>
+      ) : aura.name ? (
+        <p className="text-sm">✅ It's {aura.name}</p>
+      ) : (
+        <p className="text-sm">🔒 Face down. Flip it in the app.</p>
+      )}
 
       <button type="button" onClick={onClose} className="mt-4 w-full rounded border px-3 py-2">
         Close
       </button>
     </Overlay>
   );
-}
-
-function FlameDetailAction({
-  flame,
-  shown,
-  bonusRevealsLeft,
-  revealFlame,
-  revealFlameName
-}: {
-  flame: Flame;
-  shown: boolean;
-  bonusRevealsLeft: number;
-  revealFlame: ReturnType<typeof useRevealFlame>;
-  revealFlameName: ReturnType<typeof useRevealFlameName>;
-}) {
-  if (flame.anonymous) return <p className="text-sm">🔒 This admirer is anonymous (God Mode)</p>;
-
-  if (!shown) {
-    return (
-      <div className="flex flex-col gap-1">
-        <button type="button" onClick={() => revealFlame.mutate(flame.id)} className="rounded bg-black px-3 py-2 text-white">
-          Reveal a hint · 🪙 1
-        </button>
-        {revealFlame.isError && <p className="text-sm text-red-600">{(revealFlame.error as Error).message}</p>}
-      </div>
-    );
-  }
-
-  if (flame.godMode) {
-    if (flame.name) return <p className="text-sm">✅ It's {flame.name}</p>;
-    if (flame.repeatAdmirer) {
-      if (bonusRevealsLeft <= 0) return <p className="text-sm">No bonus reveals left</p>;
-      return (
-        <div className="flex flex-col gap-1">
-          <button type="button" onClick={() => revealFlameName.mutate(flame.id)} className="rounded bg-black px-3 py-2 text-white">
-            🔓 Reveal their full name · Bonus ({bonusRevealsLeft} left)
-          </button>
-          {revealFlameName.isError && <p className="text-sm text-red-600">{(revealFlameName.error as Error).message}</p>}
-        </div>
-      );
-    }
-    return <p className="text-sm">👑 First-initial hint unlocked</p>;
-  }
-
-  return null;
 }

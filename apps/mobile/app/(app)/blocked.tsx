@@ -80,8 +80,8 @@ export default function Blocked() {
 
         {count > 0 && (
           <View className="mt-[18px]">
-            {/* The design said these flames were "gone for good either way", but blocking hides them
-                rather than deleting them (see flamesFor) — so the copy says what actually happens. */}
+            {/* The design said these auras were "gone for good either way", but blocking hides them
+                rather than deleting them (see aurasFor) — so the copy says what actually happens. */}
             <InfoCard icon="reroll">
               While someone's blocked, the aura they gave you is hidden from your inbox. Unblocking puts you both
               back in each other's rounds and brings it back.

@@ -123,7 +123,7 @@ export function EditProfileSheet({ onClose }: { onClose: () => void }) {
             Only shows on your profile. Nothing else uses it.
           </Text>
 
-          <Text className="font-nunito-900 mt-4 text-[11.5px] text-ink-muted">SHOWS ON YOUR FLAMES</Text>
+          <Text className="font-nunito-900 mt-4 text-[11.5px] text-ink-muted">SHOWS ON YOUR AURAS</Text>
           {/* Read-only here: both are set during onboarding, and grade changes are admin-gated per 6A
               ("Ask an admin if you need it changed sooner"), so an editable field would imply
               otherwise. Shown because this is where someone comes to check what leaks. */}

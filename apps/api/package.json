@@ -9,7 +9,8 @@
     "deploy:staging": "wrangler deploy --env staging",
     "typecheck": "tsc --noEmit",
     "migrate": "tsx scripts/migrate.ts",
-    "seed-flames": "tsx scripts/seedFlames.ts",
+    "reset-flips": "tsx scripts/resetFlips.ts",
+    "seed-auras": "tsx scripts/seedAuras.ts",
     "seed-socials": "tsx scripts/seedSocials.ts",
     "test": "tsx --test --test-concurrency=1 test/*.test.ts"
   },

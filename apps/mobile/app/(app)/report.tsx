@@ -13,9 +13,10 @@ import { InfoCard, SettingsNav, Toggle } from '../../src/components/settingsKit'
 import { EmptyState, SkeletonRows } from '../../src/components/stateKit';
 import { ToyShadow } from '../../src/components/ToyShadow';
 import { AuraIcon, type AuraIconName } from '../../src/components/AuraIcon';
+import { avatarAccent } from '../../src/components/profileKit';
 
 /* 8A "Report · block · blocked list". Two steps in one route: pick a person, then say what's wrong.
-   Arriving with a `userId` param (from a profile or a flame) skips straight to the second step, per
+   Arriving with a `userId` param (from a profile or a aura) skips straight to the second step, per
    the design's note that the picker is skipped when the person is passed in.
 
    The reason chips are not an enum server-side — `reportUser` stores free text capped at 300 chars,
@@ -35,15 +36,9 @@ function metaLine(u: { username: string | null; grade: string | null }): string 
   return [u.username ? `@${u.username}` : null, grade].filter(Boolean).join(' · ');
 }
 
-/* Deterministic avatar colour. The design shows different hues per person (#7C6CF5, #F5A05C); with
-   no colour stored on User, deriving it from the id keeps a given person's colour stable across
-   screens instead of flickering on every render. */
-const AVATAR_COLORS = ['#7C6CF5', '#F5A05C', '#FF5CA8', '#6BF2C2', '#F5D65C'];
-function avatarColor(id: string): string {
-  let sum = 0;
-  for (let i = 0; i < id.length; i++) sum += id.charCodeAt(i);
-  return AVATAR_COLORS[sum % AVATAR_COLORS.length];
-}
+/* The deterministic avatar colour is profileKit's `avatarAccent` now. This file had its own palette
+   in a different order, so the same person was one colour here and another on the People screen —
+   which defeated the entire point of deriving it from a stable id. */
 
 export default function Report() {
   const { userId } = useLocalSearchParams<{ userId?: string }>();
@@ -180,9 +175,14 @@ function PersonRow({ person, blocked, onPress }: { person: Schoolmate; blocked: 
     >
       <View
         className="h-[42px] w-[42px] items-center justify-center rounded-pill"
-        style={{ backgroundColor: blocked ? '#524F53' : avatarColor(person.id) }}
+        style={{ backgroundColor: blocked ? '#524F53' : avatarAccent(person.id).bg }}
       >
-        <Text className="font-fredoka-700 text-[16px]" style={{ color: blocked ? '#B0AEB2' : '#FFFFFF' }}>
+        {/* Ink from the accent, not a flat white: two of the five fills are light enough that white
+            initials on them were unreadable. */}
+        <Text
+          className="font-fredoka-700 text-[16px]"
+          style={{ color: blocked ? '#B0AEB2' : avatarAccent(person.id).ink }}
+        >
           {initials(person)}
         </Text>
       </View>
@@ -255,9 +255,11 @@ function ReasonForm({
         <View className="flex-row items-center gap-3">
           <View
             className="h-[46px] w-[46px] items-center justify-center rounded-pill"
-            style={{ backgroundColor: avatarColor(person.id) }}
+            style={{ backgroundColor: avatarAccent(person.id).bg }}
           >
-            <Text className="font-fredoka-700 text-[17px] text-white">{initials(person)}</Text>
+            <Text className="font-fredoka-700 text-[17px]" style={{ color: avatarAccent(person.id).ink }}>
+              {initials(person)}
+            </Text>
           </View>
           <View className="flex-1">
             <Text className="font-fredoka-700 text-[22px] text-white">Report {displayName(person)}</Text>

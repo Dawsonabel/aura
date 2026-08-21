@@ -11,9 +11,6 @@ overrides:
   react-dom: 19.2.3
 allowBuilds:
   '@clerk/shared': true
-  # Its postinstall (scripts/install-libs.js) fetches the prebuilt Skia binaries into libs/. Without it
-  # the package installs but has no native artifacts, and the iOS build fails at the CocoaPods step.
-  '@shopify/react-native-skia': true
   browser-tabs-lock: true
   bufferutil: true
   core-js: true

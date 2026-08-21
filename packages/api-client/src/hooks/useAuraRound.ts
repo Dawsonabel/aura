@@ -21,8 +21,8 @@ export type UseAuraRoundParams = {
   enabled: boolean;
 };
 
-/* Owns the whole voting-loop state machine (mode/polls/roundId/index/answered/shuffleUsed/
-   choices/earned + start/pick/shuffle/advance) so apps/web and apps/mobile don't hand-duplicate
+/* Owns the whole voting-loop state machine (mode/polls/roundId/index/answered/choices/earned +
+   start/pick/reroll/advance) so apps/web and apps/mobile don't hand-duplicate
    it — they were, verbatim, before this was extracted; the Gas->Aura rename had to be applied
    identically in both files, which is exactly the drift risk shared hooks avoid elsewhere in
    this package. Each app's screen is left with nothing but presentational components. */
@@ -37,14 +37,14 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
   const [roundId, setRoundId] = useState('');
   const [index, setIndex] = useState(0);
   const [answered, setAnswered] = useState(false);
-  const [shuffleUsed, setShuffleUsed] = useState(false);
   const [choices, setChoices] = useState<RoundChoice[]>([]);
   const [earned, setEarned] = useState(0);
   const [roundsLeft, setRoundsLeft] = useState(0);
-  const [dailyLimit, setDailyLimit] = useState(0);
+  const [roundsPerHour, setRoundsPerHour] = useState(0);
   const [nextRoundAt, setNextRoundAt] = useState<string | null>(null);
   // Priced by the server, never hardcoded here — see DESIGN-REQUESTS §7.2 on prices drifting.
   const [rerollCost, setRerollCost] = useState(0);
+  const [votePayout, setVotePayout] = useState(0);
   const [roundPayout, setRoundPayout] = useState(0);
   const [votesToday, setVotesToday] = useState(0);
   const [followWeightFactor, setFollowWeightFactor] = useState(0);
@@ -55,14 +55,26 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
       onSuccess: round => {
         setRoundId(round.roundId);
         setPolls(round.polls);
-        setIndex(0);
+        /* Open where the round actually stopped, not at its first question.
+
+           A resumed round arrives with all of its polls, answered ones included, and this used to open
+           at index 0 regardless. Reload mid-round and you'd land back on a question you had already
+           voted on — where voting is a silent no-op the server reports as `dup` (so the spark never
+           lands and the count never moves) and rerolling fails outright with "you already answered
+           that one". Both symptoms, one cause.
+
+           Falls back to 0 if somehow everything is answered, which the server shouldn't hand back:
+           servedRound only resumes a round with questions left. */
+        const firstUnplayed = round.polls.findIndex(p => !round.answeredQuestionIds.includes(p.questionId));
+        const openAt = firstUnplayed === -1 ? 0 : firstUnplayed;
+        setIndex(openAt);
         setAnswered(false);
-        setShuffleUsed(false);
-        setChoices(round.polls[0]?.choices ?? []);
+        setChoices(round.polls[openAt]?.choices ?? []);
         setRoundsLeft(round.roundsLeft);
-        setDailyLimit(round.dailyLimit);
+        setRoundsPerHour(round.roundsPerHour);
         setNextRoundAt(round.nextRoundAt);
         setRerollCost(round.rerollCost);
+        setVotePayout(round.votePayout);
         setRoundPayout(round.roundPayout);
         setVotesToday(round.votesToday);
         setFollowWeightFactor(round.followWeightFactor);
@@ -95,18 +107,22 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
   }
 
   /* The paid reroll, replacing what used to be a free client-side reshuffle of the same four people —
-     a button labelled "new four" that never fetched anybody new. Still capped at one per question, so
-     coins can't buy an unlimited hunt through the school for one prompt. */
+     a button labelled "new four" that never fetched anybody new.
+
+     Uncapped: reroll a question as many times as you'll pay for. It used to allow one per question, on
+     the reasoning that the currency shouldn't buy an unlimited hunt through the school for one prompt.
+     The price is the limit instead. Worth knowing what that trades away — with enough sparks a player
+     can cycle a question until a particular classmate turns up — which is close to what the crush boost
+     sells, just from the other side of the ballot.
+
+     The cap was only ever client-side; the server has never limited rerolls per question, so nothing
+     needed to change there. Still refused once the question is answered (the server rejects that too)
+     and while a reroll is in flight, so a double-tap can't buy two. */
   function reroll() {
-    if (answered || shuffleUsed || !polls[index]) return;
-    setShuffleUsed(true);
+    if (answered || rerollQuestion.isPending || !polls[index]) return;
     rerollQuestion.mutate(
       { roundId, questionId: polls[index].questionId },
-      {
-        onSuccess: result => setChoices(result.choices),
-        // Re-enable on failure (not enough coins, nobody new) so the attempt isn't silently spent.
-        onError: () => setShuffleUsed(false)
-      }
+      { onSuccess: result => setChoices(result.choices) }
     );
   }
 
@@ -123,7 +139,6 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
     }
     setIndex(nextIndex);
     setAnswered(false);
-    setShuffleUsed(false);
     setChoices(polls[nextIndex].choices);
   }
 
@@ -134,7 +149,6 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
     count: index + 1,
     total: polls.length,
     answered,
-    shuffleUsed,
     earned,
     pick,
     reroll,
@@ -143,14 +157,15 @@ export function useAuraRound({ gqlFetch, getToken, enabled }: UseAuraRoundParams
     rerollPending: rerollQuestion.isPending,
     rerollError: rerollQuestion.error instanceof Error ? rerollQuestion.error.message : null,
     roundsLeft,
-    dailyLimit,
+    roundsPerHour,
     rerollCost,
+    votePayout,
     roundPayout,
     votesToday,
     followWeightFactor,
     nextRoundAt,
-    /** Which round of the daily allowance this is — the 1-of-3 the pips render. */
-    roundNumber: Math.max(1, dailyLimit - roundsLeft),
+    /** Which round of this hour's allowance is in play. 1 whenever roundsPerHour is 1, which it is. */
+    roundNumber: Math.max(1, roundsPerHour - roundsLeft),
     advance,
     cashOut: () => setMode('playagain'),
     playAgain: start,

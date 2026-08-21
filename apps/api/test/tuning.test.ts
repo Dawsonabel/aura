@@ -45,18 +45,18 @@ test('each dial can actually be overridden by its own env var', () => {
 });
 
 test('garbage and negative values are ignored, not applied', () => {
-  const key = TUNING_ENV_KEYS.dailyRoundLimit;
+  const key = TUNING_ENV_KEYS.roundsPerHour;
   // A typo in a dashboard variable must leave the game playable rather than setting a limit of NaN.
   for (const bad of ['abc', '', '   ', 'NaN', 'Infinity', '-1', '-100']) {
     assert.equal(
-      resolveTuning({ [key]: bad }).dailyRoundLimit,
-      TUNING_DEFAULTS.dailyRoundLimit,
+      resolveTuning({ [key]: bad }).roundsPerHour,
+      TUNING_DEFAULTS.roundsPerHour,
       `"${bad}" should have been ignored`
     );
   }
   // null/undefined arrive when a var is declared but empty.
-  assert.equal(resolveTuning({ [key]: null }).dailyRoundLimit, TUNING_DEFAULTS.dailyRoundLimit);
-  assert.equal(resolveTuning({ [key]: undefined }).dailyRoundLimit, TUNING_DEFAULTS.dailyRoundLimit);
+  assert.equal(resolveTuning({ [key]: null }).roundsPerHour, TUNING_DEFAULTS.roundsPerHour);
+  assert.equal(resolveTuning({ [key]: undefined }).roundsPerHour, TUNING_DEFAULTS.roundsPerHour);
 });
 
 test('zero is a legal setting, and fractions are floored', () => {
@@ -68,7 +68,7 @@ test('zero is a legal setting, and fractions are floored', () => {
 
 test('numbers work as well as strings', () => {
   // wrangler.toml vars arrive as strings, but a plain number shouldn't break it either.
-  assert.equal(resolveTuning({ [TUNING_ENV_KEYS.dailyRoundLimit]: 5 }).dailyRoundLimit, 5);
+  assert.equal(resolveTuning({ [TUNING_ENV_KEYS.roundsPerHour]: 5 }).roundsPerHour, 5);
 });
 
 test('unrelated env vars are left alone', () => {

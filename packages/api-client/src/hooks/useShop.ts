@@ -15,10 +15,7 @@ const SHOP_QUERY = /* GraphQL */ `
   query Shop {
     shop {
       coins
-      clueGradeCost
-      clueInitialCost
-      freeClueHourUtc
-      freeClueReady
+      dailyFlips
       roundPayout
       streakBonus
       inviteBonus
@@ -37,13 +34,9 @@ const SHOP_QUERY = /* GraphQL */ `
 
 export type Shop = {
   coins: number;
-  /** The clue ladder's two priced rungs. "Who" is free; the first name is Infinite Aura only. */
-  clueGradeCost: number;
-  clueInitialCost: number;
-  /** UTC hour the daily free clue lands; 24 means it's switched off. */
-  freeClueHourUtc: number;
-  /** Whether the free tile is claimable right now. Server-derived — see the resolver. */
-  freeClueReady: boolean;
+  /* Name reveals a member gets a day. Not a coin price — coins can never buy a name. Here so the
+     Shop can say what Infinite Aura gives; the clue ladder's prices used to sit in this spot. */
+  dailyFlips: number;
   roundPayout: number;
   streakBonus: number;
   /** Advertised in the Shop, not yet credited — invite attribution doesn't exist. */

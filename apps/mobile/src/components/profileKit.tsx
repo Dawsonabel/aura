@@ -139,6 +139,31 @@ function darken(hex: string): string {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
+/* One person, one avatar colour, everywhere.
+
+   There is no colour stored on User, so it's derived from the id — the id is stable, so the colour is
+   too, and nobody's avatar changes hue between renders or between screens.
+
+   This exists because that last part wasn't true. Two screens had grown their own copy of this idea
+   with *different* palettes (People had `#FFD84D` where Report had `#F5D65C`, in a different order),
+   and two more hardcoded a single colour for everyone — the candidate sheet was mint for every
+   student alive, the public profile purple. So one person could be pink on the People screen, mint on
+   the sheet that opens when you tap them, and purple on their own profile. The colour reads as an
+   identity cue, which makes four answers worse than none.
+
+   Ink is carried alongside the fill because two of these are light enough that white type on them is
+   unreadable; keeping the pair together is what stops a call site from picking one and forgetting the
+   other. */
+const AVATAR_ACCENTS = ['#FF5CA8', '#6BF2C2', '#7C6CF5', '#FFD84D', '#F5A05C'];
+const AVATAR_INK: Record<string, string> = { '#6BF2C2': '#0A3B2C', '#FFD84D': '#3A2A00' };
+
+export function avatarAccent(id: string): { bg: string; shadow: string; ink: string } {
+  let sum = 0;
+  for (let i = 0; i < id.length; i++) sum += id.charCodeAt(i);
+  const bg = AVATAR_ACCENTS[sum % AVATAR_ACCENTS.length];
+  return { bg, shadow: darken(bg), ink: AVATAR_INK[bg] ?? '#FFFFFF' };
+}
+
 /* Three rows at most, and the overflow goes sideways.
 
    These used to wrap: every extra title pushed the rest of the profile — socials, the block/report
@@ -163,7 +188,7 @@ export function SuperlativeChips({
   onLockedPress
 }: {
   superlatives: Superlative[];
-  /** How many are withheld behind God Mode; 0 hides the lock chip. */
+  /** How many are withheld behind Infinite Aura; 0 hides the lock chip. */
   lockedCount: number;
   onLockedPress?: () => void;
 }) {

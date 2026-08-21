@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShop } from '../../src/hooks/useShop';
 import { useBoostRandom, useBoostCrush } from '../../src/hooks/useBoosts';
 import { AuraIcon, type AuraIconName } from '../../src/components/AuraIcon';
-import { COIN_FILL, COIN_INK, COIN_SHADOW } from '../../src/components/coin';
+import { SPARK_FILL, SPARK_INK, SPARK_SHADOW } from '../../src/components/currency';
 import { ToyShadow } from '../../src/components/ToyShadow';
 import { AuthError } from '../../src/components/authKit';
 import { InlineFailure, SkeletonBlock, SkeletonRows } from '../../src/components/stateKit';
@@ -15,9 +15,13 @@ import { InlineFailure, SkeletonBlock, SkeletonRows } from '../../src/components
    routes lead and the packs come second. It also means the screen reads the same whether or not you have
    money, which is the point at a school where plenty of people don't.
 
-   Both states of the design live here rather than in two routes, because they differ by three rows out
-   of a dozen — a member's balance is for boosts only, clues stop having a price, and the upsell becomes a
-   receipt. Splitting them would duplicate the earn and spend sections and let them drift.
+   Both states of the design live here rather than in two routes, because they differ by two rows out of
+   a dozen — the upsell tile becomes a receipt, and the member gains a card showing the renewal date.
+   Splitting them would duplicate the earn and spend sections and let them drift.
+
+   Sparks are the same currency for everybody now: boosts and rerolls. They used to buy clues as well,
+   which is why this screen once had a members-pay-nothing story running through it. The clue ladder is
+   gone; the only thing membership buys is the daily flips, and sparks can't buy those at any price.
 
    Every number comes from the `shop` query, which reads tuning.ts. Nothing here is a literal. */
 
@@ -46,16 +50,16 @@ export default function Shop() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <AuraIcon name="chevronLeft" size={22} color="#727074" />
         </Pressable>
-        <Text className="font-fredoka-700 text-[19px] text-white">Coins</Text>
+        <Text className="font-fredoka-700 text-[19px] text-white">Sparks</Text>
         <View style={{ width: 22 }} />
       </View>
 
       {isError ? (
         <View className="mt-5">
           <InlineFailure
-            icon="coin"
+            icon="bolt"
             title="The shop didn't load"
-            body="Your coins are safe — we just couldn't read the prices back."
+            body="Your sparks are safe — we just couldn't read the prices back."
             onRetry={() => refetch()}
           />
         </View>
@@ -69,15 +73,15 @@ export default function Shop() {
           {/* The two things you *have* — a balance and a membership — sit side by side as squares.
 
               Stacked full-width rows wasted the widest part of the screen on two short lines of text and
-              pushed everything you can *do* below the fold. Square tiles also match the scratch card and
-              the coin packs, so the screen reads as one grid rather than three unrelated rhythms.
+              pushed everything you can *do* below the fold. Square tiles also match the spark packs, so
+              the screen reads as one grid rather than three unrelated rhythms.
 
-              Membership keeps a fixed slot: a member sees their status here, everyone else sees the offer.
-              It leads rather than trails because it reframes every row beneath it — "one more clue · 1
-              coin" only means something once you know there's a version where clues are free. */}
+              Membership keeps a fixed slot: a member sees their status here, everyone else sees the
+              offer. It leads rather than trails because it's the only thing on this screen that opens a
+              card — the rows beneath it are all boosts, and no amount of sparks reaches a name. */}
           <View className="flex-row gap-3">
             <View className="flex-1">
-              <ToyShadow depth={6} shadowColor={COIN_SHADOW} backgroundColor={COIN_FILL} radius={26}>
+              <ToyShadow depth={6} shadowColor={SPARK_SHADOW} backgroundColor={SPARK_FILL} radius={26}>
                 {/* Icon pinned to the corner, body centred in the space *below* it.
 
                     The icon is absolutely positioned so it can't shift the body off-centre — with both in
@@ -92,18 +96,19 @@ export default function Shop() {
                   style={{ aspectRatio: 1, paddingTop: 50, paddingBottom: 16, paddingHorizontal: 18 }}
                 >
                   <View style={{ position: 'absolute', top: 16, left: 16 }}>
-                    <AuraIcon name="coin" size={32} color={COIN_INK} />
+                    <AuraIcon name="bolt" size={32} color={SPARK_INK} />
                   </View>
                   <View className="items-center">
-                    <Text className="font-fredoka-700 text-[56px] leading-[58px]" style={{ color: COIN_INK }}>
+                    <Text className="font-fredoka-700 text-[56px] leading-[58px]" style={{ color: SPARK_INK }}>
                       {shop.coins}
                     </Text>
                     <Text
                       className="font-nunito-900 mt-[2px] text-center text-[13px] leading-[17px]"
                       style={{ color: '#7A5A00' }}
                     >
-                      {/* A member's coins still have a job, and the tile says which rather than going quiet. */}
-                      {member ? 'Boosts only —\nclues are free' : '1 coin = 1 clue'}
+                      {/* Sparks buy boosts and rerolls, for everybody. They never bought a name and no
+                          longer buy a clue either, so the tile says what they're actually for. */}
+                      {'Boosts and\nrerolls'}
                     </Text>
                   </View>
                 </View>
@@ -149,7 +154,7 @@ export default function Shop() {
                       className="font-nunito-800 mt-[4px] text-center text-[12.5px] leading-[16px]"
                       style={{ color: '#12664C' }}
                     >
-                      {member ? 'Clues free · first names' : 'Every clue free'}
+                      {member ? `${shop.dailyFlips} flips a day` : `${shop.dailyFlips} names a day`}
                     </Text>
                   </View>
                 </View>
@@ -159,7 +164,7 @@ export default function Shop() {
 
           {/* A member's detail — renewal, what's included, how to cancel — is too much for a square, so it
               stays a full-width block underneath the tile that summarises it. */}
-          {member && <MemberCard expires={shop.infiniteAuraExpires} />}
+          {member && <MemberCard expires={shop.infiniteAuraExpires} flips={shop.dailyFlips} />}
 
           {error && <AuthError message={(error as Error).message} />}
 
@@ -185,28 +190,21 @@ export default function Shop() {
 
           <Section>OR BUY IT</Section>
           <View className="mt-[9px] flex-row items-end gap-2">
-            <CoinPack amount={shop.coinPackSmall} />
-            <CoinPack amount={shop.coinPackMedium} featured />
-            <CoinPack amount={shop.coinPackLarge} />
+            <SparkPack amount={shop.coinPackSmall} />
+            <SparkPack amount={shop.coinPackMedium} featured />
+            <SparkPack amount={shop.coinPackLarge} />
           </View>
           {/* Said plainly rather than showing a price nothing can charge. A native app with a priced
               button that takes no money is both a revenue leak and a Guideline 3.1.1 risk. */}
           <Text className="font-nunito-700 mt-[9px] text-center text-[11.5px] leading-[16px] text-ink-faint">
-            Coin packs aren't on sale yet — prices come from the App Store once the products are live.
+            Spark packs aren't on sale yet — prices come from the App Store once the products are live.
           </Text>
 
-          <Section>{member ? 'SPEND COINS ON' : 'SPEND IT'}</Section>
+          <Section>{member ? 'SPEND SPARKS ON' : 'SPEND IT'}</Section>
           <View className="mt-[9px] gap-2">
-            {/* A member never sees a clue price, because clues cost them nothing. Showing "1 coin" to
-                someone with unlimited clues would contradict the card at the top of this screen. */}
-            {!member && (
-              <SpendRow
-                icon="search"
-                label="One more clue"
-                sub="On any flame in your inbox"
-                cost={shop.clueInitialCost}
-              />
-            )}
+            {/* "One more clue" was the first row here, priced at a coin — that currency is sparks now. Sparks can't open a card at all
+                any more — flipping is the only way, and only Infinite Aura flips — so what's left to
+                spend them on is boosts and rerolls. */}
             <SpendRow
               icon="dice"
               label={member ? 'Extra random boost' : 'Random boost'}
@@ -233,9 +231,9 @@ export default function Shop() {
 
           {/* The card moved up under the balance; this line stays. It's the rule the whole ladder rests
               on, and the bottom of the spend list is exactly where someone is looking for a way to buy
-              a name with coins. */}
+              a name with sparks. */}
           <Text className="font-nunito-800 mt-5 mb-8 text-center text-[12.5px] leading-[18px] text-ink-faint">
-            First names come with Infinite Aura. Coins never buy one.
+            First names come with Infinite Aura. Sparks never buy one.
           </Text>
         </ScrollView>
       )}
@@ -269,18 +267,18 @@ function EarnRow({
   );
 }
 
-/* Coin amounts without dollar prices, on purpose — see the note in useShop. The middle pack is the
+/* Spark amounts without dollar prices, on purpose — see the note in useShop. The middle pack is the
    featured one, which is the standard three-tier shape: the anchor is the one they should take. */
-function CoinPack({ amount, featured = false }: { amount: number; featured?: boolean }) {
+function SparkPack({ amount, featured = false }: { amount: number; featured?: boolean }) {
   if (featured) {
     return (
       <View style={{ flex: 1.1 }}>
         <View style={{ position: 'absolute', top: -11, left: 0, right: 0, alignItems: 'center', zIndex: 1 }}>
           <View
             className="rounded-pill px-[10px] py-[3px]"
-            style={{ backgroundColor: COIN_FILL, transform: [{ rotate: '-3deg' }] }}
+            style={{ backgroundColor: SPARK_FILL, transform: [{ rotate: '-3deg' }] }}
           >
-            <Text className="font-nunito-900 text-[10px]" style={{ color: COIN_INK }}>
+            <Text className="font-nunito-900 text-[10px]" style={{ color: SPARK_INK }}>
               MOST GET THIS
             </Text>
           </View>
@@ -289,7 +287,7 @@ function CoinPack({ amount, featured = false }: { amount: number; featured?: boo
           <View className="items-center px-2 py-4">
             <Text className="font-fredoka-700 text-[25px] text-white">{amount}</Text>
             <Text className="font-nunito-700 text-[11.5px]" style={{ color: '#FFD6E9' }}>
-              coins
+              sparks
             </Text>
           </View>
         </ToyShadow>
@@ -299,7 +297,7 @@ function CoinPack({ amount, featured = false }: { amount: number; featured?: boo
   return (
     <View className="flex-1 items-center rounded-20 bg-surface px-2 py-[13px]">
       <Text className="font-fredoka-700 text-[21px] text-white">{amount}</Text>
-      <Text className="font-nunito-700 text-[11.5px] text-ink-dim">coins</Text>
+      <Text className="font-nunito-700 text-[11.5px] text-ink-dim">sparks</Text>
     </View>
   );
 }
@@ -332,8 +330,8 @@ function SpendRow({
         {sub ? <Text className="font-nunito-700 mt-[1px] text-[11.5px] text-ink-dim">{sub}</Text> : null}
       </View>
       <View className="flex-row items-center gap-[5px] rounded-pill bg-raised px-[10px] py-[7px]">
-        <AuraIcon name="coin" size={14} color={COIN_FILL} />
-        <Text className="font-nunito-900 text-[12.5px]" style={{ color: COIN_FILL }}>
+        <AuraIcon name="bolt" size={14} color={SPARK_FILL} />
+        <Text className="font-nunito-900 text-[12.5px]" style={{ color: SPARK_FILL }}>
           {cost}
         </Text>
       </View>
@@ -343,7 +341,7 @@ function SpendRow({
 
 /* The member block. Renewal date comes from the stored IAP expiry, so it's the real one — and it reads
    "no renewal date" rather than inventing one when the unlock has no purchase behind it. */
-function MemberCard({ expires }: { expires: string | null }) {
+function MemberCard({ expires, flips }: { expires: string | null; flips: number }) {
   const renews = expires
     ? new Date(expires).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     : null;
@@ -364,8 +362,8 @@ function MemberCard({ expires }: { expires: string | null }) {
         </Text>
       </View>
 
-      <IncludedRow emoji="🙋" label="First names on" sub="Every flame you have, and every new one" />
-      <IncludedRow icon="search" label="Clues unlimited" sub="No coins spent, no daily wait" />
+      <IncludedRow emoji="🙋" label={`${flips} flips a day`} sub="Each one turns a card over for good" />
+      <IncludedRow icon="search" label="Name and grade" sub="Both arrive together, on any card you flip" />
 
       <View className="mt-3 flex-row items-center gap-3 rounded-20 bg-raised px-[14px] py-[13px]">
         <AuraIcon name="receipt" size={20} color="#C1C0C0" />

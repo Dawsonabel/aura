@@ -41,7 +41,7 @@ export function Users() {
   return (
     <div>
       <h2 className="mb-1 text-xl font-semibold">Users</h2>
-      <p className="mb-4 text-sm text-gray-500">Assign students to schools & grades, adjust coins, or toggle God Mode.</p>
+      <p className="mb-4 text-sm text-gray-500">Assign students to schools & grades, adjust coins, or toggle Infinite Aura.</p>
 
       <div className="mb-4 flex gap-2">
         <select value={schoolFilter} onChange={e => setSchoolFilter(e.target.value)} className="rounded border px-2 py-1">
@@ -108,8 +108,8 @@ export function Users() {
               <td className="p-2">
                 <input
                   type="checkbox"
-                  checked={!!u.godMode}
-                  onChange={e => updateUser.mutate({ id: u.id, godMode: e.target.checked })}
+                  checked={!!u.infiniteAura}
+                  onChange={e => updateUser.mutate({ id: u.id, infiniteAura: e.target.checked })}
                 />
               </td>
               <td className="flex gap-2 p-2">

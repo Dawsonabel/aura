@@ -1,5 +1,5 @@
 export { createGqlFetch, type GqlFetch } from './client';
-export { GENDER_LABEL, GENDER_VALUES, flameGenderLabel, type Gender } from './gender';
+export { GENDER_LABEL, GENDER_VALUES, auraGenderLabel, type Gender } from './gender';
 export { SOCIALS, normalizeHandle, type SocialKey, type Socials } from './socials';
 export { useMe, type Me, type UseMeParams } from './hooks/useMe';
 export { useUpdateMe, type UpdateMeInput, type UseUpdateMeParams } from './hooks/useUpdateMe';
@@ -14,25 +14,33 @@ export {
 } from './hooks/useRerollQuestion';
 export { useCompleteRound, type UseCompleteRoundParams } from './hooks/useCompleteRound';
 export { useAuraRound, type AuraMode, type UseAuraRoundParams } from './hooks/useAuraRound';
-export { useFlames, type Flame, type FlamesResult, type UseFlamesParams } from './hooks/useFlames';
-export { useMarkFlamesRead, type UseMarkFlamesReadParams } from './hooks/useMarkFlamesRead';
+export { useAuras, type Aura, type AurasResult, type UseAurasParams } from './hooks/useAuras';
+export { useMarkAurasRead, type UseMarkAurasReadParams } from './hooks/useMarkAurasRead';
+export { useMarkAuraOpened, type UseMarkAuraOpenedParams } from './hooks/useMarkAuraOpened';
 export { useNotifications, type Notification, type UseNotificationsParams } from './hooks/useNotifications';
+export {
+  useFriendActivity,
+  type FriendActivityEvent,
+  type UseFriendActivityParams
+} from './hooks/useFriendActivity';
 export { useMarkNotificationsRead, type UseMarkNotificationsReadParams } from './hooks/useMarkNotificationsRead';
-export { useRevealFlame, type UseRevealFlameParams } from './hooks/useRevealFlame';
-export { useRevealFlameName, type UseRevealFlameNameParams } from './hooks/useRevealFlameName';
-export { useActivateGodMode, type UseActivateGodModeParams } from './hooks/useActivateGodMode';
+export { useRevealAuraName, type UseRevealAuraNameParams } from './hooks/useRevealAuraName';
+export { useActivateInfiniteAura, type UseActivateInfiniteAuraParams } from './hooks/useActivateInfiniteAura';
+export {
+  useDevTools,
+  type DevToolKind,
+  type DevToolAction,
+  type DevResult,
+  type UseDevToolsParams
+} from './hooks/useDevTools';
 export { useDeleteMe, type UseDeleteMeParams } from './hooks/useDeleteMe';
 export { useBlockedPeople, type BlockedPerson, type UseBlockedPeopleParams } from './hooks/useBlockedPeople';
 export { useSchoolmates, type Schoolmate, type UseSchoolmatesParams } from './hooks/useSchoolmates';
 export { useBoard, type Board, type BoardEntry, type BoardScope, type UseBoardParams } from './hooks/useBoard';
 export { useShop, type Shop, type UseShopParams } from './hooks/useShop';
-export {
-  useRevealClue,
-  type ClueName,
-  type RevealClueInput,
-  type RevealClueResult,
-  type UseRevealClueParams
-} from './hooks/useRevealClue';
+/* `useRevealClue` and `useRevealAura` were exported here — the scratch-off clue ladder's two
+   mutations. Both are gone along with the ladder; `useRevealAuraName` (the flip) is what opens a
+   card now. */
 export { useBoostRandom, useBoostCrush, type BoostResult, type UseBoostParams } from './hooks/useBoosts';
 export {
   useMySuperlatives,
@@ -41,7 +49,17 @@ export {
   type PublicProfile,
   type Superlative
 } from './hooks/useProfile';
-export { useFollow, useUnfollow, useFollowGrade, type UseFollowParams } from './hooks/useFollow';
+export {
+  useSendFriendRequest,
+  useCancelFriendRequest,
+  useAcceptFriendRequest,
+  useDenyFriendRequest,
+  useRemoveFriend,
+  useFriendRequests,
+  type FriendRequester,
+  type FriendState,
+  type UseFriendsParams
+} from './hooks/useFriends';
 export { useBlockUser, type UseBlockUserParams } from './hooks/useBlockUser';
 export { useUnblockUser, type UseUnblockUserParams } from './hooks/useUnblockUser';
 export { useReportUser, type ReportUserInput, type UseReportUserParams } from './hooks/useReportUser';

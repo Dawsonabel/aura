@@ -6,7 +6,7 @@ const BOARD_QUERY = /* GraphQL */ `
     board(scope: $scope) {
       scope
       resetsAt
-      flamesToTopTen
+      aurasToTopTen
       memberCount
       unlockThreshold
       unlocked
@@ -15,7 +15,7 @@ const BOARD_QUERY = /* GraphQL */ `
         userId
         name
         grade
-        flames
+        auras
         blocked
       }
       me {
@@ -23,7 +23,7 @@ const BOARD_QUERY = /* GraphQL */ `
         userId
         name
         grade
-        flames
+        auras
         blocked
       }
     }
@@ -36,10 +36,10 @@ export type BoardScope = 'overall' | 'grade' | 'trending';
 export type BoardEntry = {
   rank: number;
   userId: string;
-  /** "Blocked" when the caller blocked this person — rank and flames stay truthful. */
+  /** "Blocked" when the caller blocked this person — rank and auras stay truthful. */
   name: string;
   grade: string | null;
-  flames: number;
+  auras: number;
   blocked: boolean;
 };
 
@@ -47,7 +47,7 @@ export type Board = {
   scope: BoardScope;
   /** Next UTC Sunday, ISO — the countdown pill derives "2d left" from this. */
   resetsAt: string;
-  flamesToTopTen: number | null;
+  aurasToTopTen: number | null;
   entries: BoardEntry[];
   me: BoardEntry | null;
   /** People at the school so far, and how many it takes to unlock the board. */

@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { useIsFocused, useRouter } from 'expo-router';
 import { Show, useAuth, useClerk, useSignIn, useSignUp } from '@clerk/expo';
 import { useMe } from '../src/hooks/useMe';
-import { useFlames } from '../src/hooks/useFlames';
+import { useAuras } from '../src/hooks/useAuras';
 import { callClerk } from '../src/lib/clerkCall';
 import { toE164 } from '../src/lib/phone';
 import { CODE_COOLDOWN_SECONDS, isRateLimited, useCooldown } from '../src/hooks/useCooldown';
@@ -16,20 +16,26 @@ import {
   AuthLabel,
   AuthShell,
   AuthStatus,
-  PhoneField,
-  PromptPill
+  PhoneField
 } from '../src/components/authKit';
+import { RoamGlow, roamSlots, useRoamClock, type CardRoam } from '../src/components/auraKit';
 import { ToyShadow } from '../src/components/ToyShadow';
 import { LoadingGate } from '../src/components/LoadingScreen';
 import { FullScreenFailure } from '../src/components/stateKit';
 import { InfoCard, Strong } from '../src/components/settingsKit';
-import { AuraIcon } from '../src/components/AuraIcon';
+import { AuraIcon, type AuraIconName } from '../src/components/AuraIcon';
 
-const SAMPLE_PROMPTS = [
-  { emoji: '🥵', label: 'Hottest in 11th' },
-  { emoji: '💅', label: 'Best dressed' },
-  { emoji: '🎤', label: 'Will go viral next' },
-  { emoji: '😏', label: 'Biggest flirt' }
+/* The four things the app actually does. One line each, nothing under it.
+
+   Each tile briefly carried a sample beneath the label — a real prompt, what a face-down card says, a
+   rank row, a superlative chip. They were accurate, and they were still helper text: the sample said
+   the same thing the label already said, and paying for it in type size made the label small in a tile
+   with room to spare. The label is the whole tile now, set large enough to read at a glance. */
+const PILLARS: { icon: AuraIconName; accent: string; label: string }[] = [
+  { icon: 'ballot', accent: '#6BF2C2', label: 'Vote on your class' },
+  { icon: 'aura', accent: '#FF5CA8', label: 'Track your aura' },
+  { icon: 'trophy', accent: '#FFD84D', label: 'Climb the ranks' },
+  { icon: 'people', accent: '#7C5CFF', label: "See your friends' aura" }
 ];
 
 export default function Home() {
@@ -65,6 +71,14 @@ function Welcome() {
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const cooldown = useCooldown();
+
+  /* The roaming light from the Aura tab's card grid, reused here rather than rebuilt: one clock for
+     the whole grid, one tile lit at a time, and the visit order deliberately out of reading order so
+     it doesn't scan as a sweep. roamSlots returns positions in visit order, so the array index is the
+     slot — the same mapping the Inbox uses. */
+  const clock = useRoamClock();
+  const slotOfTile = new Map<number, number>();
+  roamSlots(PILLARS.length).forEach((position, slot) => slotOfTile.set(position, slot));
 
   /* Clerk still needs to know up front whether this is a sign-in or a sign-up, but the design
      deliberately never asks — "the number tells us which they are". So we try to sign in first,
@@ -134,19 +148,39 @@ function Welcome() {
 
   return (
     <>
-      <AuthBrand centered />
-      <AuthHero
-        badge="YOUR SCHOOL ONLY"
-        title="Find out who's picking you."
-        body="Vote on your class. See how many people picked you back. They never find out it was you."
-      />
-      <View className="mt-[18px] flex-row flex-wrap gap-[9px]">
-        {SAMPLE_PROMPTS.map(p => (
-          <PromptPill key={p.label} emoji={p.emoji} label={p.label} />
-        ))}
+      {/* The wordmark, and nothing else.
+
+          This card carried a headline through several rewrites — "Find out who's picking you.",
+          "Aura check your whole class.", "Auramaxx with your whole school!" — and every one of them
+          was a sentence explaining a screen that already shows four tiles saying what the app does.
+          The name is the only thing here the tiles can't say.
+
+          The wordmark used to sit above the card as its own element. Moving it inside and letting the
+          card grow to hold it is what closes the gap that left behind, so the top of the screen is one
+          object instead of a small mark floating over a mostly-empty panel. */}
+      <AuthHero badge="YOUR SCHOOL ONLY" centerY>
+        <AuthBrand centered fontSize={62} shadowHeight={8} />
+      </AuthHero>
+      {/* Two explicit rows, each flex-1, rather than a wrapped grid of fixed-height tiles.
+
+          The tiles absorb whatever vertical space is left between the hero and the number field, which
+          is what closes the dead half-screen this used to have — `mt-auto` on the block below only
+          moved that gap, it didn't remove it. Growing the tiles to a fixed square would have closed it
+          too, but AuthShell is a plain View with no scrolling, so on a 667pt phone that pushes the
+          sign-in button off the bottom and the screen stops working entirely. Flexible rows are the
+          version that fills a tall screen and merely gets shorter on a small one. */}
+      <View className="mt-[18px] flex-1 gap-[11px]">
+        <View className="flex-1 flex-row gap-[11px]">
+          <PillarTile {...PILLARS[0]} roam={{ slot: slotOfTile.get(0) ?? 0, of: PILLARS.length, clock }} />
+          <PillarTile {...PILLARS[1]} roam={{ slot: slotOfTile.get(1) ?? 0, of: PILLARS.length, clock }} />
+        </View>
+        <View className="flex-1 flex-row gap-[11px]">
+          <PillarTile {...PILLARS[2]} roam={{ slot: slotOfTile.get(2) ?? 0, of: PILLARS.length, clock }} />
+          <PillarTile {...PILLARS[3]} roam={{ slot: slotOfTile.get(3) ?? 0, of: PILLARS.length, clock }} />
+        </View>
       </View>
 
-      <View className="mt-auto gap-3 pt-6">
+      <View className="gap-3 pt-6">
         <AuthLabel>ENTER YOUR NUMBER TO START</AuthLabel>
         {/* PhoneField owns its own top margin for the inner screens; neutralised here so it sits
             in this bottom stack's 12px rhythm instead. */}
@@ -162,11 +196,46 @@ function Welcome() {
           onPress={start}
           disabled={phone.trim().length === 0 || busy || cooldown.active}
         />
-        <Text className="font-nunito-800 text-center text-[12.5px] leading-[18px] text-ink-faint">
-          New or coming back — same button. Standard rates apply.
-        </Text>
       </View>
     </>
+  );
+}
+
+/* One of the four squares. Fills its row rather than taking a fixed 47.5% width and a natural height,
+   so a tall screen gets tall tiles instead of a gap — see the grid comment above.
+
+   Icon and label are one vertically-centred block. The Shop pins its icon to the corner, but these
+   tiles stretch to fill the screen — pinning the icon top and the label bottom just moved the dead
+   space inside each tile and made four small holes out of one big one.
+
+   Icon centred above centred text. Type is sized to the *longest* label, since all four tiles share a
+   height and one long label drags the size down for the other three — a longer wording here costs
+   every tile its type size, not just its own. */
+function PillarTile({
+  icon,
+  accent,
+  label,
+  roam
+}: {
+  icon: AuraIconName;
+  accent: string;
+  label: string;
+  roam: NonNullable<CardRoam>;
+}) {
+  return (
+    <View style={{ flex: 1, position: 'relative' }}>
+      {/* Same composition as a card on the Aura tab: the halo is a sibling painted first, and the
+          tile on top of it is opaque, so only the 9px ring around the edge shows. Its colour is the
+          tile's own accent, so the light that travels the grid changes colour with whatever it lands
+          on. Radius is the tile's 22 plus the 6 the halo is offset by — see RoamGlow. */}
+      <RoamGlow accent={accent} roam={roam} radius={28} />
+      <View className="flex-1 items-center justify-center rounded-22 bg-surface px-[12px] py-[16px]">
+        <AuraIcon name={icon} size={52} color={accent} />
+        <Text className="font-fredoka-700 mt-[13px] text-center text-[24px] leading-[27px] text-white">
+          {label}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -233,8 +302,8 @@ function ReturningHandoff({
   school: string | null;
 }) {
   const router = useRouter();
-  const { data: flames } = useFlames();
-  const newAura = flames?.flames.filter(f => f.unread).length ?? 0;
+  const { data: auras } = useAuras();
+  const newAura = auras?.auras.filter(f => f.unread).length ?? 0;
   const first = (name || '').trim().split(/\s+/)[0] || 'you';
   /* Design shows "11th · Lakeview High". Grade is free-form on the server and includes
      non-numeric values ("Not in High School", "Already Graduated"), so only numeric grades get

@@ -3,7 +3,7 @@ import { Slot, useIsFocused, usePathname, useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { useAuth } from '@clerk/expo';
 import { useMe } from '../../src/hooks/useMe';
-import { useFlames } from '../../src/hooks/useFlames';
+import { useAuras } from '../../src/hooks/useAuras';
 import { TabHeader } from '../../src/components/TabHeader';
 
 export default function AppLayout() {
@@ -27,8 +27,8 @@ export default function AppLayout() {
   const current = pathname.split('/').pop() || 'aura';
 
   // Fetched here (not just inside the Inbox route) so the header badge shows from any tab.
-  const { data: flames } = useFlames();
-  const unreadCount = flames?.flames.filter(f => f.unread).length ?? 0;
+  const { data: auras } = useAuras();
+  const unreadCount = auras?.auras.filter(f => f.unread).length ?? 0;
 
   return (
     <View className="flex-1">

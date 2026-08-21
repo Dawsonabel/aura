@@ -56,7 +56,7 @@ describe('Home', () => {
   test('signed in as an admin (no `me` row, adminStats succeeds instead): redirects to /admin', () => {
     showMock.mockImplementation(({ when, children }) => (when === 'signed-in' ? children : null));
     useMeMock.mockReturnValue({ data: undefined, isLoading: false, error: new Error('Not logged in') });
-    useAdminStatsMock.mockReturnValue({ data: { schools: 1, users: 1, polls: 1, votes: 1, godMode: 0, reports: 0 }, isError: false });
+    useAdminStatsMock.mockReturnValue({ data: { schools: 1, users: 1, polls: 1, votes: 1, infiniteAura: 0, reports: 0 }, isError: false });
     render(<Home />);
     expect(navigateMock).toHaveBeenCalledWith({ to: '/admin' });
   });

@@ -15,29 +15,41 @@
    real anonymity, so it isn't a growth lever. */
 
 export type Tuning = {
-  /** Rounds a player gets per UTC day. The biggest single dial: it sets how much app you get a day. */
-  dailyRoundLimit: number;
-  /** Coins to swap one question's four candidates for four different ones. */
+  /* Rounds a player gets per clock hour. The biggest single dial: it sets how much app you get.
+
+     Hourly, not daily. A daily allowance meant one visit and a wait until tomorrow — the app was over
+     by lunchtime and had nothing to bring anyone back the same day. On the hour, "come back later"
+     means later today, which is the difference between a habit and a chore. The reset lands on the
+     UTC hour boundary for everyone rather than an hour after your last round: a fixed clock is
+     something you can learn, and it can't be gamed by timing when you start. */
+  roundsPerHour: number;
+  /** Cost to swap one question's four candidates for four different ones. */
   rerollCost: number;
-  /* Coins paid for finishing a round. 15A's Shop advertises "+10", so this is what that promise costs.
-     The Infinite Aura rate is level with it on purpose: the subscription's value is unlimited clues and
-     first names, not a coin multiplier — paying members more coins would just deflate the currency for
-     the people the shop is trying to sell to. */
-  roundPayout: number;
-  roundPayoutGodMode: number;
-  /* The clue ladder — 15A "Infinite Aura". Four rungs per flame, in this order:
-       who (gender)  free
-       grade         clueGradeCost
-       initial       clueInitialCost
-       first name    Infinite Aura only, and coins can never buy it
-     Priced separately even though both are 1 today, because the whole point of the ladder is that the
-     rungs can be tuned against each other. */
-  clueGradeCost: number;
-  clueInitialCost: number;
-  /* One clue free per day, "every day at 3pm" — stored as the UTC hour it lands, matching the round
-     push (20:15 UTC ≈ 3:15pm US Eastern). Set to 24 to switch the free clue off entirely. */
-  freeClueHourUtc: number;
-  /** Coins for keeping your streak alive, on top of the round payout. */
+  /* Paid per vote, the moment it lands. The round used to pay only on completion, which meant nine
+     answered questions and a closed app were worth nothing — every question now banks something on its
+     own, and finishing is a bonus on top rather than the only way to earn. */
+  votePayout: number;
+  /* The completion bonus, paid only when *every* question in the round is answered. Partial rounds keep
+     what their votes earned and get none of this — that's the whole point of it being a bonus.
+
+     The Infinite Aura rate is level with it on purpose: the subscription's value is the daily flips,
+     not a currency multiplier — paying members more would just deflate the currency for the people the
+     shop is trying to sell to. */
+  roundBonus: number;
+  roundBonusInfiniteAura: number;
+  /* Name reveals ("flips") a member gets per day.
+
+     A card has two states — face down, showing the poll and the sender's gender, or flipped, showing
+     their name and grade. This is the whole economy of getting from one to the other, and coins are
+     deliberately not part of it: a name is the one thing Infinite Aura sells, so it cannot also be for
+     sale by the coin. (The clue ladder that used to sell the grade and first initial as separate
+     scratch-off tiles, with a free one a day, is gone — this replaced it.)
+
+     Counted per *card*, not per person — five picks from the same classmate are five flips — because
+     the card is the unit on screen and pretending otherwise makes the allowance unreadable. Set to 0
+     to switch flips off entirely; there is no "unlimited" setting, deliberately. */
+  dailyFlips: number;
+  /** For keeping your streak alive, on top of everything the round itself paid. */
   streakBonus: number;
   /* Coins for an invite that converts. NOT PAID OUT YET — invite attribution doesn't exist (see
      DESIGN-REQUESTS §3.2/§6.1), so this is the number the Shop advertises and nothing credits. */
@@ -58,33 +70,37 @@ export type Tuning = {
   maxBoostPerRound: number;
   /** Questions in one round (also the cap on how many polls a round draws). */
   questionsPerRound: number;
-  /* How much following someone weights them into your polls, relative to a plain schoolmate. These
+  /* How much being friends weights someone into your polls, relative to a plain schoolmate. These
      were module constants in pollRound.ts, which made the People screen's "3× likelier to show up"
      copy a number duplicated by hand in the client — the exact drift this file exists to stop. The
-     ratio is served to the client (PollRound.followWeightFactor) rather than retyped there. */
-  weightFollowing: number;
-  weightFollower: number;
+     ratio is served to the client (PollRound.followWeightFactor) rather than retyped there.
+
+     One weight, not two: following had a stronger number for people you followed and a weaker one for
+     people who followed you, and a friendship is symmetric. */
+  weightFriend: number;
   weightSchoolmate: number;
-  /** Days a flame stays in the inbox. */
-  flameLifetimeDays: number;
-  /** People who must share a (gender, grade) cohort before a flame will name either. */
+  /** Days a aura stays in the inbox. */
+  auraLifetimeDays: number;
+  /* People who must share a (gender, grade) cohort before a aura will show the sender's gender.
+     **0 — off by default.** Gender is a free attribute on every card; see the note in auras.ts for
+     what turning it back on protects and what it costs. Raise it per environment if a school ever
+     needs it. */
   cohortFloor: number;
   /** People at a school before the Ranks board unlocks. */
   schoolUnlockThreshold: number;
-  /** Rows the board returns, and the tier "N more flames cracks the top 10" refers to. */
+  /** Rows the board returns, and the tier "N more auras cracks the top 10" refers to. */
   boardLimit: number;
   boardTopTier: number;
 };
 
 export const TUNING_DEFAULTS: Tuning = {
-  dailyRoundLimit: 3,
-  rerollCost: 3,
-  roundPayout: 10,
-  roundPayoutGodMode: 10,
-  clueGradeCost: 1,
-  clueInitialCost: 1,
-  freeClueHourUtc: 20,
-  streakBonus: 5,
+  roundsPerHour: 1,
+  rerollCost: 5,
+  votePayout: 1,
+  roundBonus: 10,
+  roundBonusInfiniteAura: 10,
+  dailyFlips: 2,
+  streakBonus: 20,
   inviteBonus: 25,
   coinPackSmall: 25,
   coinPackMedium: 100,
@@ -94,26 +110,24 @@ export const TUNING_DEFAULTS: Tuning = {
   boostCrushCost: 300,
   boostCrushUses: 6,
   maxBoostPerRound: 4,
-  questionsPerRound: 12,
-  weightFollowing: 3,
-  weightFollower: 2,
+  questionsPerRound: 10,
+  weightFriend: 3,
   weightSchoolmate: 1,
-  flameLifetimeDays: 30,
-  cohortFloor: 5,
+  auraLifetimeDays: 30,
+  cohortFloor: 0,
   schoolUnlockThreshold: 20,
   boardLimit: 25,
   boardTopTier: 10
 };
 
-/** Worker variable name for each dial — AURA_DAILY_ROUND_LIMIT, AURA_REROLL_COST, and so on. */
+/** Worker variable name for each dial — AURA_ROUNDS_PER_HOUR, AURA_REROLL_COST, and so on. */
 export const TUNING_ENV_KEYS: Record<keyof Tuning, string> = {
-  dailyRoundLimit: 'AURA_DAILY_ROUND_LIMIT',
+  roundsPerHour: 'AURA_ROUNDS_PER_HOUR',
   rerollCost: 'AURA_REROLL_COST',
-  roundPayout: 'AURA_ROUND_PAYOUT',
-  roundPayoutGodMode: 'AURA_ROUND_PAYOUT_GODMODE',
-  clueGradeCost: 'AURA_CLUE_GRADE_COST',
-  clueInitialCost: 'AURA_CLUE_INITIAL_COST',
-  freeClueHourUtc: 'AURA_FREE_CLUE_HOUR_UTC',
+  votePayout: 'AURA_VOTE_PAYOUT',
+  roundBonus: 'AURA_ROUND_BONUS',
+  roundBonusInfiniteAura: 'AURA_ROUND_BONUS_INFINITE_AURA',
+  dailyFlips: 'AURA_DAILY_FLIPS',
   streakBonus: 'AURA_STREAK_BONUS',
   inviteBonus: 'AURA_INVITE_BONUS',
   coinPackSmall: 'AURA_COIN_PACK_SMALL',
@@ -125,10 +139,9 @@ export const TUNING_ENV_KEYS: Record<keyof Tuning, string> = {
   boostCrushUses: 'AURA_BOOST_CRUSH_USES',
   maxBoostPerRound: 'AURA_MAX_BOOST_PER_ROUND',
   questionsPerRound: 'AURA_QUESTIONS_PER_ROUND',
-  weightFollowing: 'AURA_WEIGHT_FOLLOWING',
-  weightFollower: 'AURA_WEIGHT_FOLLOWER',
+  weightFriend: 'AURA_WEIGHT_FRIEND',
   weightSchoolmate: 'AURA_WEIGHT_SCHOOLMATE',
-  flameLifetimeDays: 'AURA_FLAME_LIFETIME_DAYS',
+  auraLifetimeDays: 'AURA_LIFETIME_DAYS',
   cohortFloor: 'AURA_COHORT_FLOOR',
   schoolUnlockThreshold: 'AURA_SCHOOL_UNLOCK_THRESHOLD',
   boardLimit: 'AURA_BOARD_LIMIT',

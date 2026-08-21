@@ -5,7 +5,7 @@ import { useMe } from '../hooks/useMe';
 import { useUpdateMe } from '../hooks/useUpdateMe';
 import { useFriends, type FriendUser } from '../hooks/useFriends';
 import { useBlocked } from '../hooks/useBlocked';
-import { useFlames } from '../hooks/useFlames';
+import { useAuras } from '../hooks/useAuras';
 import { useRemoveFriend } from '../hooks/useRemoveFriend';
 import { useBlockUser } from '../hooks/useBlockUser';
 import { useUnblockUser } from '../hooks/useUnblockUser';
@@ -14,7 +14,7 @@ import { useDeleteMe } from '../hooks/useDeleteMe';
 import { Overlay } from '../components/Overlay';
 import { GENDER_LABEL, GENDER_VALUES, type Gender } from '@aura/api-client';
 import { ShopOverlay } from '../components/ShopOverlay';
-import { GodModeOverlay } from '../components/GodModeOverlay';
+import { InfiniteAuraOverlay } from '../components/InfiniteAuraOverlay';
 
 export const Route = createFileRoute('/_app/profile')({
   component: Profile
@@ -24,12 +24,12 @@ function initials(first: string | null, last: string | null): string {
   return `${first?.[0] || ''}${last?.[0] || ''}`.toUpperCase();
 }
 
-type OverlayKind = 'edit' | 'manage' | 'blocked' | 'shop' | 'godmode' | null;
+type OverlayKind = 'edit' | 'manage' | 'blocked' | 'shop' | 'infiniteAura' | null;
 
 export function Profile() {
   const { data: me } = useMe();
   const { data: friends } = useFriends();
-  const { data: flames } = useFlames();
+  const { data: auras } = useAuras();
   const [overlay, setOverlay] = useState<OverlayKind>(null);
   const [actionsFor, setActionsFor] = useState<FriendUser | null>(null);
 
@@ -49,7 +49,7 @@ export function Profile() {
               <b>{friends?.length ?? 0}</b> friends
             </span>
             <span>
-              <b>{flames?.flames.length ?? 0}</b> flames
+              <b>{auras?.auras.length ?? 0}</b> auras
             </span>
           </div>
           <button type="button" onClick={() => setOverlay('edit')} className="mt-1 rounded border px-2 py-1 text-xs">
@@ -66,15 +66,15 @@ export function Profile() {
       <button type="button" onClick={() => setOverlay('shop')} className="rounded border p-3 text-left text-sm">
         🪙 {me.coins} coins
       </button>
-      {me.godMode ? (
-        <div className="rounded bg-purple-100 p-3 text-sm">👑 God Mode active</div>
+      {me.infiniteAura ? (
+        <div className="rounded bg-purple-100 p-3 text-sm">👑 Infinite Aura active</div>
       ) : (
-        <button type="button" onClick={() => setOverlay('godmode')} className="rounded bg-gray-100 p-3 text-left text-sm">
-          👑 Unlock God Mode
+        <button type="button" onClick={() => setOverlay('infiniteAura')} className="rounded bg-gray-100 p-3 text-left text-sm">
+          👑 Unlock Infinite Aura
         </button>
       )}
 
-      <TopFlames flames={flames?.flames ?? []} hidden={!!me.hideTopFlames} />
+      <TopAuras auras={auras?.auras ?? []} hidden={!!me.hideTopAuras} />
 
       <h3 className="text-sm font-semibold uppercase text-gray-500">Friends</h3>
       {friends?.length ? (
@@ -99,16 +99,16 @@ export function Profile() {
       {overlay === 'manage' && <ManageAccountOverlay onClose={() => setOverlay(null)} onBlockedList={() => setOverlay('blocked')} />}
       {overlay === 'blocked' && <BlockedListOverlay onClose={() => setOverlay(null)} />}
       {overlay === 'shop' && <ShopOverlay onClose={() => setOverlay(null)} />}
-      {overlay === 'godmode' && <GodModeOverlay onClose={() => setOverlay(null)} />}
+      {overlay === 'infiniteAura' && <InfiniteAuraOverlay onClose={() => setOverlay(null)} />}
       {actionsFor && <UserActionsOverlay friend={actionsFor} onClose={() => setActionsFor(null)} />}
     </div>
   );
 }
 
-function TopFlames({ flames, hidden }: { flames: { q: string; emoji: string }[]; hidden: boolean }) {
-  if (hidden || flames.length === 0) return null;
+function TopAuras({ auras, hidden }: { auras: { q: string; emoji: string }[]; hidden: boolean }) {
+  if (hidden || auras.length === 0) return null;
   const groups = new Map<string, { q: string; emoji: string; count: number }>();
-  for (const f of flames) {
+  for (const f of auras) {
     const g = groups.get(f.q) || { q: f.q, emoji: f.emoji, count: 0 };
     g.count++;
     groups.set(f.q, g);
@@ -117,7 +117,7 @@ function TopFlames({ flames, hidden }: { flames: { q: string; emoji: string }[];
 
   return (
     <div>
-      <h3 className="text-sm font-semibold uppercase text-gray-500">Top Flames 🔥</h3>
+      <h3 className="text-sm font-semibold uppercase text-gray-500">Top Auras 🔥</h3>
       <div className="mt-2 grid grid-cols-4 gap-2">
         {top.map(t => (
           <div key={t.q} className="rounded border p-2 text-center text-xs">
@@ -207,7 +207,7 @@ function ManageAccountOverlay({ onClose, onBlockedList }: { onClose: () => void;
   const deleteMe = useDeleteMe();
 
   function deleteAccount() {
-    if (!confirm('Delete your account? This removes your profile, flames, and votes. This cannot be undone.')) return;
+    if (!confirm('Delete your account? This removes your profile, auras, and votes. This cannot be undone.')) return;
     deleteMe.mutate();
   }
 
@@ -215,11 +215,11 @@ function ManageAccountOverlay({ onClose, onBlockedList }: { onClose: () => void;
     <Overlay onClose={onClose}>
       <h2 className="text-lg font-semibold">Manage Account</h2>
       <label className="mt-4 flex items-center justify-between">
-        <span>Hide Top Flames</span>
+        <span>Hide Top Auras</span>
         <input
           type="checkbox"
-          checked={!!me?.hideTopFlames}
-          onChange={e => updateMe.mutate({ hideTopFlames: e.target.checked })}
+          checked={!!me?.hideTopAuras}
+          onChange={e => updateMe.mutate({ hideTopAuras: e.target.checked })}
         />
       </label>
       <button type="button" onClick={onBlockedList} className="mt-4 w-full rounded border px-3 py-2 text-left">

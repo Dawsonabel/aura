@@ -7,9 +7,11 @@ const START_ROUND_QUERY = /* GraphQL */ `
       roundId
       canPlay
       roundsLeft
-      dailyLimit
+      roundsPerHour
       nextRoundAt
       rerollCost
+      votePayout
+      answeredQuestionIds
       roundPayout
       followWeightFactor
       votesToday
@@ -41,14 +43,19 @@ export type PollRound = {
   roundId: string;
   canPlay: boolean;
   polls: RoundPoll[];
-  /** Rounds still available today, out of dailyLimit. 0 with no polls is the out-of-rounds state. */
+  /** Rounds still available this hour, out of roundsPerHour. 0 with no polls is the out-of-rounds state. */
   roundsLeft: number;
-  dailyLimit: number;
-  /** ISO time the allowance refills (next UTC midnight). */
+  roundsPerHour: number;
+  /** ISO time the allowance refills — the top of the next UTC hour. */
   nextRoundAt: string;
-  /** Coins a reroll costs. Server-owned so the UI can't display a stale price. */
+  /** Sparks a reroll costs. Server-owned so the UI can't display a stale price. */
   rerollCost: number;
-  /** Coins finishing this round pays, God Mode rate included. */
+  /** Sparks a single vote pays — what the "+1" that pops on each vote is counting. Server-owned too. */
+  votePayout: number;
+  /* Questions already answered in this round. Empty for a fresh one; populated when the server hands
+     back a round you left half-finished, so the screen can open where you actually stopped. */
+  answeredQuestionIds: string[];
+  /** Sparks a finished round pays end to end: every vote plus the completion bonus. */
   roundPayout: number;
   /** Votes cast today — the out-of-rounds screen's "N votes cast today". */
   votesToday: number;

@@ -6,14 +6,14 @@ import type { SocialKey } from '../socials';
 const UPDATE_ME_MUTATION = /* GraphQL */ `
   mutation UpdateMe(
     $firstName: String, $lastName: String, $username: String, $gender: String, $grade: String,
-    $age: Int, $schoolId: ID, $onboarded: Boolean, $hideTopFlames: Boolean,
-    $notifyFlames: Boolean, $notifyRound: Boolean, $notifyFriendJoined: Boolean, $quietHours: Boolean,
+    $age: Int, $schoolId: ID, $onboarded: Boolean, $hideTopAuras: Boolean,
+    $notifyAuras: Boolean, $notifyRound: Boolean, $notifyFriendJoined: Boolean, $quietHours: Boolean,
     $socials: SocialsInput
   ) {
     updateMe(
       firstName: $firstName, lastName: $lastName, username: $username, gender: $gender, grade: $grade,
-      age: $age, schoolId: $schoolId, onboarded: $onboarded, hideTopFlames: $hideTopFlames,
-      notifyFlames: $notifyFlames, notifyRound: $notifyRound, notifyFriendJoined: $notifyFriendJoined,
+      age: $age, schoolId: $schoolId, onboarded: $onboarded, hideTopAuras: $hideTopAuras,
+      notifyAuras: $notifyAuras, notifyRound: $notifyRound, notifyFriendJoined: $notifyFriendJoined,
       quietHours: $quietHours, socials: $socials
     ) {
       id
@@ -25,8 +25,8 @@ const UPDATE_ME_MUTATION = /* GraphQL */ `
       age
       schoolId
       onboarded
-      hideTopFlames
-      notifyFlames
+      hideTopAuras
+      notifyAuras
       notifyRound
       notifyFriendJoined
       quietHours
@@ -43,8 +43,8 @@ export type UpdateMeInput = {
   age?: number;
   schoolId?: string;
   onboarded?: boolean;
-  hideTopFlames?: boolean;
-  notifyFlames?: boolean;
+  hideTopAuras?: boolean;
+  notifyAuras?: boolean;
   notifyRound?: boolean;
   notifyFriendJoined?: boolean;
   quietHours?: boolean;

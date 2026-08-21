@@ -13,14 +13,13 @@ compatibility_flags = ["nodejs_compat"]
 # can't take the game down.
 #
 # [vars]
-# AURA_DAILY_ROUND_LIMIT = "3"        # rounds per day — the biggest dial in the product
-# AURA_REROLL_COST = "3"              # candy to swap one question's four candidates
-# AURA_ROUND_PAYOUT = "10"            # coins for finishing a round — the Shop advertises this
-# AURA_ROUND_PAYOUT_GODMODE = "10"    # level on purpose: the sub sells clues, not a coin multiplier
-# AURA_CLUE_GRADE_COST = "1"          # clue 2 of 4 — their grade
-# AURA_CLUE_INITIAL_COST = "1"        # clue 3 of 4 — their first initial
-# AURA_FREE_CLUE_HOUR_UTC = "20"      # one free clue a day lands at this UTC hour; 24 disables it
-# AURA_STREAK_BONUS = "5"             # coins for keeping the streak alive
+# AURA_ROUNDS_PER_HOUR = "1"          # rounds per clock hour — the biggest dial in the product
+# AURA_REROLL_COST = "5"              # to swap one question's four candidates
+# AURA_VOTE_PAYOUT = "1"              # paid per vote, as it lands — a partial round still earns
+# AURA_ROUND_BONUS = "10"             # on top, and only when every question is answered
+# AURA_ROUND_BONUS_INFINITE_AURA = "10"     # level on purpose: the sub sells flips, not a currency multiplier
+# AURA_DAILY_FLIPS = "2"              # name reveals a member gets per day, per card
+# AURA_STREAK_BONUS = "20"            # for keeping the streak alive (paid from streak day 2)
 # AURA_INVITE_BONUS = "25"            # advertised in the Shop; NOT paid out — no invite attribution yet
 # AURA_COIN_PACK_SMALL = "25"         # pack sizes only — prices come from StoreKit, localized
 # AURA_COIN_PACK_MEDIUM = "100"
@@ -30,11 +29,10 @@ compatibility_flags = ["nodejs_compat"]
 # AURA_BOOST_CRUSH_COST = "300"
 # AURA_BOOST_CRUSH_USES = "6"
 # AURA_MAX_BOOST_PER_ROUND = "4"
-# AURA_QUESTIONS_PER_ROUND = "12"
-# AURA_WEIGHT_FOLLOWING = "3"         # how many times likelier a followed classmate is than a stranger
-# AURA_WEIGHT_FOLLOWER = "2"          # someone who follows you, but you don't follow back
+# AURA_QUESTIONS_PER_ROUND = "10"
+# AURA_WEIGHT_FRIEND = "3"            # how many times likelier a friend is than a stranger
 # AURA_WEIGHT_SCHOOLMATE = "1"        # the baseline everything else is a multiple of
-# AURA_FLAME_LIFETIME_DAYS = "30"
+# AURA_LIFETIME_DAYS = "30"
 # AURA_COHORT_FLOOR = "5"             # anonymity floor — lowering trades away privacy, not a growth lever
 # AURA_SCHOOL_UNLOCK_THRESHOLD = "20" # people before the Ranks board unlocks
 # AURA_BOARD_LIMIT = "25"
@@ -60,6 +58,23 @@ REDIS_KEY_PREFIX = "aura-api"
 # Secrets (DATABASE_URL, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN) are supplied via
 # .dev.vars locally (gitignored, same idea as the root .env) and `wrangler secret put` in production —
 # never committed here.
+
+# ---------------------------------------------------------------------------
+# AURA_DEV_TOOLS — the test-state shortcuts in src/devTools.ts (reset flips, seed fake votes, grant
+# sparks, reset the round timer, set the streak). Add
+#
+#     AURA_DEV_TOOLS=1
+#
+# to apps/api/.dev.vars to switch them on locally.
+#
+# It is intentionally NOT listed under [vars] above, and must never be. Production is off because the
+# variable does not exist there — not because a flag defaults to false, and not because a resolver
+# checks a hostname. These mutations mint currency, refund paid reveals and fabricate other people's
+# votes, so the only safe shape for the gate is one that requires a deliberate act to enable and
+# cannot be reached by forgetting something.
+#
+# Never run `wrangler secret put AURA_DEV_TOOLS` against the deployed worker.
+# ---------------------------------------------------------------------------
 
 # Local dev and TestFlight beta share this Worker + its own Neon branch/Clerk dev instance/Upstash DB
 # — kept separate from the [above] production config so a beta build or a stray local `wrangler

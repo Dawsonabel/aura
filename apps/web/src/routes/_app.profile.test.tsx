@@ -7,7 +7,7 @@ const {
   updateMeMutateMock,
   useFriendsMock,
   useBlockedMock,
-  useFlamesMock,
+  useAurasMock,
   removeFriendMutateMock,
   blockUserMutateMock,
   unblockUserMutateMock,
@@ -18,13 +18,13 @@ const {
   useSuggestionsMock,
   boostRandomMutateMock,
   boostCrushMutateMock,
-  activateGodModeMutateMock
+  activateInfiniteAuraMutateMock
 } = vi.hoisted(() => ({
   useMeMock: vi.fn(),
   updateMeMutateMock: vi.fn(),
   useFriendsMock: vi.fn(),
   useBlockedMock: vi.fn(),
-  useFlamesMock: vi.fn(),
+  useAurasMock: vi.fn(),
   removeFriendMutateMock: vi.fn(),
   blockUserMutateMock: vi.fn(),
   unblockUserMutateMock: vi.fn(),
@@ -35,7 +35,7 @@ const {
   useSuggestionsMock: vi.fn(),
   boostRandomMutateMock: vi.fn(),
   boostCrushMutateMock: vi.fn(),
-  activateGodModeMutateMock: vi.fn()
+  activateInfiniteAuraMutateMock: vi.fn()
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -48,7 +48,7 @@ vi.mock('../hooks/useMe', () => ({ useMe: useMeMock }));
 vi.mock('../hooks/useUpdateMe', () => ({ useUpdateMe: () => ({ mutate: updateMeMutateMock }) }));
 vi.mock('../hooks/useFriends', () => ({ useFriends: useFriendsMock }));
 vi.mock('../hooks/useBlocked', () => ({ useBlocked: useBlockedMock }));
-vi.mock('../hooks/useFlames', () => ({ useFlames: useFlamesMock }));
+vi.mock('../hooks/useAuras', () => ({ useAuras: useAurasMock }));
 vi.mock('../hooks/useRemoveFriend', () => ({ useRemoveFriend: () => ({ mutate: removeFriendMutateMock }) }));
 vi.mock('../hooks/useBlockUser', () => ({ useBlockUser: () => ({ mutate: blockUserMutateMock }) }));
 vi.mock('../hooks/useUnblockUser', () => ({ useUnblockUser: () => ({ mutate: unblockUserMutateMock }) }));
@@ -57,9 +57,9 @@ vi.mock('../hooks/useDeleteMe', () => ({ useDeleteMe: () => ({ mutate: deleteMeM
 vi.mock('../hooks/useSuggestions', () => ({ useSuggestions: useSuggestionsMock }));
 vi.mock('../hooks/useBoostRandom', () => ({ useBoostRandom: () => ({ mutate: boostRandomMutateMock, isError: false }) }));
 vi.mock('../hooks/useBoostCrush', () => ({ useBoostCrush: () => ({ mutate: boostCrushMutateMock, isError: false }) }));
-vi.mock('../hooks/useActivateGodMode', () => ({ useActivateGodMode: () => ({ mutate: activateGodModeMutateMock, isError: false }) }));
+vi.mock('../hooks/useActivateInfiniteAura', () => ({ useActivateInfiniteAura: () => ({ mutate: activateInfiniteAuraMutateMock, isError: false }) }));
 
-const ME = { id: 'usr_1', firstName: 'Alex', lastName: 'Kim', username: 'alexk', gender: 'girl', coins: 5, godMode: false, hideTopFlames: false };
+const ME = { id: 'usr_1', firstName: 'Alex', lastName: 'Kim', username: 'alexk', gender: 'girl', coins: 5, infiniteAura: false, hideTopAuras: false };
 const FRIEND = { id: 'usr_2', firstName: 'Bailey', lastName: 'Ray' };
 
 beforeEach(() => {
@@ -67,7 +67,7 @@ beforeEach(() => {
   updateMeMutateMock.mockReset();
   useFriendsMock.mockReset();
   useBlockedMock.mockReset();
-  useFlamesMock.mockReset();
+  useAurasMock.mockReset();
   removeFriendMutateMock.mockReset();
   blockUserMutateMock.mockReset();
   unblockUserMutateMock.mockReset();
@@ -78,13 +78,13 @@ beforeEach(() => {
   useSuggestionsMock.mockReset();
   boostRandomMutateMock.mockReset();
   boostCrushMutateMock.mockReset();
-  activateGodModeMutateMock.mockReset();
+  activateInfiniteAuraMutateMock.mockReset();
 
   useMeMock.mockReturnValue({ data: ME });
   useFriendsMock.mockReturnValue({ data: [FRIEND] });
   useBlockedMock.mockReturnValue({ data: [], isLoading: false });
-  useFlamesMock.mockReturnValue({
-    data: { flames: [{ q: 'Best smile', emoji: '😁' }, { q: 'Best smile', emoji: '😁' }, { q: 'Funniest', emoji: '😂' }], coins: 5, godMode: false, bonusRevealsLeft: 0 }
+  useAurasMock.mockReturnValue({
+    data: { auras: [{ q: 'Best smile', emoji: '😁' }, { q: 'Best smile', emoji: '😁' }, { q: 'Funniest', emoji: '😂' }], coins: 5, infiniteAura: false }
   });
   useSuggestionsMock.mockReturnValue({ data: { contacts: [], fof: [] } });
 });
@@ -97,16 +97,16 @@ describe('Profile', () => {
     expect(screen.getByText('Bailey Ray')).toBeInTheDocument();
   });
 
-  test('Top Flames groups by question, sorted by count', () => {
+  test('Top Auras groups by question, sorted by count', () => {
     render(<Profile />);
     const bestSmile = screen.getByText('Best smile').closest('div.rounded.border') as HTMLElement;
     expect(bestSmile).toHaveTextContent('🔥 2');
   });
 
-  test('Top Flames is hidden when hideTopFlames is set', () => {
-    useMeMock.mockReturnValue({ data: { ...ME, hideTopFlames: true } });
+  test('Top Auras is hidden when hideTopAuras is set', () => {
+    useMeMock.mockReturnValue({ data: { ...ME, hideTopAuras: true } });
     render(<Profile />);
-    expect(screen.queryByText('Top Flames 🔥')).not.toBeInTheDocument();
+    expect(screen.queryByText('Top Auras 🔥')).not.toBeInTheDocument();
   });
 
   test('editing a field in Edit Profile auto-saves via updateMe', () => {
@@ -178,16 +178,16 @@ describe('Profile', () => {
     expect(screen.getByText('Shop')).toBeInTheDocument();
   });
 
-  test('tapping "Unlock God Mode" opens the God Mode overlay', () => {
+  test('tapping "Unlock Infinite Aura" opens the Infinite Aura overlay', () => {
     render(<Profile />);
-    fireEvent.click(screen.getByText('👑 Unlock God Mode'));
-    expect(screen.getByText('GOD MODE')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('👑 Unlock Infinite Aura'));
+    expect(screen.getByText('INFINITE AURA')).toBeInTheDocument();
   });
 
-  test('God Mode active badge is shown instead of the unlock banner when already active', () => {
-    useMeMock.mockReturnValue({ data: { ...ME, godMode: true } });
+  test('Infinite Aura active badge is shown instead of the unlock banner when already active', () => {
+    useMeMock.mockReturnValue({ data: { ...ME, infiniteAura: true } });
     render(<Profile />);
-    expect(screen.getByText('👑 God Mode active')).toBeInTheDocument();
-    expect(screen.queryByText('👑 Unlock God Mode')).not.toBeInTheDocument();
+    expect(screen.getByText('👑 Infinite Aura active')).toBeInTheDocument();
+    expect(screen.queryByText('👑 Unlock Infinite Aura')).not.toBeInTheDocument();
   });
 });

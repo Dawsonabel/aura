@@ -196,7 +196,7 @@ export default function Ranks() {
       {/* Pinned, always pink, never scrolls — the one pink element on the screen. Rendered even at
           rank 0 so the screen always answers "where am I?", which is the point of the board. Hidden
           while locked: there is no rank to show, and the unlock card is the whole message. */}
-      {data && data.unlocked && !isError && <YourRank entry={data.me} flamesToTopTen={data.flamesToTopTen} />}
+      {data && data.unlocked && !isError && <YourRank entry={data.me} aurasToTopTen={data.aurasToTopTen} />}
     </View>
   );
 }
@@ -341,7 +341,7 @@ function PodiumCard({
             {entry.name}
           </Text>
           <Text className="font-fredoka-700" style={{ fontSize: first ? 26 : 20, color: '#2D2A2E' }}>
-            {entry.flames}
+            {entry.auras}
           </Text>
           <Text className="font-nunito-900 text-[11px]" style={{ color: '#8B888D' }}>
             {rankLabel}
@@ -385,21 +385,21 @@ function RankRow({ entry, isMe, onPress }: { entry: BoardEntry; isMe: boolean; o
           </Text>
         ) : null}
       </View>
-      <Text className="font-nunito-900 text-[15px] text-ink-secondary">{entry.flames}</Text>
+      <Text className="font-nunito-900 text-[15px] text-ink-secondary">{entry.auras}</Text>
     </Row>
   );
 }
 
 /* The pinned row. 10A's empty-board variant is the same card gone grey with an em dash instead of a
    rank — never a fake #1 for someone with no aura. */
-function YourRank({ entry, flamesToTopTen }: { entry: BoardEntry | null; flamesToTopTen: number | null }) {
-  const flames = entry?.flames ?? 0;
+function YourRank({ entry, aurasToTopTen }: { entry: BoardEntry | null; aurasToTopTen: number | null }) {
+  const auras = entry?.auras ?? 0;
   const ranked = entry !== null;
 
   const subtitle = !ranked
     ? 'Any aura at all is enough to get ranked'
-    : flamesToTopTen !== null
-      ? `${flamesToTopTen} more aura cracks the top 10`
+    : aurasToTopTen !== null
+      ? `${aurasToTopTen} more aura cracks the top 10`
       : "You're in the top 10";
 
   const card = (
@@ -412,7 +412,7 @@ function YourRank({ entry, flamesToTopTen }: { entry: BoardEntry | null; flamesT
       </Text>
       <View className="flex-1">
         <Text className="font-nunito-900 text-[15px]" style={{ color: ranked ? '#FFFFFF' : '#C1C0C0' }}>
-          You · {flames} aura
+          You · {auras} aura
         </Text>
         <Text className="font-nunito-800 mt-[2px] text-[12.5px]" style={{ color: ranked ? '#FFD6E9' : '#848286' }}>
           {subtitle}
