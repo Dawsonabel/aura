@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Share, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@clerk/expo';
@@ -7,14 +15,20 @@ import type { Aura } from '@aura/api-client';
 import { useAuras } from '../../src/hooks/useAuras';
 import { useMe } from '../../src/hooks/useMe';
 import { useMarkAurasRead } from '../../src/hooks/useMarkAurasRead';
+import { useSchoolmates } from '../../src/hooks/useSchoolmates';
+import { useBlockedPeople } from '../../src/hooks/useBlockedPeople';
 import { useMarkAuraOpened } from '../../src/hooks/useMarkAuraOpened';
 import { useNotifications, type Notification } from '../../src/hooks/useNotifications';
-import { useFriendActivity, type FriendActivity } from '../../src/hooks/useFriendActivity';
+import {
+  useFriendActivity,
+  type FriendActivityEvent,
+  type FriendMilestone
+} from '../../src/hooks/useFriendActivity';
+import { useDismissed } from '../../src/hooks/useDismissed';
 import { useMarkNotificationsRead } from '../../src/hooks/useMarkNotificationsRead';
 import { useRevealAuraName } from '../../src/hooks/useRevealAuraName';
 import { AuraIcon } from '../../src/components/AuraIcon';
 import { EmptyState, InlineFailure, SkeletonBlock, SkeletonRows } from '../../src/components/stateKit';
-import { InfoCard } from '../../src/components/settingsKit';
 import { ToyShadow } from '../../src/components/ToyShadow';
 import { StatusRow } from '../../src/components/voteKit';
 import { AuthError } from '../../src/components/authKit';
@@ -22,6 +36,7 @@ import {
   AuraCardFace,
   EmptyCardSlot,
   GENDER_ACCENT,
+  GENDER_GROUND,
   PAGER_TAIL,
   PagerRow,
   PeriodBar,
@@ -29,6 +44,7 @@ import {
   SegmentBar,
   TRACK,
   UNKNOWN_ACCENT,
+  UNKNOWN_GROUND,
   roamSlots,
   useRoamClock,
   type CardRoam,
@@ -87,9 +103,38 @@ export default function Inbox() {
   const router = useRouter();
   const { data, isLoading, isError, refetch } = useAuras();
   const markAurasRead = useMarkAurasRead();
-  const { data: notifications } = useNotifications();
-  const { data: friendData } = useFriendActivity();
+  const { data: notifications, isLoading: notificationsLoading } = useNotifications();
+  const { data: friendData, isLoading: friendLoading } = useFriendActivity();
   const markNotificationsRead = useMarkNotificationsRead();
+
+  /* The Activity feed is a merge of four queries, and it used to render the moment the *first* one
+     landed. `useAuras` is the fastest of them, so the tab reliably painted your own picks alone, then
+     jolted as the friend rows sorted themselves into the same day groups and the promo pushed
+     everything down. One feed assembling itself in three visible stages.
+
+     So Activity waits for all of them. `useSchoolmates`/`useBlockedPeople` are the promo's, read here
+     only to know when it can draw — FriendsPromo calls the same two hooks itself, and React Query
+     dedupes by query key, so this is a readiness check rather than a second pair of requests.
+
+     Scoped to Activity on purpose. Cards and Receipt are built from `useAuras` alone; making them wait
+     on the friend graph would be paying this tab's cost on two screens that don't merge anything. */
+  const { isLoading: schoolmatesLoading } = useSchoolmates();
+  const { isLoading: blockedLoading } = useBlockedPeople();
+  const activityPending = friendLoading || notificationsLoading || schoolmatesLoading || blockedLoading;
+
+  /* Filters the feed by whose rows they are. `activityFeed` takes its four sources as separate
+     arguments, so filtering is a matter of handing it empty arrays rather than a second pass over the
+     merged list — the global sort, the cap and the day bucketing all keep working untouched.
+
+     Notifications count as "me": a report being resolved or a friend request landing is an event about
+     you, and "only friends" is a request to see other people rather than a request to hide your own
+     admin. */
+  const feedSources = (f: FeedFilter) => ({
+    auras: data?.auras ?? [],
+    events: f === 'me' ? [] : (friendData?.events ?? []),
+    milestones: f === 'me' ? [] : (friendData?.milestones ?? []),
+    notifications: notifications ?? []
+  });
 
   /* The active segment lives in the URL, not in state.
 
@@ -102,8 +147,16 @@ export default function Inbox() {
      on the argument that it's the reason to open the tab — but that's an argument about what you came
      for, not about what should meet you. The feed is the thing that changes between visits, so it's
      what makes opening the tab worth doing twice; the grid is one tap away and isn't going anywhere. */
-  const { seg } = useLocalSearchParams<{ seg?: string }>();
+  /* The feed filter rides in the URL for exactly the same reason the segment does — it has to survive
+     the unmount that opening a card causes, or every reveal you close silently resets it to "all". */
+  const { seg, feed } = useLocalSearchParams<{ seg?: string; feed?: string }>();
   const segment: Segment = seg === 'cards' || seg === 'receipt' ? seg : 'activity';
+  const feedFilter: FeedFilter = feed === 'me' ? 'me' : 'all';
+  const setFeedFilter = (f: FeedFilter) => router.setParams({ feed: f });
+
+  /* The promo is closable, and closing it is what reveals the filter — one control in one slot rather
+     than both stacked above the feed. See FriendsPromo for why the flag is stored rather than held. */
+  const promo = useDismissed('aura.inbox.friendsPromoDismissed');
   // setParams, not push: switching segments is not a place you should have to press back out of.
   const setSegment = (s: Segment) => router.setParams({ seg: s });
 
@@ -154,7 +207,16 @@ export default function Inbox() {
       </AuraShell>
     );
   }
-  if (isLoading || !data) {
+  /* Two gates, one skeleton. The first is every segment waiting on its only source; the second is
+     Activity additionally waiting on the three that merge into it, so the feed arrives assembled
+     rather than in stages.
+
+     Skeletons rather than the breathing wordmark (LoadingScreen). That screen is the cold-start gate —
+     it covers the tab bar and the segment bar, so using it here would make every visit to this tab
+     look like the app relaunching, and 10A's rule is that real chrome appears immediately and only the
+     data-dependent region blocks out. The block-and-rows shape also holds the space the hero card and
+     the feed are about to occupy, so nothing jumps when they land. */
+  if (isLoading || !data || (segment === 'activity' && activityPending)) {
     return (
       <AuraShell segment={segment} onSegment={setSegment}>
         <View className="mt-4">
@@ -182,13 +244,26 @@ export default function Inbox() {
 
   return (
     <AuraShell segment={segment} onSegment={setSegment}>
+      {/* Hoisted out of ActivitySegment so it survives the empty state.
+
+          It used to live inside, which meant `AuraEmpty` replaced it — the card whose entire job is to
+          fix an empty feed was shown only to people whose feed already had something in it. The second
+          info card down there even tells you to go get more classmates, with the button that does it
+          removed from the screen one line above.
+
+          The toggle is *not* hoisted, and stays inside: filtering nothing is not a control anyone
+          needs. `=== true` because null means the stored flag hasn't been read yet, and neither the
+          card nor the switch should draw until we know which one belongs there. */}
+      {segment === 'activity' && promo.dismissed === false && <FriendsPromo onClose={promo.dismiss} />}
+
       {(segment === 'activity' ? feedEmpty : auras.length === 0) ? (
         <AuraEmpty onVote={() => router.replace('/aura')} />
       ) : segment === 'activity' ? (
         <ActivitySegment
-          auras={auras}
-          friend={friendData ?? null}
-          notifications={notifications ?? []}
+          sources={feedSources(feedFilter)}
+          filter={feedFilter}
+          onFilter={setFeedFilter}
+          promoClosed={promo.dismissed === true}
         />
       ) : segment === 'cards' ? (
         <CardsSegment
@@ -260,6 +335,66 @@ function AuraShell({
 // Activity
 // ─────────────────────────────────────────────────────────────
 
+/* Whose rows the feed shows. Two states, because a switch only has two — and the third ("only
+   friends") was the least wanted of the three: this tab exists to tell you about your own aura, and
+   the friend rows are context around that rather than a view you'd sit in.
+
+   Being a real toggle also fixes what a segmented bar couldn't: it sat directly under the
+   Activity/Cards/Receipt bar wearing the same track, the same pill and the same type, so the screen
+   appeared to have two rows of tabs and no way to tell which one moved you between screens. */
+export type FeedFilter = 'all' | 'me';
+
+/* Label plus track-and-knob, right-aligned and about a third of the width the segment bar takes.
+   Every one of those is doing the same job: none of it can be mistaken for the tabs above it.
+
+   The label is the *on* state, which is why there's no word for "all". A switch reads as one claim you
+   turn on or off — "Only me", off — and adding a second label to explain the off position would make
+   it a two-item menu again. */
+function FeedToggle({ value, onChange }: { value: FeedFilter; onChange: (f: FeedFilter) => void }) {
+  const on = value === 'me';
+  const slide = useSharedValue(on ? 1 : 0);
+  useEffect(() => {
+    slide.value = withTiming(on ? 1 : 0, { duration: 160, easing: Easing.out(Easing.quad) });
+  }, [on, slide]);
+
+  const knob = useAnimatedStyle(() => ({ transform: [{ translateX: interpolate(slide.value, [0, 1], [3, 24]) }] }));
+  const track = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(slide.value, [0, 1], ['#3C393E', '#6BF2C2'])
+  }));
+
+  /* The margins are the point of this wrapper, and they're deliberately lopsided.
+
+     Below: -15, which cancels the 15pt top margin the first day header carries and sits the switch
+     against the list. It belongs to the feed it filters, so it should read as attached to it rather
+     than floating between the tabs and the feed as a third thing. That negative is fighting a margin
+     this component can't see and shouldn't edit — `mt-[15px]` on the day label also spaces every
+     *later* day group, so shrinking it there would tighten the whole feed to fix one gap at the top.
+
+     Above: 20pt. Still clear of the segment bar — the two sat 14pt apart with the switch on the same
+     right edge as the Receipt tab, and a thumb catching the wrong one changes screen — but less than
+     the 26 it briefly had, which became an obvious hole once the bottom closed up. */
+  return (
+    <View className="mt-[20px] flex-row items-center justify-end gap-[11px]" style={{ marginBottom: -15 }}>
+      <Text className="font-nunito-900 text-[15px]" style={{ color: on ? '#FFFFFF' : '#848286', letterSpacing: 0.3 }}>
+        Only me
+      </Text>
+      <Pressable
+        onPress={() => onChange(on ? 'all' : 'me')}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: on }}
+        accessibilityLabel="Only me"
+        hitSlop={12}
+      >
+        <Animated.View style={[{ width: 52, height: 31, borderRadius: 99, justifyContent: 'center' }, track]}>
+          <Animated.View
+            style={[{ width: 25, height: 25, borderRadius: 99, backgroundColor: '#FFFFFF' }, knob]}
+          />
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
+}
+
 /* The feed. One row per event, yours and your friends' interleaved, newest first.
 
    The friend rows the design always wanted are real now — `friendActivity` (apps/api/src/auras.ts)
@@ -270,60 +405,34 @@ function AuraShell({
    Everything below the stat card is ungrouped on purpose. The day summary that used to stand here
    ("19 girls and 13 boys picked you") answered the question before you scrolled. */
 function ActivitySegment({
-  auras,
-  friend,
-  notifications
+  sources,
+  filter,
+  onFilter,
+  promoClosed
 }: {
-  auras: Aura[];
-  friend: FriendActivity | null;
-  notifications: Notification[];
+  sources: { auras: Aura[]; events: FriendActivityEvent[]; milestones: FriendMilestone[]; notifications: Notification[] };
+  filter: FeedFilter;
+  onFilter: (f: FeedFilter) => void;
+  promoClosed: boolean;
 }) {
   const router = useRouter();
   const { data: me } = useMe();
-  const days = activityFeed(auras, friend?.events ?? [], friend?.milestones ?? [], notifications);
-  const pulse = friend?.schoolPulse;
+  const days = activityFeed(sources.auras, sources.events, sources.milestones, sources.notifications);
 
   return (
     <>
-      {/* The school, not you.
+      {/* One slot, two occupants. The promo sits here until it's closed, and closing it hands the space
+          to the filter rather than just collapsing — the room the card was using goes back to the feed,
+          minus a control that's a fraction of its height.
 
-          What stood here was your own last-24-hours count, your streak and a gender split bar — a
-          summary sitting directly on top of the list it summarised. Every number on it could be got
-          by counting the rows underneath and reading their colours, which is the same redundancy the
-          ungrouped rewrite removed one level down and left standing one level up. Neither fact is
-          lost: the streak is on Me and the Vote tab, the split is on the Receipt.
+          Deliberately not both at once. A promo asking you to add friends stacked on top of a switch
+          for hiding friends is two contradictory things competing for the top of the same screen.
 
-          The pulse is the one thing on this screen the feed can't tell you, which is exactly why it
-          earns the space. It also carries the days the feed can't: when nobody picked you, everything
-          below is your own zero, and a screen that only reflects you back has nothing to say on the
-          days you most need a reason to open it.
-
-          The delta is the half that makes it worth looking at twice — one number is a fact, two is a
-          direction. */}
-      {!!pulse && (pulse.today > 0 || pulse.yesterday > 0) && (
-        <View className="mt-[14px] rounded-22 bg-surface px-4 py-[15px]">
-          <View className="flex-row items-center gap-[11px]">
-            <Text className="font-fredoka-700 text-[38px] leading-[38px]" style={{ color: '#6BF2C2' }}>
-              {pulse.today}
-            </Text>
-            <View className="min-w-0 flex-1">
-              <Text className="font-nunito-900 text-[14px] leading-[18px] text-white">
-                {`aura vote${pulse.today === 1 ? '' : 's'} at`}
-              </Text>
-              <Text
-                numberOfLines={1}
-                className="font-nunito-900 text-[14px] leading-[18px] text-white"
-              >
-                {me?.school?.name ?? 'your school'}
-              </Text>
-              <Text className="font-nunito-700 mt-[2px] text-[11.5px]" style={{ color: '#848286' }}>
-                in the last 24 hours
-              </Text>
-            </View>
-            <PulseDelta today={pulse.today} yesterday={pulse.yesterday} />
-          </View>
-        </View>
-      )}
+          What stood here before either was the school pulse — today's vote count for the whole school
+          — and before that your own 24-hour count, streak and gender split. All stats: true, and
+          nothing you could act on. `schoolPulse` is still served and still tested; it just isn't
+          drawn. */}
+      {promoClosed && <FeedToggle value={filter} onChange={onFilter} />}
 
       {days.map(day => (
         <View key={day.key}>
@@ -355,23 +464,94 @@ function ActivitySegment({
   );
 }
 
-/* "+7" / "−3" against the 24 hours before this one.
+/* The ad at the top of the feed. A count, who it counts, and the button.
 
-   Silent on a tie and silent when yesterday was empty. A "+13" that only means "yesterday there was
-   no data yet" is a direction the number hasn't earned, and it would show on every school's first
-   day — the one time the figure is least meaningful and most likely to be looked at. */
-function PulseDelta({ today, yesterday }: { today: number; yesterday: number }) {
-  if (yesterday === 0 || today === yesterday) return null;
-  const diff = today - yesterday;
-  const up = diff > 0;
+   **No body copy, and don't add it back.** Two versions were written and both were cut: one selling
+   candidate weighting, one selling activity and mutuals. The count and the button already say the
+   whole thing — a number of people from your school, and the way to reach them — and a sentence
+   underneath explaining what friends are for is the exact pattern CLAUDE.md keeps cutting. If a reason
+   to add friends ever needs stating, `/add` is where it belongs; that screen already carries it.
+
+   The reason *we* want a dense friend graph — a real one is what separates an actual student from an
+   imposter, which a name-and-grade directory can't establish on its own — stays out of the UI on
+   purpose. It's our reason, not a benefit on offer, and phrasing it as one recruits a fifteen-year-old
+   into moderation and tells anyone gaming the system which signal to fake.
+
+   No faces either. Nothing populates `photo` yet, so a row of avatars would be a row of coloured
+   initials pretending to be people. */
+function FriendsPromo({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const { data: me } = useMe();
+  const { data: schoolmates } = useSchoolmates();
+  const { data: blockedPeople } = useBlockedPeople();
+
+  /* Two different numbers, deliberately.
+
+     What's *shown* is how many people from your school are on Aura at all — `schoolmates` is already
+     school-scoped and already excludes you (getUsersBySchool takes your id as excludeId), so its
+     length is the figure as-is. It's social proof: the school is here, and it doesn't move when you
+     add someone, which is what makes it a headline rather than a chore counter.
+
+     What *gates* the card is how many of them you could still add — blocked people filtered out the
+     same way add.tsx filters them, since befriending someone you blocked is refused server-side. With
+     nobody left to add there's nothing to advertise, and the card should leave rather than nag about a
+     directory you've exhausted. Keeping the gate separate is the whole reason the shown number is free
+     to be the flattering one. */
+  const blockedIds = new Set((blockedPeople ?? []).map(b => b.user.id));
+  const onAura = (schoolmates ?? []).length;
+  const addable = (schoolmates ?? []).filter(s => s.friendState === 'none' && !blockedIds.has(s.id)).length;
+  if (addable === 0) return null;
+
   return (
-    <View className="items-end">
-      <Text className="font-fredoka-700 text-[17px] leading-[19px]" style={{ color: up ? '#6BF2C2' : '#FF5CA8' }}>
-        {`${up ? '+' : '−'}${Math.abs(diff)}`}
-      </Text>
-      <Text className="font-nunito-800 mt-[2px] text-[10.5px]" style={{ color: '#848286' }}>
-        VS YESTERDAY
-      </Text>
+    <View
+      className="mt-[14px] rounded-22 px-[18px] pb-[16px] pt-[15px]"
+      style={{ backgroundColor: '#2B3835', borderWidth: 1, borderColor: '#385E52' }}
+    >
+      <View className="flex-row items-center gap-[11px]">
+        <Text className="font-fredoka-700 text-[46px] leading-[48px]" style={{ color: '#6BF2C2' }}>
+          {onAura}
+        </Text>
+        {/* One Text, one weight, one colour. The tail used to be a nested grey span, which split the
+            sentence into a claim and a footnote — and the footnote was the half carrying the verb. All
+            white reads as one statement, which is what it is.
+
+            Still a single Text rather than stacked ones, for the reason that outlived the grey: as
+            siblings the tail hard-broke onto its own line wherever the school name happened to wrap,
+            so a two-word school stranded a line. Nested, it flows and breaks wherever it needs to. */}
+        <View className="min-w-0 flex-1">
+          <Text numberOfLines={3} className="font-nunito-900 text-[13px] leading-[17px] text-white" style={{ letterSpacing: 0.6 }}>
+            {`PEOPLE FROM ${(me?.school?.name ?? 'YOUR SCHOOL').toUpperCase()} ARE AURA FARMING`}
+          </Text>
+        </View>
+        {/* Top-right, and given a hit area much larger than the glyph — 11px of padding around a 15px
+            icon. A close control that's hard to hit is worse than no close control, and this one sits
+            in the corner where a thumb arrives at an angle.
+
+            `items-start` on the row above would normally be needed to pin this to the top; the row is
+            `items-center` and the X is the shortest child, so it centres against the 48px number and
+            lands level with the copy. That reads better here than true corner alignment, which would
+            float it above the text with nothing beside it. */}
+        <Pressable
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          hitSlop={8}
+          className="-mr-[6px] -mt-[6px] self-start p-[11px]"
+        >
+          <AuraIcon name="close" size={15} color="#7C9E92" />
+        </Pressable>
+      </View>
+
+      <View className="mt-[14px]">
+        <ToyShadow depth={4} shadowColor="#3FBF95" backgroundColor="#6BF2C2" radius={9999} onPress={() => router.push('/add')}>
+          <View className="flex-row items-center justify-center gap-[7px] py-[13px]">
+            <AuraIcon name="personPlus" size={19} color="#0A3B2C" />
+            <Text className="font-fredoka-700 text-[16px]" style={{ color: '#0A3B2C' }}>
+              Add friends
+            </Text>
+          </View>
+        </ToyShadow>
+      </View>
     </View>
   );
 }
@@ -394,6 +574,7 @@ function PulseDelta({ today, yesterday }: { today: number; yesterday: number }) 
    scoreboard, not a feed. */
 function ActivityRow({ item, onPress }: { item: ActivityItem; onPress?: () => void }) {
   const mine = item.kind === 'pick';
+  const isFriend = item.kind === 'friend';
   const isNote = item.kind === 'note';
   const isMilestone = item.kind === 'milestone';
   /* A milestone is about a friend, not about a voter, so it has no gender to colour by. Streaks take
@@ -410,11 +591,38 @@ function ActivityRow({ item, onPress }: { item: ActivityItem; onPress?: () => vo
   const body = (
     <View
       className="flex-row items-center gap-[11px] rounded-18 px-[13px] py-[11px]"
-      style={{ backgroundColor: mine ? '#4A474B' : '#3C393E' }}
+      /* Your rows are coloured by whoever sent the vote; everyone else's stay the default grey.
+
+         Two jobs from one decision. It still separates your aura from your friends' at a glance — the
+         thing a single step of grey (#4A474B against #3C393E) never did, and that the wording stopped
+         doing once friend rows gained their prompt too. But it also makes the colour *mean* something
+         instead of just marking ownership: the row is pink, blue or mint for the same reason the disc
+         inside it is, so a feed skimmed at arm's length already says who's been picking you.
+
+         Which is also why a single fixed colour was the wrong idea twice over — lavender marked the
+         row as yours and said nothing else, and it had to borrow a hue that means "protected sender"
+         on the Cards tab to do it.
+
+         Edge-lit, not washed: dark tinted ground with the bright accent on the rim. That's the
+         treatment the protected cards use (TRACK behind, bright rim around — see AuraCardFace) and the
+         reason they read as lit rather than painted. A saturated fill gets none of it.
+
+         Every row carries the border and the non-yours ones make it transparent. Toggling `borderWidth`
+         instead would shift each row's contents by 1.5px depending on whose it was — RN borders are
+         inside the box. */
+      style={{
+        backgroundColor: mine ? GENDER_GROUND[item.gender] ?? UNKNOWN_GROUND : '#3C393E',
+        borderWidth: 1.5,
+        borderColor: mine ? accent : 'transparent'
+      }}
     >
-      {mine ? (
+      {mine || isFriend ? (
         /* Emoji on the card ground, ringed in the accent — rather than emoji *on* the accent, where a
-           yellow prompt on a pink disc is two bright fills fighting and the glyph stops reading. */
+           yellow prompt on a pink disc is two bright fills fighting and the glyph stops reading.
+
+           Friend rows use this too now. They kept the plain aura mark only because they had no prompt
+           to draw; they have one, and forty rows of the same glyph was exactly the sameness the emoji
+           exists to break up. */
         <View
           className="items-center justify-center"
           style={{ width: 34, height: 34, borderRadius: 99, backgroundColor: '#2C2A2D', borderWidth: 2, borderColor: accent }}
@@ -453,7 +661,7 @@ function ActivityRow({ item, onPress }: { item: ActivityItem; onPress?: () => vo
               ? milestoneLine(item)
               : mine
                 ? pickLine(item.gender, item.name, item.q)
-                : auraLine(item.gender, item.friendName)}
+                : auraLine(item.gender, item.friendName, item.q)}
         </Text>
         <View className="flex-row items-center gap-[6px]">
           <Text className="font-nunito-700 mt-[2px] text-[11.5px]" style={{ color: '#848286' }}>
@@ -556,9 +764,7 @@ function CardsSegment({
     /* Recorded here rather than on the card screen, and in the handler rather than an Effect.
 
        This tap *is* the event — the card screen would have to reconstruct it from a mount, which is
-       the "mutation in an Effect" smell the house rules call out (see CLAUDE.md). Here it also lands
-       in the one place that already knows the tap didn't open anything: the `!member` branch below
-       diverts to the paywall without ever showing the card, so marking it opened there would be a lie.
+       the "mutation in an Effect" smell the house rules call out (see CLAUDE.md).
 
        Fire-and-forget; navigation doesn't wait on it. See useMarkAuraOpened. */
     const markOpened = () => markAuraOpened.mutate(f.id);
@@ -570,7 +776,14 @@ function CardsSegment({
       markOpened();
       return router.push({ pathname: '/flip', params: { id: f.id } });
     }
-    if (!member) return router.push('/infinite');
+    /* A non-member used to be diverted straight to /infinite from here, never seeing the card at all.
+       That sold the upgrade to someone who had been shown nothing — the pitch arrived before the thing
+       it was pitching about. Now they get the same screen everyone else gets: their card, face down, at
+       full size, with everything that's free on it (emoji, gender, grade, how many times that sender
+       picked them) and a live Flip button under it. The paywall opens when they press it — at the
+       moment they've decided they want the name, rather than before they knew there was one.
+
+       Which is also why marking it opened is honest now and wasn't before: they really do see it. */
     if (outOfFlips) {
       markOpened();
       return router.push({ pathname: '/flip', params: { id: f.id, spent: '1' } });
@@ -863,26 +1076,30 @@ function ReceiptSegment({ auras }: { auras: Aura[] }) {
 
 /* Per the design's note: no membership banner when there is nothing to unlock — the ask is voting,
    not paying. */
+/* The card, and nothing under it.
+
+   Two InfoCards used to sit below: a bell one promising a notification the moment someone picks you,
+   and a mail one saying more classmates means more people who can pick you. Both went.
+
+   The bell line restated the body directly above it — "this fills up without warning" already says you
+   don't have to sit here watching — and it made a promise about push notifications on a screen that
+   can't know whether they're even enabled. The mail line was the friends promo without the button, and
+   the promo is now on this screen carrying it properly.
+
+   That also retires the `showClassmatesTip` prop: it existed to hide the mail card when the promo was
+   above it, and there's no card left to hide. */
 function AuraEmpty({ onVote }: { onVote: () => void }) {
   return (
-    <>
-      <View className="mt-5">
-        <EmptyState
-          icon="aura"
-          iconColor="#7C5CFF"
-          title="No aura in here yet"
-          body="People who pick you stay anonymous, so this fills up without warning. Voting puts you in more rounds."
-          wobble
-          ctaLabel="Vote in today's round"
-          onCta={onVote}
-        />
-      </View>
-      <View className="mt-4 gap-[9px]">
-        <InfoCard icon="bell">
-          We'll notify you the second someone picks you — a pick never says who until you open it.
-        </InfoCard>
-        <InfoCard icon="mail">More classmates at your school means more people who can pick you.</InfoCard>
-      </View>
-    </>
+    <View className="mt-5">
+      <EmptyState
+        icon="aura"
+        iconColor="#7C5CFF"
+        title="No aura in here yet"
+        body="People who pick you stay anonymous, so this fills up without warning. Voting puts you in more rounds."
+        wobble
+        ctaLabel="Vote in today's round"
+        onCta={onVote}
+      />
+    </View>
   );
 }

@@ -31,10 +31,10 @@ async function seedVoteAt(voterId: string, targetId: string, tsIso: string): Pro
   `;
 }
 
-const FEED_QUERY = '{ friendActivity { id ts friendId friendName gender } }';
+const FEED_QUERY = '{ friendActivity { id ts friendId friendName gender label emoji } }';
 const feedFor = async (u: TestUser) =>
   (await callApi(FEED_QUERY, undefined, u.token)).body.data.friendActivity as
-    { id: string; ts: string; friendId: string; friendName: string; gender: string }[];
+    { id: string; ts: string; friendId: string; friendName: string; gender: string; label: string; emoji: string }[];
 
 before(async () => {
   await resetDb();
@@ -74,6 +74,17 @@ test("a friend's pick arrives as gender + first name; a non-friend's picks don't
     { friendId: events[0].friendId, friendName: events[0].friendName, gender: events[0].gender },
     { friendId: emma.userId, friendName: 'Emma', gender: 'boy' }
   );
+});
+
+/* The prompt used to be withheld from friend rows on purpose. Reversing that was a deliberate call, so
+   it gets a test: the point is that the prompt arrives *and* the voter stays anonymous, which is the
+   pair the reversal was argued on. A future "tighten this back up" edit should have to look here. */
+test("a friend row names the prompt, and still doesn't name the voter", async () => {
+  const events = await feedFor(me);
+  assert.equal(events[0].label, pollText, 'the prompt comes through');
+  assert.ok(events[0].emoji, 'and its emoji');
+  // Nothing on the event identifies the voter — gender is the only thing said about them.
+  assert.deepEqual(Object.keys(events[0]).filter(k => /voter|user|id$/i.test(k)).sort(), ['friendId', 'id']);
 });
 
 test('your own vote for a friend is dropped — the one row that could out a voter', async () => {

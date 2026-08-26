@@ -43,3 +43,20 @@ test('requires authentication', async () => {
   const r = await callApi(VALIDATE, { tx: 'x.y.z' });
   assert.match(r.body.errors[0].message, /Not logged in/);
 });
+
+/* The free unlock is a dev tool now, and this is the production posture pinned as a test: with the
+   flag off, the paywall's legacy path cannot grant the paid tier. The flag is restored in finally —
+   every other file in the suite mints its members through this mutation. */
+test('legacyInfiniteAura refuses when dev tools are off', async () => {
+  const { env } = await import('./helpers');
+  const saved = (env as Record<string, unknown>).AURA_DEV_TOOLS;
+  delete (env as Record<string, unknown>).AURA_DEV_TOOLS;
+  try {
+    const r = await callApi('mutation{ legacyInfiniteAura }', undefined, user.token);
+    assert.match(r.body.errors[0].message, /Dev tools are not enabled/);
+  } finally {
+    (env as Record<string, unknown>).AURA_DEV_TOOLS = saved;
+  }
+  const on = await callApi('mutation{ legacyInfiniteAura }', undefined, user.token);
+  assert.equal(on.body.data.legacyInfiniteAura, true, 'and works again with the flag back');
+});

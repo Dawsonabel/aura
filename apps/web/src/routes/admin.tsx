@@ -7,13 +7,14 @@ export const Route = createFileRoute('/admin')({
   component: AdminLayout
 });
 
-const NAV: { to: '/admin' | '/admin/schools' | '/admin/users' | '/admin/polls' | '/admin/votes' | '/admin/reports'; label: string }[] = [
+const NAV: { to: '/admin' | '/admin/schools' | '/admin/users' | '/admin/polls' | '/admin/votes' | '/admin/reports' | '/admin/tuning'; label: string }[] = [
   { to: '/admin', label: 'Overview' },
   { to: '/admin/schools', label: 'Schools' },
   { to: '/admin/users', label: 'Users' },
   { to: '/admin/polls', label: 'Polls' },
   { to: '/admin/votes', label: 'Votes' },
-  { to: '/admin/reports', label: 'Reports' }
+  { to: '/admin/reports', label: 'Reports' },
+  { to: '/admin/tuning', label: 'Tuning' }
 ];
 
 export function AdminLayout() {

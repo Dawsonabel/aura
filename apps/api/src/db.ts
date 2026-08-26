@@ -306,8 +306,16 @@ export function makeDb(databaseUrl: string) {
        blocked check belongs in the resolver, not here. Aggregating in SQL rather than in JS because
        this reads the whole school's vote history — the alternative is pulling every row per request.
 
-       Ties break on target_id so the ordering is stable between requests; without it two people on
-       the same score can swap places on a refresh and the board looks broken. */
+       Ties break on who got there first: `MAX(v.ts) ASC`. A person's newest counted vote is the one
+       that put them on their total, so the earlier that timestamp, the sooner they reached it — and
+       holding a score since Monday should outrank arriving at it on Saturday. It also means a tie is
+       broken by something that happened rather than by an implementation detail, so the person who
+       loses the tie can at least be told why.
+
+       target_id stays as the last resort, for the case where two people's newest votes share a
+       timestamp. Some deterministic final key is required regardless: without one, equal rows come
+       back in whatever order the planner feels like and two people can swap places on a refresh, which
+       reads as the board being broken. */
     async getBoard(
       schoolId: string,
       sinceIso: string,
@@ -320,7 +328,7 @@ export function makeDb(databaseUrl: string) {
             FROM votes v JOIN users u ON u.id = v.target_id
             WHERE u.school_id = ${schoolId} AND v.ts >= ${sinceIso} AND u.data->>'grade' = ${grade}
             GROUP BY v.target_id, first, last, grade
-            ORDER BY auras DESC, v.target_id
+            ORDER BY auras DESC, MAX(v.ts) ASC, v.target_id
           `
         : await sql`
             SELECT v.target_id AS user_id, u.data->>'firstName' AS first, u.data->>'lastName' AS last,
@@ -328,7 +336,7 @@ export function makeDb(databaseUrl: string) {
             FROM votes v JOIN users u ON u.id = v.target_id
             WHERE u.school_id = ${schoolId} AND v.ts >= ${sinceIso}
             GROUP BY v.target_id, first, last, grade
-            ORDER BY auras DESC, v.target_id
+            ORDER BY auras DESC, MAX(v.ts) ASC, v.target_id
           `;
       return rows.map((r: any) => ({
         userId: r.user_id,
@@ -625,6 +633,72 @@ export function makeDb(databaseUrl: string) {
         WHERE target_id = ${targetId} AND (name_revealed = true OR opened = true) RETURNING id
       `;
       return rows.length;
+    },
+
+    /* Per-schoolmate vote activity, for candidate weighting (see candidateWeight in pollRound.ts):
+       votes cast in the window, received in the window, and received ever. Three GROUP BY aggregates
+       over indexed columns, merged here so the sampler gets one map — absent id means zero across the
+       board, which is exactly the person the underdog factors exist for. */
+    async getSchoolVoteStats(
+      schoolId: string,
+      sinceIso: string
+    ): Promise<Record<string, { cast: number; received: number; receivedEver: number }>> {
+      const [cast, received, receivedEver] = await Promise.all([
+        sql`
+          SELECT v.voter_id AS id, COUNT(*)::int AS n FROM votes v
+          JOIN users u ON u.id = v.voter_id
+          WHERE u.school_id = ${schoolId} AND v.ts >= ${sinceIso} GROUP BY v.voter_id
+        `,
+        sql`
+          SELECT v.target_id AS id, COUNT(*)::int AS n FROM votes v
+          JOIN users u ON u.id = v.target_id
+          WHERE u.school_id = ${schoolId} AND v.ts >= ${sinceIso} GROUP BY v.target_id
+        `,
+        sql`
+          SELECT v.target_id AS id, COUNT(*)::int AS n FROM votes v
+          JOIN users u ON u.id = v.target_id
+          WHERE u.school_id = ${schoolId} GROUP BY v.target_id
+        `
+      ]);
+      const out: Record<string, { cast: number; received: number; receivedEver: number }> = {};
+      const at = (id: string) => (out[id] ??= { cast: 0, received: 0, receivedEver: 0 });
+      for (const r of cast) at(r.id as string).cast = r.n as number;
+      for (const r of received) at(r.id as string).received = r.n as number;
+      for (const r of receivedEver) at(r.id as string).receivedEver = r.n as number;
+      return out;
+    },
+
+    /* ---------- tuning overrides ---------- */
+
+    async getTuningOverrides(): Promise<Record<string, number>> {
+      const rows = await sql`SELECT key, value FROM tuning_overrides`;
+      const out: Record<string, number> = {};
+      for (const r of rows) out[r.key as string] = Number(r.value);
+      return out;
+    },
+
+    /** null deletes the override — the dial falls back to env/default on the next request. */
+    async setTuningOverride(key: string, value: number | null): Promise<void> {
+      if (value === null) {
+        await sql`DELETE FROM tuning_overrides WHERE key = ${key}`;
+      } else {
+        await sql`
+          INSERT INTO tuning_overrides (key, value) VALUES (${key}, ${value})
+          ON CONFLICT (key) DO UPDATE SET value = ${value}, updated_at = now()
+        `;
+      }
+    },
+
+    /* Every aura someone has ever received, with no time window — the Me screen's lifetime figure.
+
+       Deliberately not derived from the cards the app already holds: those are cut at
+       `auraLifetimeDays` (30), which is what "aura fades" means on screen. The rows themselves are
+       never purged — the only deletes anywhere are a single-card admin action and a dev tool — so
+       this counts real history rather than an accumulating client-side tally that a reinstall would
+       reset. A COUNT over an indexed target_id, so it stays cheap as history grows. */
+    async countVotesForTarget(targetId: string): Promise<number> {
+      const rows = await sql`SELECT COUNT(*)::int AS n FROM votes WHERE target_id = ${targetId}`;
+      return rows[0]?.n ?? 0;
     },
 
     /** Deletes every card someone has received. Returns how many went. */

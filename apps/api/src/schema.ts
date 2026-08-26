@@ -21,7 +21,7 @@ import {
   devResetRounds,
   devSetStreak
 } from './devTools';
-import type { Tuning } from './tuning';
+import { TUNING_DEFAULTS, applyTuningOverrides, coerceDial, resolveTuning, type Tuning } from './tuning';
 
 export interface Env {
   DATABASE_URL: string;
@@ -100,6 +100,20 @@ function requireAdmin(ctx: GraphQLContext): void {
   if (!ctx.isAdmin) throw new Error('Admin only');
 }
 
+/* The tuning page's rows, computed fresh rather than from ctx.tuning — the mutation calls this
+   *after* writing, and ctx.tuning was resolved before the request's resolver ran, so reading it here
+   would hand the admin back the values from before their own edit. */
+async function tuningDialList(ctx: GraphQLContext): Promise<{ key: string; value: number; default: number; overridden: boolean }[]> {
+  const overrides = await ctx.db.getTuningOverrides();
+  const current = applyTuningOverrides(resolveTuning(ctx.env as unknown as Record<string, unknown>), overrides);
+  return (Object.keys(TUNING_DEFAULTS) as (keyof Tuning)[]).map(key => ({
+    key,
+    value: current[key],
+    default: TUNING_DEFAULTS[key],
+    overridden: key in overrides
+  }));
+}
+
 /** The comparable part of a free-text grade: "11" and "Grade 11" are the same class. */
 function gradeKey(grade: unknown): string | null {
   return typeof grade === 'string' ? grade.match(/\d+/)?.[0] ?? null : null;
@@ -174,10 +188,11 @@ const typeDefs = /* GraphQL */ `
     ts: String!
     read: Boolean!
   }
-  # One friend of yours getting picked. Deliberately thin — see friendActivityFor in auras.ts.
-  # There is no superlative here and no field to put one in: what a friend was picked *for* is theirs
-  # to share, not yours to read. Gender is "private" whenever a card would have withheld it, and also
-  # whenever the voter has Infinite Aura.
+  # One friend of yours getting picked. See friendActivityFor in auras.ts.
+  # Carries the prompt now: a friend row says what the vote was for, the same way your own card does.
+  # That is a deliberate reversal — the reasoning for and against is on FriendActivityEvent in auras.ts.
+  # What did not change: the *voter* stays anonymous. Gender is "private" whenever a card would have
+  # withheld it, and also whenever the voter has Infinite Aura.
   type FriendActivityEvent {
     id: ID!
     ts: String!
@@ -185,6 +200,9 @@ const typeDefs = /* GraphQL */ `
     # First name only.
     friendName: String!
     gender: String!
+    # The prompt the vote was cast on, and its emoji.
+    label: String!
+    emoji: String!
   }
   # Something a friend has done, rather than something done to them. Unlike FriendActivityEvent this
   # may name a superlative — a milestone is the aggregate ("Emma's won Best smile x5"), which already
@@ -342,6 +360,9 @@ const typeDefs = /* GraphQL */ `
     # deriving it server-side is what keeps voter ids out of the client while still letting the
     # screen say "7 people" instead of "7 auras" (one person can send several).
     admirerCount: Int!
+    # Every aura ever received, with no time window — unlike the auras list above, which stops at
+    # auraLifetimeDays. The Me screen's lifetime figure; see countVotesForTarget in db.ts.
+    lifetimeAuras: Int!
     # Name reveals left today, and the daily allowance they count down from. Zero for a non-member —
     # the allowance is what Infinite Aura buys, so there is nothing to count down before that.
     flipsLeft: Int!
@@ -472,6 +493,16 @@ const typeDefs = /* GraphQL */ `
     infiniteAura: Int!
     reports: Int!
   }
+  # One gameplay/economy dial. value is what the game is running right now (defaults, then env vars,
+  # then the admin override — see applyTuningOverrides in tuning.ts); overridden says whether an admin
+  # row is the reason. Clearing an override falls back to env/default, so value and default can still
+  # differ afterward on an environment that sets the env var.
+  type TuningDial {
+    key: String!
+    value: Int!
+    default: Int!
+    overridden: Boolean!
+  }
   type Query {
     schools: [School!]!
     school(id: ID!): School
@@ -482,6 +513,8 @@ const typeDefs = /* GraphQL */ `
     votes(limit: Int): [Vote!]!
     reports: [Report!]!
     adminStats: AdminStats!
+    # Every gameplay/economy dial, admin only — the tuning page's data. See tuning.ts.
+    tuningDials: [TuningDial!]!
 
     me: User!
     blockedPeople: [BlockedPerson!]!
@@ -535,6 +568,9 @@ const typeDefs = /* GraphQL */ `
     seedDefaultPolls: Int!
     deleteVote(id: ID!): Boolean!
     resolveReport(id: ID!): Report
+    # Set (or with value omitted, clear) one dial's admin override. Returns the full dial list so the
+    # tuning page repaints from one response. Admin only; the key must be a real dial name.
+    updateTuningDial(key: String!, value: Int): [TuningDial!]!
     adminUpdateUser(
       id: ID!, schoolId: ID, grade: String, coins: Int, infiniteAura: Boolean,
       firstName: String, lastName: String, username: String
@@ -697,6 +733,10 @@ const resolvers = {
     votes: (_: unknown, args: { limit?: number }, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getVotes(args.limit); },
     reports: (_: unknown, __: unknown, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getReports(); },
     adminStats: (_: unknown, __: unknown, ctx: GraphQLContext) => { requireAdmin(ctx); return ctx.db.getAdminStats(); },
+    tuningDials: async (_: unknown, __: unknown, ctx: GraphQLContext) => {
+      requireAdmin(ctx);
+      return tuningDialList(ctx);
+    },
 
     me: (_: unknown, __: unknown, ctx: GraphQLContext) => requireMe(ctx),
 
@@ -859,11 +899,14 @@ const resolvers = {
       const me = requireMe(ctx);
       const { auras: list, admirerCount } = await aurasFor(ctx.db, me, ctx.tuning);
       const flips = flipState(me, ctx.tuning);
+      // Runs alongside the windowed read rather than after it — a separate COUNT with nothing to wait on.
+      const lifetimeAuras = await ctx.db.countVotesForTarget(me.id);
       return {
         auras: list,
         coins: me.coins as number,
         infiniteAura: !!me.infiniteAura,
         admirerCount,
+        lifetimeAuras,
         flipsLeft: flips.left,
         flipsPerDay: ctx.tuning.dailyFlips
       };
@@ -933,6 +976,23 @@ const resolvers = {
         if (reporter) await notify(ctx.db, reporter, 'An admin reviewed your report. Thanks for flagging it.', '🛡️');
       }
       return report;
+    },
+
+    updateTuningDial: async (_: unknown, args: { key: string; value?: number | null }, ctx: GraphQLContext) => {
+      requireAdmin(ctx);
+      if (!(args.key in TUNING_DEFAULTS)) throw new Error('Unknown dial: ' + args.key);
+      if (args.value === undefined || args.value === null) {
+        await ctx.db.setTuningOverride(args.key, null);
+      } else {
+        /* Same validator as the env path — a value it rejects never reaches the table, so the table
+           can only ever hold numbers applyTuningOverrides will actually apply. Rejected loudly here
+           rather than skipped silently: an admin typing -5 should hear about it, where a bad env var
+           degrading quietly is the right posture for a dashboard variable nobody is looking at. */
+        const value = coerceDial(args.value);
+        if (value === null) throw new Error('Dial values are whole numbers, 0 or more');
+        await ctx.db.setTuningOverride(args.key, value);
+      }
+      return tuningDialList(ctx);
     },
 
     // Thin wrappers over db.updateUser/deleteUser — those already do everything needed (generic
@@ -1377,10 +1437,17 @@ const resolvers = {
        on there was no way back to the free experience short of editing the database — so the half of
        the product most users will actually see was the half nobody on the team could look at.
 
-       LAUNCH BLOCKER: remove (or admin-gate) this before StoreKit purchases go live, or the paywall
-       stays a free button forever. Adding the off switch doesn't widen that hole — the on switch is
-       the hole — but it does mean the whole mutation has to go, not just half of it. */
+       Was a LAUNCH BLOCKER (a free button granting the paid tier); now gated behind AURA_DEV_TOOLS
+       below, so production refuses it by construction. The remaining launch work is the client half:
+       point the paywall's button at validateIap with a real StoreKit purchase, which needs a dev
+       build — StoreKit doesn't exist under Expo Go. */
     legacyInfiniteAura: async (_: unknown, args: { on?: boolean }, ctx: GraphQLContext) => {
+      /* The launch blocker above, closed: this now rides the same AURA_DEV_TOOLS gate as the seeding
+         mutations, because it is one — a test-state shortcut that happens to grant the paid tier.
+         Dev keeps working (.dev.vars sets the flag), and production refuses by default because the
+         flag must never be set there (see wrangler.toml's block on it). On a production build the
+         paywall's button errors instead of granting — failing safe until validateIap is what it calls. */
+      requireDevTools(ctx.env as unknown as { [k: string]: unknown });
       const me = requireMe(ctx);
       const on = args.on ?? true;
       await ctx.db.updateUser(me.id, { infiniteAura: on, infiniteAuraExpires: null });

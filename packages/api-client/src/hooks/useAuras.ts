@@ -7,6 +7,7 @@ const AURAS_QUERY = /* GraphQL */ `
       coins
       infiniteAura
       admirerCount
+      lifetimeAuras
       flipsLeft
       flipsPerDay
       auras {
@@ -40,7 +41,11 @@ export type Aura = {
      it gives the name and grade as well. The clue ladder that sold the grade and first initial as
      separate scratch tiles is gone, and so are `revealed`, `gradeRevealed` and `initial`. */
   gender: string;
-  /** Empty until flipped — it arrives with the name. */
+  /* Free on a face-down card, beside the gender — the flip buys the *name* and nothing else. Empty
+     only when the anonymity floor withholds it (see `detailHidden`), which is off by default.
+
+     This said "empty until flipped, it arrives with the name" long after that stopped being true, and
+     the Infinite Aura paywall was written from it — advertising a paid benefit the app gives away. */
   grade: string;
   infiniteAura: boolean;
   unread: boolean;
@@ -68,6 +73,8 @@ export type AurasResult = {
   infiniteAura: boolean;
   /** Distinct people who picked you in the last 7 days — server-derived, see AurasResult in the API. */
   admirerCount: number;
+  /** Every aura ever received. `auras` above is the 30-day window; this one has no cutoff. */
+  lifetimeAuras: number;
   /* Name reveals left today, and the daily allowance. Both 0 / the tuned value for a non-member:
      `flipsLeft` is 0 for them because the allowance is what Infinite Aura buys. Counted per card, so
      five picks from one classmate are five flips. */

@@ -79,6 +79,22 @@ export type Tuning = {
      people who followed you, and a friendship is symmetric. */
   weightFriend: number;
   weightSchoolmate: number;
+  /* The candidate sampler's other factors, as integer percentages — 100 is neutral, 200 doubles.
+     Percent because dials are whole numbers (coerceDial floors) and "1.25×" has to be expressible.
+     They multiply into the base weight above; see candidateWeight in pollRound.ts for the model and
+     the windows. All quiet: none of these is printed anywhere a student can see.
+
+     weightLoyalPct       — cast a vote in the last 7 days: people who play get seen.
+     weightCrossGenderPct — viewer and candidate are girl/boy opposites; non-binary, unset and
+                            "rather not say" are neutral on both sides.
+     weightUnderdogPct    — received nothing in the last 7 days, so the pool tilts toward whoever the
+                            school has been overlooking. (The *never picked at all* case gets a hard
+                            guaranteed seat in buildRound on top of this.)
+     weightMemberPct      — Infinite Aura members, deliberately mild. */
+  weightLoyalPct: number;
+  weightCrossGenderPct: number;
+  weightUnderdogPct: number;
+  weightMemberPct: number;
   /** Days a aura stays in the inbox. */
   auraLifetimeDays: number;
   /* People who must share a (gender, grade) cohort before a aura will show the sender's gender.
@@ -113,10 +129,21 @@ export const TUNING_DEFAULTS: Tuning = {
   questionsPerRound: 10,
   weightFriend: 3,
   weightSchoolmate: 1,
+  weightLoyalPct: 200,
+  weightCrossGenderPct: 200,
+  weightUnderdogPct: 400,
+  weightMemberPct: 125,
   auraLifetimeDays: 30,
   cohortFloor: 0,
   schoolUnlockThreshold: 20,
-  boardLimit: 25,
+  /* Ten, matching boardTopTier — the board shows the top tier and stops.
+     Cut from 25 deliberately, and enforced here rather than by slicing on the client: at 25 the server
+     was still sending ranks 11–25, so "we don't show it" would have meant the standings were in the
+     payload of every student at the school regardless. Being ranked 19th out of 43 is not a fact
+     anyone signed up to publish. `aurasToTopTen` is unaffected — board.ts reads 10th place off the
+     full ranking before this slice, and the caller's own row is pinned whether or not it makes the
+     cut, so someone outside the tier still sees where they stand. */
+  boardLimit: 10,
   boardTopTier: 10
 };
 
@@ -141,6 +168,10 @@ export const TUNING_ENV_KEYS: Record<keyof Tuning, string> = {
   questionsPerRound: 'AURA_QUESTIONS_PER_ROUND',
   weightFriend: 'AURA_WEIGHT_FRIEND',
   weightSchoolmate: 'AURA_WEIGHT_SCHOOLMATE',
+  weightLoyalPct: 'AURA_WEIGHT_LOYAL_PCT',
+  weightCrossGenderPct: 'AURA_WEIGHT_CROSS_GENDER_PCT',
+  weightUnderdogPct: 'AURA_WEIGHT_UNDERDOG_PCT',
+  weightMemberPct: 'AURA_WEIGHT_MEMBER_PCT',
   auraLifetimeDays: 'AURA_LIFETIME_DAYS',
   cohortFloor: 'AURA_COHORT_FLOOR',
   schoolUnlockThreshold: 'AURA_SCHOOL_UNLOCK_THRESHOLD',
@@ -156,17 +187,43 @@ export const TUNING_ENV_KEYS: Record<keyof Tuning, string> = {
 export function resolveTuning(env: Record<string, unknown>): Tuning {
   const resolved = { ...TUNING_DEFAULTS };
   for (const key of Object.keys(TUNING_DEFAULTS) as (keyof Tuning)[]) {
-    const raw = env[TUNING_ENV_KEYS[key]];
-    if (raw === undefined || raw === null) continue;
-    /* Trimmed and checked for emptiness *before* Number(), because `Number("")` and `Number("   ")`
-       are both 0 — not NaN. Without this, a dashboard variable holding a stray space would read as a
-       deliberate zero and set the daily round limit to nothing, locking every player out of the app.
-       Found by test/tuning.test.ts, which is the entire reason that file exists. */
-    const text = String(raw).trim();
-    if (text === '') continue;
-    const value = Number(text);
-    if (!Number.isFinite(value) || value < 0) continue;
-    resolved[key] = Math.floor(value);
+    const value = coerceDial(env[TUNING_ENV_KEYS[key]]);
+    if (value !== null) resolved[key] = value;
+  }
+  return resolved;
+}
+
+/* One validator for every path a dial value can arrive by — env var, admin mutation, DB row.
+
+   Trimmed and checked for emptiness *before* Number(), because `Number("")` and `Number("   ")`
+   are both 0 — not NaN. Without this, a dashboard variable holding a stray space would read as a
+   deliberate zero and set the daily round limit to nothing, locking every player out of the app.
+   Found by test/tuning.test.ts, which is the entire reason that file exists. Zero is allowed —
+   "free reroll" is a legitimate setting — but a negative price is not. */
+export function coerceDial(raw: unknown): number | null {
+  if (raw === undefined || raw === null) return null;
+  const text = String(raw).trim();
+  if (text === '') return null;
+  const value = Number(text);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.floor(value);
+}
+
+/* The admin layer, applied on top of what env resolved.
+
+   Precedence is defaults < env < DB, and the order is deliberate: the admin site is the product
+   owner's console, so a dial set there must actually win — an env var silently outranking the UI
+   would make the tuning page lie. Env stays useful as the dev/test knob (the API tests mutate the
+   env object directly, and their DB is wiped every run so no override rows survive to fight them).
+
+   Unknown keys and invalid values are skipped, same posture as resolveTuning: a bad row degrades to
+   the env/default value rather than taking the game down. */
+export function applyTuningOverrides(base: Tuning, overrides: Record<string, unknown>): Tuning {
+  const resolved = { ...base };
+  for (const key of Object.keys(TUNING_DEFAULTS) as (keyof Tuning)[]) {
+    if (!(key in overrides)) continue;
+    const value = coerceDial(overrides[key]);
+    if (value !== null) resolved[key] = value;
   }
   return resolved;
 }

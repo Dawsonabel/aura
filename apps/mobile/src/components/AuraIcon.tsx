@@ -70,6 +70,10 @@ const PATHS = {
   // ---- system & safety ----
   sliders:
     '<path d="M4 7.4h10M18.4 7.4h1.6"/><circle cx="16.2" cy="7.4" r="2.2"/><path d="M4 16.6h4.4M12.8 16.6h7.2"/><circle cx="10.6" cy="16.6" r="2.2"/>',
+  /* APP-AUTHORED — the one glyph not copied from the design's aura-icons.js, which has no gear. Drawn
+     to the set's rules (24-grid, 2.2 stroke, rounded caps; centre dot filled like `target`'s). If the
+     design doc grows a gear, replace this with the doc's path verbatim rather than keeping both. */
+  gear: '<circle cx="12" cy="12" r="6.3"/><circle cx="12" cy="12" r="1.5" fill="%C%" stroke="none"/><path d="M12 3v2.7M12 18.3V21M3 12h2.7M18.3 12H21M5.6 5.6l1.9 1.9M16.5 16.5l1.9 1.9M18.4 5.6l-1.9 1.9M7.5 16.5l-1.9 1.9"/>',
   bell: '<path d="M7 10.6a5 5 0 0 1 10 0c0 4 1.6 5.6 1.6 5.6H5.4S7 14.6 7 10.6Z"/><path d="M9.9 19.4a2.3 2.3 0 0 0 4.2 0"/>',
   clock: '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2v5.2l3.7 2.2"/>',
   hourglass: '<path d="M6.8 3.4h10.4M6.8 20.6h10.4"/><path d="M7.6 3.4h8.8L12 12l4.4 8.6H7.6L12 12Z"/>',

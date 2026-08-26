@@ -74,12 +74,41 @@ export async function notify(db: Db, user: User, text: string, emoji: string): P
 
    The numbers live in tuning.ts, because the People screen prints the ratio ("3× likelier to show up
    in your four") and a constant here plus a literal there is two copies of one rule. */
-function weightsFor(user: User, mates: User[], tuning: Tuning): { user: User; weight: number }[] {
-  const friends = new Set((user.friends as string[]) || []);
-  return mates.map(m => ({
-    user: m,
-    weight: friends.has(m.id) ? tuning.weightFriend : tuning.weightSchoolmate
-  }));
+/** How far back "recently" reaches for the loyalty and underdog factors. A week, fixed: it tracks the
+    board's rhythm, and a dial for it would be a dial nobody could name a reason to turn. */
+export const ACTIVITY_WINDOW_DAYS = 7;
+
+export type VoteStats = Record<string, { cast: number; received: number; receivedEver: number }>;
+
+/* One candidate's weight, for one viewer. Exported for the unit tests in candidateWeights.test.ts —
+   sampling is stochastic, so the suite pins this function's arithmetic instead of rolling dice.
+
+   A product of factors rather than a sum, so they compose the way intuition expects: a loyal
+   opposite-gender friend is 3 × 2 × 2 = 12× a passive same-gender stranger, not 3 + 2 + 2 = 7-ish.
+   Every factor is a live dial (see tuning.ts); the percent dials divide by 100 here.
+
+   The attraction factor is deliberately unnameable from the outside: girl↔boy in either direction,
+   anything else — non-binary, unset, "rather not say" — neutral on both sides. It biases who turns up,
+   it never filters: everyone at the school remains reachable in every pool. */
+export function candidateWeight(viewer: User, mate: User, stats: VoteStats, tuning: Tuning): number {
+  const friends = new Set((viewer.friends as string[]) || []);
+  let weight = friends.has(mate.id) ? tuning.weightFriend : tuning.weightSchoolmate;
+
+  const s = stats[mate.id] ?? { cast: 0, received: 0, receivedEver: 0 };
+  if (s.cast > 0) weight *= tuning.weightLoyalPct / 100;
+
+  const pair = [String(viewer.gender ?? ''), String(mate.gender ?? '')];
+  if ((pair[0] === 'girl' && pair[1] === 'boy') || (pair[0] === 'boy' && pair[1] === 'girl')) {
+    weight *= tuning.weightCrossGenderPct / 100;
+  }
+
+  if (s.received === 0) weight *= tuning.weightUnderdogPct / 100;
+  if (mate.infiniteAura) weight *= tuning.weightMemberPct / 100;
+  return weight;
+}
+
+function weightsFor(user: User, mates: User[], stats: VoteStats, tuning: Tuning): { user: User; weight: number }[] {
+  return mates.map(m => ({ user: m, weight: candidateWeight(user, m, stats, tuning) }));
 }
 
 /** How many times likelier a friend is than a stranger — the number the People copy prints. */
@@ -112,7 +141,9 @@ function weightedPick(pool: { user: User; weight: number }[], n: number): User[]
 
 export async function buildRound(db: Db, rounds: RoundStore, user: User, tuning: Tuning): Promise<BuiltRound> {
   const mates = (await db.getUsersBySchool(user.schoolId, user.id)).filter(m => notBlocked(user, m));
-  const weighted = weightsFor(user, mates, tuning);
+  const sinceIso = new Date(Date.now() - ACTIVITY_WINDOW_DAYS * 86400_000).toISOString();
+  const stats = user.schoolId ? await db.getSchoolVoteStats(user.schoolId, sinceIso) : {};
+  const weighted = weightsFor(user, mates, stats, tuning);
   const pool = mates;
 
   const allPolls = await db.getPolls();
@@ -155,6 +186,28 @@ export async function buildRound(db: Db, rounds: RoundStore, user: User, tuning:
     return { questionId: q.id, emoji: q.emoji, text: q.text, color: q.color, choices };
   });
 
+  /* The first-vote guarantee. Weighting tilts the odds; this is the floor under them: if anyone at
+     this school has never received a single aura, at least one such person holds a seat in every
+     round built here, until their first real vote lands and lifts them out of the set. The vote they
+     eventually get is a real one from a real classmate — the guarantee is exposure, never fabrication
+     (that distinction is a deliberate product/legal decision; don't "improve" this into seeding votes).
+
+     Runs after the boost pass and skips boosted slots, so a paid placement is never evicted, and the
+     seat only does anything on rounds where the sampler happened to leave the never-picked out
+     entirely. */
+  const neverPicked = mates.filter(m => (stats[m.id]?.receivedEver ?? 0) === 0);
+  if (neverPicked.length > 0 && polls.length > 0) {
+    const seated = new Set(polls.flatMap(p => p.choices.map(c => c.id)));
+    if (!neverPicked.some(m => seated.has(m.id))) {
+      const lucky = neverPicked[Math.floor(Math.random() * neverPicked.length)];
+      const poll = polls[Math.floor(Math.random() * polls.length)];
+      const openSlots = poll.choices.map((c, i) => (c.boosted ? -1 : i)).filter(i => i >= 0);
+      if (openSlots.length > 0) {
+        poll.choices[openSlots[Math.floor(Math.random() * openSlots.length)]] = toChoice(lucky);
+      }
+    }
+  }
+
   await Promise.all(decrements.map(id => db.decrementBoost(id)));
 
   if (boostedInserts > 0 && user.infiniteAura) {
@@ -178,7 +231,10 @@ export async function rerollChoices(db: Db, user: User, exclude: string[], tunin
     m => notBlocked(user, m) && !exclude.includes(m.id)
   );
   if (mates.length === 0) return [];
-  return weightedPick(weightsFor(user, mates, tuning), 4).map(c => toChoice(c));
+  // Same sampler as buildRound, stats included — a reroll is a re-draw, not a different game.
+  const sinceIso = new Date(Date.now() - ACTIVITY_WINDOW_DAYS * 86400_000).toISOString();
+  const stats = user.schoolId ? await db.getSchoolVoteStats(user.schoolId, sinceIso) : {};
+  return weightedPick(weightsFor(user, mates, stats, tuning), 4).map(c => toChoice(c));
 }
 
 /* What the Vote screen actually asks for.

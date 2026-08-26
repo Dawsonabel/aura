@@ -67,8 +67,11 @@ function SparkPopLabel({ pop, onDone }: { pop: SparkPop; onDone: (id: number) =>
       }}
     >
       {/* The glyph alone — no "+1". The number was saying what the counter in the corner already says
-          a beat later, and the bolt on its own is the thing that reads at a glance mid-vote. */}
-      <AuraIcon name="bolt" size={44} color={SPARK_FILL} />
+          a beat later, and the bolt on its own is the thing that reads at a glance mid-vote.
+
+          Filled with the rest of them, and it gains the most from it: this one flies across a busy
+          screen for a few hundred milliseconds, where a solid shape registers and an outline doesn't. */}
+      <AuraIcon name="bolt" size={44} color={SPARK_FILL} filled />
     </Animated.View>
   );
 }
@@ -85,10 +88,12 @@ function SparkCounter({ total, top }: { total: number; top: number }) {
       className="flex-row items-center gap-[6px] rounded-pill px-[13px] py-[7px]"
       style={{ position: 'absolute', right: 21, top, backgroundColor: 'rgba(64,62,65,0.72)', zIndex: 5 }}
     >
-      <AuraIcon name="bolt" size={22} color={SPARK_FILL} />
-      <Text className="font-nunito-900 text-[19px]" style={{ color: SPARK_FILL }}>
-        {total}
-      </Text>
+      {/* Filled bolt, white number — matching the Me screen's sparks cell, and matching the reroll
+          price a few hundred lines down, which already reasoned its way to exactly this pairing: the
+          yellow marks the *currency*, the white is just the figure. This counter was the odd one out,
+          colouring both, which is why the balance and the price never read as the same unit. */}
+      <AuraIcon name="bolt" size={22} color={SPARK_FILL} filled />
+      <Text className="font-nunito-900 text-[19px] text-white">{total}</Text>
     </View>
   );
 }
@@ -564,7 +569,7 @@ function UtilityRow({
                 *number* stays white, because pricing the reroll in the currency's own colour would
                 make the pill look like a balance rather than a cost. */}
             <View className="flex-row items-center gap-[5px] rounded-pill px-[11px] py-[5px]" style={{ backgroundColor: '#645F67' }}>
-              <AuraIcon name="bolt" size={16} color={SPARK_FILL} />
+              <AuraIcon name="bolt" size={16} color={SPARK_FILL} filled />
               <Text className="font-nunito-900 text-[15.5px] text-white">{rerollCost}</Text>
             </View>
           </View>

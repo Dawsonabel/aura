@@ -224,7 +224,8 @@ export function EmptyState({
   /** Defaults to the cream card's muted ink; pass an accent when the state is worth colouring. */
   iconColor?: string;
   title: string;
-  body: string;
+  /** Optional: a title and a button are a complete empty state when the title already says it. */
+  body?: string;
   ctaLabel?: string;
   onCta?: () => void;
   ctaTone?: 'pink' | 'mint';
@@ -240,9 +241,11 @@ export function EmptyState({
         <Text className="font-fredoka-700 mt-3 text-center text-[23px] leading-[26px]" style={{ color: '#2D2A2E' }}>
           {title}
         </Text>
-        <Text className="font-nunito-700 mt-2 text-center text-[13.5px] leading-[19px]" style={{ color: '#8B888D' }}>
-          {body}
-        </Text>
+        {body ? (
+          <Text className="font-nunito-700 mt-2 text-center text-[13.5px] leading-[19px]" style={{ color: '#8B888D' }}>
+            {body}
+          </Text>
+        ) : null}
         {ctaLabel && onCta ? (
           <View className="mt-4 w-full">
             <ToyShadow

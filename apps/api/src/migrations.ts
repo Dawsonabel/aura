@@ -112,6 +112,18 @@ export async function runMigrations(sql: NeonQueryFunction<false, false>): Promi
   `;
   await sql`CREATE INDEX IF NOT EXISTS idx_boosts_by_user_id ON boosts(by_user_id)`;
 
+  /* Admin-set overrides for the dials in tuning.ts, one row per overridden dial. Absence means "use
+     the default (or the env var)" — the table is not a copy of every dial, only the deliberate edits,
+     which is what lets "clear override" mean something. INT because every dial is an integer
+     (resolveTuning floors); the write path validates before insert, same rules as the env path. */
+  await sql`
+    CREATE TABLE IF NOT EXISTS tuning_overrides (
+      key TEXT PRIMARY KEY,
+      value INT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+
   await renameLegacyUserKeys(sql);
   await migrateFollowsToFriends(sql);
 }

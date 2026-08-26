@@ -39,6 +39,22 @@ export const GENDER_ACCENT: Record<string, string> = {
 /** A voter whose gender is withheld (their own choice, or the cohort floor). */
 export const UNKNOWN_ACCENT = '#8B888D';
 
+/* The ground that pairs with each accent — the same hue pulled down into `ground` so white type still
+   holds on it, leaving the bright value for the rim. Used by the Activity feed's own-aura rows, where
+   the card is coloured by whoever sent the vote.
+
+   Kept as a table rather than mixed from GENDER_ACCENT at runtime. A programmatic mix at one fixed
+   percentage doesn't land evenly across these four: mint and blue are far brighter than the pink at
+   the same ratio, so the row that should read quietest ends up loudest. These are picked per hue to
+   sit at the same *apparent* depth, which is the thing that actually has to match. */
+export const GENDER_GROUND: Record<string, string> = {
+  girl: '#4A2A3A',
+  boy: '#2A384A',
+  nonbinary: '#2F453F'
+};
+/** Pairs with UNKNOWN_ACCENT — a grey that still reads as tinted rather than as the default row. */
+export const UNKNOWN_GROUND = '#353235';
+
 export const TRACK = '#2C2A2D'; // segment / filter / pager track, one step below `ground`
 export const HAIRLINE = '#3A373A'; // inactive filter border
 export const DEEP = '#1A181B'; // flip + deck ground: darker than the tab, so the card is the light
@@ -147,15 +163,22 @@ export function SegmentBar({ value, onChange }: { value: Segment; onChange: (s: 
    button rather than as the control that decides what the receipt says.
 
    No top margin of its own — the caller places it, because the gap above it is part of a three-way
-   spacing the row can't see. */
+   spacing the row can't see.
+
+   `textSize` opts in to a larger label, and the default stays 14 rather than moving. Ranks uses this
+   bar as its primary tab row — three short words ("Overall", "My grade", "Trending") — while the
+   receipt's options are "Last 24 hrs" / "Last 7 days" / "Last 30 days", which already fill their
+   thirds at 14. Raising it for everyone would wrap the receipt to fix the leaderboard. */
 export function PeriodBar<T extends string>({
   value,
   options,
-  onChange
+  onChange,
+  textSize = 14
 }: {
   value: T;
   options: { key: T; label: string }[];
   onChange: (v: T) => void;
+  textSize?: number;
 }) {
   return (
     <View className="flex-row gap-[6px] rounded-pill p-[5px]" style={{ backgroundColor: TRACK }}>
@@ -168,7 +191,11 @@ export function PeriodBar<T extends string>({
             className="flex-1 items-center rounded-pill"
             style={{ paddingVertical: 12, backgroundColor: active ? '#4A474B' : 'transparent' }}
           >
-            <Text className="font-nunito-900 text-[14px]" style={{ color: active ? '#FFFFFF' : '#848286' }}>
+            <Text
+              numberOfLines={1}
+              className="font-nunito-900"
+              style={{ fontSize: textSize, color: active ? '#FFFFFF' : '#848286' }}
+            >
               {o.label}
             </Text>
           </Pressable>

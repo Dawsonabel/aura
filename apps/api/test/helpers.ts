@@ -31,7 +31,11 @@ export const env: Env = {
   DATABASE_URL: TEST_DATABASE_URL,
   UPSTASH_REDIS_REST_URL: vars.UPSTASH_REDIS_REST_URL,
   UPSTASH_REDIS_REST_TOKEN: vars.UPSTASH_REDIS_REST_TOKEN,
-  CLERK_SECRET_KEY: vars.CLERK_SECRET_KEY
+  CLERK_SECRET_KEY: vars.CLERK_SECRET_KEY,
+  /* The suite exercises dev-gated mutations (legacyInfiniteAura is how tests mint members), so this
+     environment is a dev environment. The gate itself is tested by deleting the flag for one call —
+     see iap.test.ts — which is also why tests must restore it rather than assume it. */
+  AURA_DEV_TOOLS: '1'
 };
 
 const clerk = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
@@ -43,7 +47,7 @@ const FAKE_IP = 'test-' + randomUUID().slice(0, 8);
 /** Wipe the test DB and recreate the schema — same statements scripts/migrate.ts uses. */
 export async function resetDb(): Promise<void> {
   const sql = neon(TEST_DATABASE_URL!);
-  await sql`DROP TABLE IF EXISTS votes, reports, boosts, polls, users, schools CASCADE`;
+  await sql`DROP TABLE IF EXISTS votes, reports, boosts, polls, users, schools, tuning_overrides CASCADE`;
   await runMigrations(sql);
 }
 

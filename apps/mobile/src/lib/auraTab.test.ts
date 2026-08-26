@@ -58,6 +58,8 @@ const friendEvent = (over: Partial<FriendActivityEvent> = {}): FriendActivityEve
   friendId: 'usr_f',
   friendName: 'Emma',
   gender: 'boy',
+  label: 'Would win a talent show',
+  emoji: '🎤',
   ...over
 });
 
@@ -94,6 +96,12 @@ describe('feed copy', () => {
     // "private" covers withheld cohort, "rather not say" AND protected senders — one word, on purpose.
     expect(auraLine('private', 'Emma')).toBe('Someone gave Emma aura');
     expect(auraLine('', 'Emma')).toBe('Someone gave Emma aura');
+  });
+
+  test('a friend row names the prompt, and falls back to the bare line without one', () => {
+    expect(auraLine('boy', 'Emma', 'Would win a talent show')).toBe('A boy gave Emma aura for Would win a talent show');
+    // Votes cast before the prompt was recorded still render — the empty string must not print "for".
+    expect(auraLine('boy', 'Emma', '')).toBe('A boy gave Emma aura');
   });
 
   test('a flipped card says the name you paid for instead of the gender', () => {

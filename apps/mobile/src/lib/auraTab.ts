@@ -113,7 +113,17 @@ export type ActivityItem =
       fresh: boolean;
       ts: string;
     }
-  | { kind: 'friend'; id: string; gender: string; friendId: string; friendName: string; ts: string }
+  | {
+      kind: 'friend';
+      id: string;
+      gender: string;
+      friendId: string;
+      friendName: string;
+      /** The prompt and its emoji — same pair a `pick` row carries, now that the server sends them. */
+      q: string;
+      emoji: string;
+      ts: string;
+    }
   | {
       kind: 'milestone';
       id: string;
@@ -146,8 +156,12 @@ const GENDER_ACTOR: Record<string, string> = {
   nonbinary: 'A non-binary person'
 };
 
-export function auraLine(gender: string, who: string): string {
-  return `${GENDER_ACTOR[gender] ?? 'Someone'} gave ${who} aura`;
+/* Mirrors `pickLine`, for a row about a friend rather than about you — and takes the prompt the same
+   way, now that the server sends one. `q` stays optional in effect (empty string falls through to the
+   bare line) because a vote cast before the poll's text was recorded still has to render. */
+export function auraLine(gender: string, who: string, q = ''): string {
+  const head = `${GENDER_ACTOR[gender] ?? 'Someone'} gave ${who} aura`;
+  return q ? `${head} for ${q}` : head;
 }
 
 /* Your own row's subject. A flipped card says the name outright.
@@ -223,7 +237,8 @@ export function repeatChip(pickCount: number): string {
   return `${pickCount}${ordinalSuffix(pickCount)} time 👀`;
 }
 
-function ordinalSuffix(n: number): string {
+/** Exported for the leaderboard's rank rows, which need the same 11th/12th/13th handling. */
+export function ordinalSuffix(n: number): string {
   if (n % 100 >= 11 && n % 100 <= 13) return 'th';
   if (n % 10 === 1) return 'st';
   if (n % 10 === 2) return 'nd';
@@ -284,6 +299,8 @@ export function activityFeed(
         gender: e.gender,
         friendId: e.friendId,
         friendName: e.friendName,
+        q: e.label,
+        emoji: e.emoji,
         ts: e.ts
       })
     ),

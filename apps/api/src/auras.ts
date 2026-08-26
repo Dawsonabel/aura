@@ -243,6 +243,19 @@ export type FriendActivityEvent = {
   id: string; ts: string; friendId: string; friendName: string;
   /** The voter's, or "private" — withheld the same way a card withholds it. */
   gender: string;
+  /* The prompt the vote was cast on, and its emoji — the same pair the target sees on their own card.
+     Carried on the vote row itself, so this costs no extra query.
+
+     This used to be withheld, and the argument for withholding it is still worth knowing: a friend
+     event is one anonymous vote, so naming the prompt creates a per-vote fact about your friend that
+     they never published anywhere. It's a real cost and it is being paid deliberately — a feed of "a
+     boy gave Emma aura" with no subject is a feed of identical rows, and the prompt is the only thing
+     that makes one friend's day distinguishable from another's.
+
+     What is *not* being given up: the voter stays anonymous. Gender is still the only thing said about
+     them, still withheld for protected voters and small cohorts. The prompt says what was claimed, not
+     who claimed it, and the withheld-gender logic below is untouched. */
+  label: string; emoji: string;
 };
 
 /* Enough to fill a feed nobody scrolls to the bottom of, capped because it is a merged timeline over
@@ -298,7 +311,9 @@ export async function friendActivityFor(db: Db, user: User, tuning: Tuning): Pro
       /* First name only. The feed is a room of people you know by first name, and a full name here
          would read as a directory entry rather than as something that just happened. */
       friendName: String(friend.firstName || '').trim() || 'A friend',
-      gender: withheld ? 'private' : String(voter.gender ?? 'private')
+      gender: withheld ? 'private' : String(voter.gender ?? 'private'),
+      label: String(v.text ?? ''),
+      emoji: String(v.emoji ?? '')
     });
   }
   return events;

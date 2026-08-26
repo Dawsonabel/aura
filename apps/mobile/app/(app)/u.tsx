@@ -3,7 +3,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GENDER_LABEL } from '@aura/api-client';
 import { usePublicProfile } from '../../src/hooks/useProfile';
-import { useMe } from '../../src/hooks/useMe';
+import { useShop } from '../../src/hooks/useShop';
+import { useBoostCrush } from '../../src/hooks/useBoosts';
 import { InfoCard } from '../../src/components/settingsKit';
 import { InlineFailure, SkeletonBlock, SkeletonRows } from '../../src/components/stateKit';
 import { ToyShadow } from '../../src/components/ToyShadow';
@@ -32,7 +33,8 @@ export default function PublicProfileScreen() {
   const { userId = '' } = useLocalSearchParams<{ userId?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { data: me } = useMe();
+  const { data: shop } = useShop();
+  const boostCrush = useBoostCrush();
   const { data: profile, isLoading, isError, refetch } = usePublicProfile(userId);
 
   const first = (profile?.name ?? '').trim().split(/\s+/)[0] || 'them';
@@ -140,23 +142,59 @@ export default function PublicProfileScreen() {
             </InfoCard>
           </View>
 
-          {/* 13A's crush-boost card. Priced from the server's own constant would be better, but
-              boostCrush hardcodes 300 in the resolver and exposes no catalogue — see §7.2. The number
-              here is therefore duplicated, which is exactly the drift that section warns about. */}
-          {!profile.blocked && (
+          {/* 13A's crush-boost card, live now — the way in the Shop's crush row points at. Priced from
+              the server (shop.boostCrushCost is ctx.tuning's number), so the admin tuning page moves
+              this label too; the old hardcoded 300 predated the catalogue and is gone.
+
+              After a purchase the card *becomes* the confirmation rather than popping an alert —
+              which also retires the button until the boost is spent, since buying twice in a row just
+              queues placements the first purchase already covers. */}
+          {!profile.blocked && shop && (
             <View className="mt-4">
               <ToyShadow depth={6} shadowColor="#D9C7AF" backgroundColor="#FFF6E8" radius={24}>
-                <View className="flex-row items-center gap-[13px] p-[18px]">
-                  <AuraIcon name="sparkle" size={26} color="#7C5CFF" />
-                  <View className="flex-1">
-                    <Text className="font-fredoka-700 text-[19px]" style={{ color: '#2D2A2E' }}>
-                      Want {first} to see you?
-                    </Text>
-                    <Text className="font-nunito-700 mt-[2px] text-[12.5px] leading-[18px]" style={{ color: '#8B888D' }}>
-                      A crush boost puts you in {first}'s polls · 300 coins
-                      {me && me.coins < 300 ? ` · you have ${me.coins}` : ''}
-                    </Text>
+                <View className="p-[18px]">
+                  <View className="flex-row items-center gap-[13px]">
+                    <AuraIcon name="sparkle" size={26} color="#7C5CFF" />
+                    <View className="flex-1">
+                      <Text className="font-fredoka-700 text-[19px]" style={{ color: '#2D2A2E' }}>
+                        {boostCrush.isSuccess ? `You're in ${first}'s polls 💘` : `Want ${first} to see you?`}
+                      </Text>
+                      <Text className="font-nunito-700 mt-[2px] text-[12.5px] leading-[18px]" style={{ color: '#8B888D' }}>
+                        {boostCrush.isSuccess
+                          ? `Their next ${shop.boostCrushUses} rounds have you in them. They'll never know it was bought.`
+                          : `A crush boost puts you in ${first}'s next ${shop.boostCrushUses} rounds`}
+                      </Text>
+                    </View>
                   </View>
+                  {boostCrush.isError && (
+                    <Text className="font-nunito-800 mt-3 text-[12.5px] text-red-600">
+                      {(boostCrush.error as Error).message}
+                    </Text>
+                  )}
+                  {!boostCrush.isSuccess && (
+                    <View className="mt-3">
+                      <ToyShadow
+                        depth={4}
+                        shadowColor="#C43A7C"
+                        backgroundColor="#FF5CA8"
+                        radius={9999}
+                        onPress={() => boostCrush.mutate(profile.id)}
+                        disabled={boostCrush.isPending || shop.coins < shop.boostCrushCost}
+                        style={boostCrush.isPending || shop.coins < shop.boostCrushCost ? { opacity: 0.5 } : undefined}
+                      >
+                        <View className="flex-row items-center justify-center gap-[7px] py-[13px]">
+                          <AuraIcon name="bolt" size={16} color="#FFFFFF" filled />
+                          <Text className="font-fredoka-700 text-[15.5px] text-white">
+                            {boostCrush.isPending
+                              ? 'Boosting…'
+                              : shop.coins < shop.boostCrushCost
+                                ? `Boost me · needs ${shop.boostCrushCost}, you have ${shop.coins}`
+                                : `Boost me · ${shop.boostCrushCost}`}
+                          </Text>
+                        </View>
+                      </ToyShadow>
+                    </View>
+                  )}
                 </View>
               </ToyShadow>
             </View>

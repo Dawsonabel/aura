@@ -12,6 +12,7 @@
     "reset-flips": "tsx scripts/resetFlips.ts",
     "seed-auras": "tsx scripts/seedAuras.ts",
     "seed-socials": "tsx scripts/seedSocials.ts",
+    "seed-students": "tsx scripts/seedStudents.ts",
     "test": "tsx --test --test-concurrency=1 test/*.test.ts"
   },
   "dependencies": {

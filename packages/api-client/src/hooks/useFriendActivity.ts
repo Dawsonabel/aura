@@ -7,8 +7,9 @@ import type { GqlFetch } from '../client';
    building "A girl gave you aura" client-side from the query the tab has open anyway costs nothing.
    This hook exists only for the rows that genuinely need the server, which is the friend graph.
 
-   Note what the document can't ask for. There is no superlative field on FriendActivityEvent — see
-   friendActivityFor in apps/api/src/auras.ts for why a friend's prompt stays with the friend. */
+   A friend event now carries its prompt (`label`/`emoji`), the same pair your own card shows. It used
+   to be withheld on purpose; see FriendActivityEvent in apps/api/src/auras.ts for both sides of that
+   and why it was reversed. The voter is still anonymous either way. */
 
 /* Three fields, one document. All three feed the Activity segment and none is useful without the
    others, so asking for them together is one round trip instead of three racing requests that make the
@@ -21,6 +22,8 @@ const FRIEND_ACTIVITY_QUERY = /* GraphQL */ `
       friendId
       friendName
       gender
+      label
+      emoji
     }
     friendMilestones {
       id
@@ -46,6 +49,9 @@ export type FriendActivityEvent = {
   friendName: string;
   /** The voter's gender, or "private" when it was withheld. */
   gender: string;
+  /** The prompt the vote was cast on, and its emoji — as shown on the target's own card. */
+  label: string;
+  emoji: string;
 };
 
 /** Picks across your whole school: the last 24 hours, and the 24 hours before that. */

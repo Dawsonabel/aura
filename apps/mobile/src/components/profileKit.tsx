@@ -47,12 +47,16 @@ export function gradeShort(grade: string | null | undefined): string | null {
 export function ProfileIdentity({
   name,
   meta,
+  /* Second meta line, for the school. Optional: `/u` passes one combined `meta` string and looks
+     right doing it, because a public profile has no streak badge under it competing for the space. */
+  metaSecondary,
   avatarColor = '#FF5CA8',
   avatarShadow = '#C43A7C',
   badge
 }: {
   name: string;
   meta: string;
+  metaSecondary?: string | null;
   avatarColor?: string;
   avatarShadow?: string;
   badge?: ReactNode;
@@ -71,6 +75,14 @@ export function ProfileIdentity({
         <Text className="font-nunito-700 mt-[3px] text-[13.5px] text-ink-muted" numberOfLines={1}>
           {meta}
         </Text>
+        {/* The school gets its own line rather than a third `·` clause. It's the longest of the three
+            and the only one that truncates — "Lincoln High S…" was the old single line's ending
+            regardless of how short the handle and grade were. */}
+        {metaSecondary ? (
+          <Text className="font-nunito-700 mt-[1px] text-[13.5px] text-ink-muted" numberOfLines={1}>
+            {metaSecondary}
+          </Text>
+        ) : null}
         {badge ? <View className="mt-2">{badge}</View> : null}
       </View>
     </View>
@@ -101,15 +113,25 @@ export function ProfileBadge({
 }
 
 /** The stat trio (or pair, on a public profile). */
-export function StatRow({ stats }: { stats: { value: string; label: string; color?: string }[] }) {
+/* A cell is either value-over-label, or icon-beside-value with no label at all — the second form is
+   for a stat whose glyph is its name (the spark bolt). `minHeight` keeps the two forms level when
+   they share a row, so a label-less cell doesn't shrink against its neighbour. */
+export function StatRow({ stats }: { stats: { value: string; label?: string; color?: string; icon?: ReactNode }[] }) {
   return (
     <View className="mt-[22px] flex-row gap-[9px]">
-      {stats.map(stat => (
-        <View key={stat.label} className="flex-1 items-center rounded-20 bg-surface px-[10px] py-[14px]">
-          <Text className="font-fredoka-700 text-[24px]" style={{ color: stat.color ?? '#FFFFFF' }}>
-            {stat.value}
-          </Text>
-          <Text className="font-nunito-900 mt-[2px] text-[11px] text-ink-dim">{stat.label}</Text>
+      {stats.map((stat, i) => (
+        <View
+          key={stat.label ?? i}
+          className="flex-1 items-center justify-center rounded-20 bg-surface px-[10px] py-[14px]"
+          style={{ minHeight: 74 }}
+        >
+          <View className="flex-row items-center gap-[6px]">
+            {stat.icon}
+            <Text className="font-fredoka-700 text-[24px]" style={{ color: stat.color ?? '#FFFFFF' }}>
+              {stat.value}
+            </Text>
+          </View>
+          {stat.label && <Text className="font-nunito-900 mt-[2px] text-[11px] text-ink-dim">{stat.label}</Text>}
         </View>
       ))}
     </View>

@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { neon } from '@neondatabase/serverless';
 import { resetDb, callApi, createTestUser, env, joinSchool, seedPolls, seedVotes, type TestUser } from './helpers';
 
 let admin: TestUser;
@@ -247,6 +248,20 @@ test('a aura is hidden when the admirer blocks the target, not just the other wa
   assert.equal(auras.body.data.auras.auras.length, 0);
 });
 
+/** N votes at one explicit timestamp. seedVotes always stamps `now()`, and the tie-break is all ts. */
+async function seedVotesAt(voterId: string, targetId: string, count: number, tsIso: string): Promise<void> {
+  const sql = neon(env.DATABASE_URL as string);
+  const polls = await sql`SELECT id, emoji, text, color FROM polls WHERE enabled ORDER BY created_at LIMIT ${count}`;
+  if (polls.length < count) throw new Error(`seedVotesAt: need ${count} enabled polls, found ${polls.length}`);
+  for (const p of polls) {
+    await sql`
+      INSERT INTO votes (id, voter_id, target_id, question_id, emoji, text, color, ts)
+      VALUES (${'vote_' + crypto.randomUUID().slice(0, 12)}, ${voterId}, ${targetId}, ${p.id}, ${p.emoji}, ${p.text}, ${p.color}, ${tsIso})
+    `;
+  }
+}
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+
 const BOARD_QUERY = `
   query($scope: String) {
     board(scope: $scope) {
@@ -258,6 +273,30 @@ const BOARD_QUERY = `
   }
 `;
 
+/* Equal scores are common on a weekly board — this school has a whole pack tied on two — so *how* a
+   tie breaks is real behaviour, not an edge case. It used to fall out of target_id, which is to say
+   out of nothing. Now the earlier arrival wins, and this pins that. */
+test('a tie breaks toward whoever reached the score first', async () => {
+  const early = await makeSchoolUser();
+  const late = await makeSchoolUser();
+  const voter = await makeSchoolUser();
+
+  /* Identical counts, six hours apart. `late` is created *after* `early`, so if the ordering were
+     still falling back to the id this would come out the other way round — which is what makes this
+     a test of the tie-break rather than of insertion order. */
+  await seedVotesAt(voter.userId, early.userId, 11, hoursAgo(7));
+  await seedVotesAt(voter.userId, late.userId, 11, hoursAgo(1));
+
+  const board = await callApi(BOARD_QUERY, { scope: 'overall' }, early.token);
+  const entries = board.body.data.board.entries;
+  const earlyRow = entries.find((e: any) => e.userId === early.userId);
+  const lateRow = entries.find((e: any) => e.userId === late.userId);
+
+  assert.ok(earlyRow && lateRow, 'both are on the board');
+  assert.equal(earlyRow.auras, lateRow.auras, 'the scores really are tied');
+  assert.ok(earlyRow.rank < lateRow.rank, 'holding the score longer wins the tie');
+});
+
 test('the board ranks by auras received and pins your own row', async () => {
   const top = await makeSchoolUser();
   const mid = await makeSchoolUser();
@@ -265,10 +304,15 @@ test('the board ranks by auras received and pins your own row', async () => {
   const voterB = await makeSchoolUser();
   await callApi('mutation{ updateMe(firstName:"Top", lastName:"Scorer"){ id } }', undefined, top.token);
 
-  // Two admirers for `top`, one for `mid` — so the ordering is unambiguous.
-  await voteTwice(voterA, top.userId);
-  await voteTwice(voterB, top.userId);
-  await voteTwice(voterA, mid.userId);
+  /* Two admirers for `top`, one for `mid` — so the ordering is unambiguous. Scaled well past two
+     auras each, and for the same reason the blocked-row test below is: `boardLimit` is 10 and this
+     file's shared school accumulates a two-aura target per test, so at two these tie that whole pack
+     and drop off the payload. `entries.find` would return undefined and the ordering assertions would
+     have nothing to read. seedVotes needs a distinct poll per vote, so 12 is the per-voter ceiling —
+     hence 24 for `top` across two voters against 10 for `mid`. */
+  await seedVotes(voterA.userId, top.userId, 12);
+  await seedVotes(voterB.userId, top.userId, 12);
+  await seedVotes(voterA.userId, mid.userId, 10);
 
   const board = await callApi(BOARD_QUERY, { scope: 'overall' }, top.token);
   const entries = board.body.data.board.entries;
@@ -279,7 +323,7 @@ test('the board ranks by auras received and pins your own row', async () => {
   const topRow = entries.find((e: any) => e.userId === top.userId);
   const midRow = entries.find((e: any) => e.userId === mid.userId);
   assert.ok(topRow && midRow, 'both targets appear on the board');
-  assert.ok(topRow.auras > midRow.auras, 'four auras beats two');
+  assert.ok(topRow.auras > midRow.auras, 'more auras is more auras');
   assert.ok(topRow.rank < midRow.rank, 'more auras means a lower rank number');
   assert.equal(topRow.name, 'Top Scorer', 'unblocked rows carry the real name');
   assert.deepEqual(
@@ -299,7 +343,16 @@ test('a blocked person keeps their rank and score on the board but loses their n
   const rival = await makeSchoolUser();
   const voter = await makeSchoolUser();
   await callApi('mutation{ updateMe(firstName:"Rival", lastName:"Person"){ id } }', undefined, rival.token);
-  await voteTwice(voter, rival.userId);
+  /* 12, not the usual 2, and the count is load-bearing.
+
+     `boardLimit` is 10, and this file's shared school accumulates a target with two auras per test —
+     sixteen of them by the end. At two the rival ties that whole pack and lands wherever the id
+     tiebreak puts them, which since the limit dropped from 25 to 10 is usually off the board entirely,
+     and `entries.find` returns undefined before this test can assert anything about masking.
+
+     Twelve (one per enabled poll — seedVotes needs a distinct poll per vote) puts them clearly first,
+     so what's under test here stays masking rather than ranking. */
+  await seedVotes(voter.userId, rival.userId, 12);
 
   const before1 = await callApi(BOARD_QUERY, { scope: 'overall' }, viewer.token);
   const rivalBefore = before1.body.data.board.entries.find((e: any) => e.userId === rival.userId);

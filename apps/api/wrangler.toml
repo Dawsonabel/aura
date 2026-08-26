@@ -74,6 +74,26 @@ REDIS_KEY_PREFIX = "aura-api"
 # cannot be reached by forgetting something.
 #
 # Never run `wrangler secret put AURA_DEV_TOOLS` against the deployed worker.
+#
+# This same gate now also guards `legacyInfiniteAura` (the free membership unlock the paywall's dev
+# button calls) — so leaving it unset in production is what closes that launch blocker, and setting it
+# there would reopen a free paid tier, not just test seams.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# APPLE_ROOT_CA — the trust anchor for StoreKit2 receipt validation (src/iap.ts). While it is unset,
+# validateIap runs in relaxed "dev trust": the JWS signature is still verified against the leaf cert,
+# but the chain isn't anchored to Apple — fine against sandbox receipts, NOT fine in production, where
+# it means a self-signed chain could mint memberships.
+#
+# BEFORE LAUNCH, set it to Apple's public root certificate (Apple Root CA - G3), as PEM:
+#
+#     curl -sO https://www.apple.com/certificateauthority/AppleRootCA-G3.cer
+#     openssl x509 -inform der -in AppleRootCA-G3.cer -out AppleRootCA-G3.pem
+#     wrangler secret put APPLE_ROOT_CA < AppleRootCA-G3.pem
+#
+# The cert is public (only ever used to *verify*), so this could be a [vars] entry — it rides the
+# secret path purely so multiline PEM survives, which TOML vars make awkward.
 # ---------------------------------------------------------------------------
 
 # Local dev and TestFlight beta share this Worker + its own Neon branch/Clerk dev instance/Upstash DB

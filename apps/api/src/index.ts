@@ -5,7 +5,7 @@ import { makeRateLimiter } from './ratelimit';
 import { makeRoundStore } from './rounds';
 import { verifyClerkRequest } from './auth';
 import { sendRoundAnnouncement } from './push';
-import { resolveTuning } from './tuning';
+import { applyTuningOverrides, resolveTuning } from './tuning';
 
 const DEV_ORIGIN = 'http://localhost:3000'; // apps/web's Vite dev server, see apps/web/vite.config.ts
 
@@ -61,9 +61,18 @@ const yoga = createYoga<{ req: Request; env: Env; ip: string; waitUntil: (p: Pro
       me,
       isAdmin,
       waitUntil,
-      /* Resolved per request so a dashboard variable change takes effect on the next call — no deploy,
-         no restart. Cheap: it's a handful of Number() casts over an object already in memory. */
-      tuning: resolveTuning(env as unknown as Record<string, unknown>)
+      /* Resolved per request so a change takes effect on the next call — no deploy, no restart.
+         Two layers: env vars (dev/test knob), then the admin site's DB overrides on top — see
+         applyTuningOverrides for why the DB wins. The read is one indexed SELECT over a table with at
+         most a couple dozen rows, riding a request that already hit Neon for auth.
+
+         Swallowed on failure on purpose: tuning is the one context field the API can degrade on. If
+         the overrides table is unreachable, serving env/default numbers beats serving a 500 to every
+         request in the app. */
+      tuning: applyTuningOverrides(
+        resolveTuning(env as unknown as Record<string, unknown>),
+        await db.getTuningOverrides().catch(() => ({}))
+      )
     };
   }
 });

@@ -120,7 +120,8 @@ export default function Flip() {
 
      `aura.anonymous` is folded in at the call site rather than here: it's a different kind of no
      (permanent, and not about your allowance) and it needs its own line above the card. */
-  const canFlip = !outOfFlips && !!data?.infiniteAura && flipsLeft > 0;
+  const isMember = !!data?.infiniteAura;
+  const canFlip = !outOfFlips && isMember && flipsLeft > 0;
   /* `awaitingName` lived here — it held a skeleton while a flip charged before navigation and the name
      hadn't landed in the cache yet. Nothing charges before navigating any more, and keeping it would
      swap the card for a skeleton at exactly the moment it is supposed to be turning over. Only the
@@ -176,7 +177,13 @@ export default function Flip() {
 
            So the card never changes. Two props carry the difference: whether the button is live, and
            one line above the card saying why not. */
-        <Reveal aura={aura} canFlip={canFlip} onBack={() => router.back()} />
+        <Reveal
+          aura={aura}
+          canFlip={canFlip}
+          isMember={isMember}
+          onUpsell={() => router.push('/infinite')}
+          onBack={() => router.back()}
+        />
       )}
     </View>
   );
@@ -192,17 +199,40 @@ export default function Flip() {
    anywhere — it sits face down, you tap Flip, and the same card turns over. Splitting this in two
    would remount FlipCard at exactly the moment it needs to animate, and the turn would be replaced by
    a cut. Only the button underneath changes. */
-function Reveal({ aura, canFlip, onBack }: { aura: Aura; canFlip: boolean; onBack: () => void }) {
+function Reveal({
+  aura,
+  canFlip,
+  isMember,
+  onUpsell,
+  onBack
+}: {
+  aura: Aura;
+  canFlip: boolean;
+  isMember: boolean;
+  onUpsell: () => void;
+  onBack: () => void;
+}) {
   const accent = glowFor(aura);
   const revealName = useRevealAuraName();
   const flipped = !!aura.name;
-  /* Three ways the button is dead, one way it's alive: already turned, no allowance left, or a sender
-     who can't be named at any price. All three share the disabled treatment, because a dead button is
-     a dead button — what differs is where the explanation lives.
 
-     `aura.anonymous` is folded in here rather than by the caller: it's the card that explains itself
-     (see FlipCard's last line), so the caller has nothing to pass. */
-  const spent = flipped || aura.anonymous || !canFlip;
+  /* The button has three jobs now, not two.
+
+     `upsell` is a non-member on a card that *could* be named — the button looks and behaves exactly
+     like a live Flip, and pressing it opens the paywall instead of spending anything. Deliberately
+     indistinguishable from the real thing up to the press: a greyed-out button tells someone they
+     can't have this, which is a reason to leave, while a live one asks whether they want it, which is
+     a reason to tap. The answer to the tap is the pitch.
+
+     The two exclusions matter. An already-flipped card has no name left to sell. A protected sender's
+     name never arrives at any price — no membership unlocks it — so advertising Infinite Aura there
+     would be taking money for something the purchase doesn't do. Both stay dead. */
+  const upsell = !isMember && !flipped && !aura.anonymous;
+
+  /* Dead in the three cases that are genuinely over: already turned, a sender who can't be named, or a
+     member who has spent today's allowance. A non-member is *not* one of them any more — that case is
+     `upsell` above and reads as fully alive. */
+  const spent = flipped || aura.anonymous || (!canFlip && !upsell);
 
   /* The breath the card's halo used to have.
 
@@ -237,10 +267,14 @@ function Reveal({ aura, canFlip, onBack }: { aura: Aura; canFlip: boolean; onBac
 
             The out-of-flips line replaces the reassurance rather than joining it: promising that
             nobody will know you looked is beside the point on a card you can't look at. */}
+        {/* Keyed off `spent` rather than re-deriving the cases, so it can't drift from the button
+            underneath it. "Out of flips" now means only what it says — a member who has spent the
+            allowance. A non-member never had flips to run out of, and telling them they did would both
+            be false and give the game away before they press anything. */}
         <Text className="font-nunito-800 mb-[20px] text-center text-[16px] leading-[21px] text-ink-muted">
-          {canFlip || flipped || aura.anonymous
-            ? "They'll never know you saw their vote... 👀"
-            : 'Out of flips for today :('}
+          {spent && !flipped && !aura.anonymous
+            ? 'Out of flips for today :('
+            : "They'll never know you saw their vote... 👀"}
         </Text>
 
         <FlipCard aura={aura} accent={accent} />
@@ -293,7 +327,7 @@ function Reveal({ aura, canFlip, onBack }: { aura: Aura; canFlip: boolean; onBac
               shadowColor="#C43A7C"
               backgroundColor="#FF5CA8"
               radius={20}
-              onPress={() => revealName.mutate(aura.id)}
+              onPress={upsell ? onUpsell : () => revealName.mutate(aura.id)}
               disabled={spent || revealName.isPending}
               /* Two different kinds of "not now", two depths of fade. Mid-flip it's a request in
                  flight and comes back; spent — turned already, or out of flips — is over for now, so

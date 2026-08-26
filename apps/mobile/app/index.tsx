@@ -3,7 +3,6 @@ import { Text, View } from 'react-native';
 import { useIsFocused, useRouter } from 'expo-router';
 import { Show, useAuth, useClerk, useSignIn, useSignUp } from '@clerk/expo';
 import { useMe } from '../src/hooks/useMe';
-import { useAuras } from '../src/hooks/useAuras';
 import { callClerk } from '../src/lib/clerkCall';
 import { toE164 } from '../src/lib/phone';
 import { CODE_COOLDOWN_SECONDS, isRateLimited, useCooldown } from '../src/hooks/useCooldown';
@@ -15,12 +14,10 @@ import {
   AuthHero,
   AuthLabel,
   AuthShell,
-  AuthStatus,
   PhoneField
 } from '../src/components/authKit';
 import { RoamGlow, roamSlots, useRoamClock, type CardRoam } from '../src/components/auraKit';
-import { ToyShadow } from '../src/components/ToyShadow';
-import { LoadingGate } from '../src/components/LoadingScreen';
+import { LoadingGate, LoadingScreen } from '../src/components/LoadingScreen';
 import { FullScreenFailure } from '../src/components/stateKit';
 import { InfoCard, Strong } from '../src/components/settingsKit';
 import { AuraIcon, type AuraIconName } from '../src/components/AuraIcon';
@@ -254,9 +251,14 @@ function SignedInGate() {
      second time — REPLACE builds a *new* route object, so onboarding remounts with fresh state and
      the user lands back on step 1. It only bites on the sign-up path, where verify.tsx used to
      leave a second copy of this screen in the stack, which is why it looked intermittent. */
+  /* Both destinations, one Effect. A returning user used to get a landing beat here instead — an
+     avatar, "Welcome back, Blake", their grade and school, and a 1600ms setTimeout before the replace.
+     It was a screen whose entire content was facts the user already knows, held up by a timer, in
+     front of the thing they opened the app for. Gone: `me` resolving is now the only wait, and the
+     moment it lands this redirects. */
   useEffect(() => {
-    if (!isFocused) return;
-    if (data && data.onboarded === false) router.replace('/onboarding');
+    if (!isFocused || !data) return;
+    router.replace(data.onboarded === false ? '/onboarding' : '/aura');
   }, [data, isFocused, router]);
 
   /* 10A's one full-screen failure. It earns that because nothing else on this screen can render
@@ -282,71 +284,13 @@ function SignedInGate() {
     );
   }
 
-  if (data && data.onboarded !== false) {
-    return <ReturningHandoff name={data.firstName} grade={data.grade} school={data.school?.name ?? null} />;
-  }
+  /* The wordmark, not null, and not a second loading style.
 
-  /* Reached only in the window before `me` resolves, which LoadingGate is already covering — so this
-     renders nothing rather than a competing "Loading…" underneath it. The 15s give-up reveals it, and
-     by then either data or isError above has won. */
-  return null;
-}
-
-function ReturningHandoff({
-  name,
-  grade,
-  school
-}: {
-  name: string | null;
-  grade: string | null;
-  school: string | null;
-}) {
-  const router = useRouter();
-  const { data: auras } = useAuras();
-  const newAura = auras?.auras.filter(f => f.unread).length ?? 0;
-  const first = (name || '').trim().split(/\s+/)[0] || 'you';
-  /* Design shows "11th · Lakeview High". Grade is free-form on the server and includes
-     non-numeric values ("Not in High School", "Already Graduated"), so only numeric grades get
-     the "th" suffix. Either half can be missing — join drops the separator with it. */
-  const gradeLabel = grade && /^\d+$/.test(grade) ? `${grade}th` : grade;
-  const meta = [gradeLabel, school].filter(Boolean).join(' · ');
-
-  // A deliberate beat, not a loader — long enough to read, short enough not to be a wall.
-  useEffect(() => {
-    const id = setTimeout(() => router.replace('/aura'), 1600);
-    return () => clearTimeout(id);
-  }, [router]);
-
-  return (
-    <View className="flex-1 items-center justify-center">
-      <ToyAvatar initial={(first[0] || 'A').toUpperCase()} />
-      <Text className="font-fredoka-700 mt-[20px] text-center text-[34px] leading-[37px] text-white">
-        Welcome back, {first}
-      </Text>
-      {meta.length > 0 && (
-        <Text className="font-nunito-700 mt-[10px] max-w-[280px] text-center text-[15px] leading-[21px] text-ink-muted">
-          {meta}
-        </Text>
-      )}
-      {newAura > 0 && (
-        <View className="mt-[24px] flex-row items-center gap-[11px] rounded-20 bg-raised px-[17px] py-[15px]">
-          <AuraIcon name="aura" size={20} color="#FFC9E4" />
-          <Text className="font-nunito-800 text-[13.5px] leading-[19px]" style={{ color: '#FFC9E4' }}>
-            +{newAura} aura while you were gone.
-          </Text>
-        </View>
-      )}
-      <AuthStatus>Taking you to today's round…</AuthStatus>
-    </View>
-  );
-}
-
-function ToyAvatar({ initial }: { initial: string }) {
-  return (
-    <ToyShadow depth={4} shadowColor="#C43A7C" backgroundColor="#FF5CA8" radius={9999}>
-      <View className="h-[78px] w-[78px] items-center justify-center">
-        <Text className="font-fredoka-700 text-[29px] text-white">{initial}</Text>
-      </View>
-    </ToyShadow>
-  );
+     Two waits land here and both should look like one screen: the window before `me` resolves (which
+     LoadingGate is already covering) and the frame or two after it resolves while the Effect above
+     replaces the route. Returning null covered the first — LoadingGate was on top of it — but would
+     flash ground-coloured blank on the second, which is the exact failure the comment on LoadingGate
+     warns about. Rendering the same breathing wordmark under the gate means the handoff is continuous:
+     one screen from cold start until the Vote tab takes over. */
+  return <LoadingScreen />;
 }

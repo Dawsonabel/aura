@@ -28,6 +28,7 @@ export {
 export { useMarkNotificationsRead, type UseMarkNotificationsReadParams } from './hooks/useMarkNotificationsRead';
 export { useRevealAuraName, type UseRevealAuraNameParams } from './hooks/useRevealAuraName';
 export { useActivateInfiniteAura, type UseActivateInfiniteAuraParams } from './hooks/useActivateInfiniteAura';
+export { useValidateIap, type ValidateIapResult, type UseValidateIapParams } from './hooks/useValidateIap';
 export {
   useDevTools,
   type DevToolKind,
