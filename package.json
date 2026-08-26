@@ -1,13 +1,16 @@
 {
-  "name": "gas-clone",
+  "name": "aura-app",
   "version": "1.0.0",
   "private": true,
-  "description": "Gas app clone — faithful UI + real backend (SQLite, phone-code auth, Apple IAP).",
-  "main": "server.js",
+  "description": "Aura — GraphQL backend (apps/api, Cloudflare Workers) + TanStack Start frontend (apps/web).",
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
-    "start": "node server.js"
+    "dev": "turbo run dev"
+  },
+  "devDependencies": {
+    "turbo": "^2.10.9"
   },
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=24.0.0"
   }
 }

@@ -2,10 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "gas",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["server.js"],
-      "port": 8777
+      "name": "api",
+      "runtimeExecutable": "nix",
+      "runtimeArgs": ["develop", "--command", "pnpm", "--filter", "api", "dev"],
+      "port": 8787
+    },
+    {
+      "name": "mobile",
+      "runtimeExecutable": "nix",
+      "runtimeArgs": ["develop", "--command", "pnpm", "--filter", "mobile", "start"],
+      "port": 8081
     }
   ]
 }

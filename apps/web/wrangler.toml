@@ -1,0 +1,17 @@
+name = "aura-web"
+main = "@tanstack/react-start/server-entry"
+compatibility_date = "2025-07-18"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+# Mirrors apps/api's staging environment — same reasoning, see the comment there. Admin-dashboard
+# actions (resolving reports, banning users) are destructive enough that verifying against staging
+# data first, not prod, is worth the extra Worker. Deploy with `wrangler deploy --env staging`
+# (`pnpm --filter web deploy:staging`).
+[env.staging]
+name = "aura-web-staging"
+
+[env.staging.observability]
+enabled = true

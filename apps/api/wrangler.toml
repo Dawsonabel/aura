@@ -1,0 +1,116 @@
+name = "aura-api"
+main = "src/index.ts"
+compatibility_date = "2025-07-18"
+compatibility_flags = ["nodejs_compat"]
+
+# ---------------------------------------------------------------------------
+# Gameplay / economy dials. Every one is OPTIONAL — src/tuning.ts holds the defaults, and anything
+# unset here just uses them. Values are read per request, so changing one takes effect on the next
+# call: edit it in the Cloudflare dashboard (Workers > aura-api > Settings > Variables) and it's live
+# with no deploy, no app release, no App Store review.
+#
+# Uncomment to override. A non-numeric or negative value is ignored rather than applied, so a typo
+# can't take the game down.
+#
+# [vars]
+# AURA_ROUNDS_PER_HOUR = "1"          # rounds per clock hour — the biggest dial in the product
+# AURA_REROLL_COST = "5"              # to swap one question's four candidates
+# AURA_VOTE_PAYOUT = "1"              # paid per vote, as it lands — a partial round still earns
+# AURA_ROUND_BONUS = "10"             # on top, and only when every question is answered
+# AURA_ROUND_BONUS_INFINITE_AURA = "10"     # level on purpose: the sub sells flips, not a currency multiplier
+# AURA_DAILY_FLIPS = "2"              # name reveals a member gets per day, per card
+# AURA_STREAK_BONUS = "20"            # for keeping the streak alive (paid from streak day 2)
+# AURA_INVITE_BONUS = "25"            # advertised in the Shop; NOT paid out — no invite attribution yet
+# AURA_COIN_PACK_SMALL = "25"         # pack sizes only — prices come from StoreKit, localized
+# AURA_COIN_PACK_MEDIUM = "100"
+# AURA_COIN_PACK_LARGE = "300"
+# AURA_BOOST_RANDOM_COST = "100"
+# AURA_BOOST_RANDOM_USES = "3"
+# AURA_BOOST_CRUSH_COST = "300"
+# AURA_BOOST_CRUSH_USES = "6"
+# AURA_MAX_BOOST_PER_ROUND = "4"
+# AURA_QUESTIONS_PER_ROUND = "10"
+# AURA_WEIGHT_FRIEND = "3"            # how many times likelier a friend is than a stranger
+# AURA_WEIGHT_SCHOOLMATE = "1"        # the baseline everything else is a multiple of
+# AURA_LIFETIME_DAYS = "30"
+# AURA_COHORT_FLOOR = "5"             # anonymity floor — lowering trades away privacy, not a growth lever
+# AURA_SCHOOL_UNLOCK_THRESHOLD = "20" # people before the Ranks board unlocks
+# AURA_BOARD_LIMIT = "25"
+# AURA_BOARD_TOP_TIER = "10"
+# ---------------------------------------------------------------------------
+
+# 7A's daily "round is live" push. 20:15 UTC on school days — mid-afternoon US Eastern, which is the
+# design's 3:15pm. It's one fixed UTC time for everyone, so the hour drifts by timezone; each user's
+# own quiet hours are still honoured per their stored offset (see inQuietHours in src/push.ts).
+[triggers]
+crons = ["15 20 * * 1-5"]
+
+# Not sensitive (an Origin is public by nature), so a plain var rather than a secret — see
+# corsHeaders() in src/index.ts. tonyhawklover.workers.dev is the account's workers.dev subdomain.
+#
+# REDIS_KEY_PREFIX: staging and production share one Upstash database (free tier only allows one)
+# — this is what keeps a beta tester's rate-limit window or round state from ever colliding with a
+# real user's. See makeRateLimiter/makeRoundStore in src/ratelimit.ts and src/rounds.ts.
+[vars]
+ALLOWED_ORIGIN = "https://aura-web.tonyhawklover.workers.dev"
+REDIS_KEY_PREFIX = "aura-api"
+
+# Secrets (DATABASE_URL, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN) are supplied via
+# .dev.vars locally (gitignored, same idea as the root .env) and `wrangler secret put` in production —
+# never committed here.
+
+# ---------------------------------------------------------------------------
+# AURA_DEV_TOOLS — the test-state shortcuts in src/devTools.ts (reset flips, seed fake votes, grant
+# sparks, reset the round timer, set the streak). Add
+#
+#     AURA_DEV_TOOLS=1
+#
+# to apps/api/.dev.vars to switch them on locally.
+#
+# It is intentionally NOT listed under [vars] above, and must never be. Production is off because the
+# variable does not exist there — not because a flag defaults to false, and not because a resolver
+# checks a hostname. These mutations mint currency, refund paid reveals and fabricate other people's
+# votes, so the only safe shape for the gate is one that requires a deliberate act to enable and
+# cannot be reached by forgetting something.
+#
+# Never run `wrangler secret put AURA_DEV_TOOLS` against the deployed worker.
+#
+# This same gate now also guards `legacyInfiniteAura` (the free membership unlock the paywall's dev
+# button calls) — so leaving it unset in production is what closes that launch blocker, and setting it
+# there would reopen a free paid tier, not just test seams.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# APPLE_ROOT_CA — the trust anchor for StoreKit2 receipt validation (src/iap.ts). While it is unset,
+# validateIap runs in relaxed "dev trust": the JWS signature is still verified against the leaf cert,
+# but the chain isn't anchored to Apple — fine against sandbox receipts, NOT fine in production, where
+# it means a self-signed chain could mint memberships.
+#
+# BEFORE LAUNCH, set it to Apple's public root certificate (Apple Root CA - G3), as PEM:
+#
+#     curl -sO https://www.apple.com/certificateauthority/AppleRootCA-G3.cer
+#     openssl x509 -inform der -in AppleRootCA-G3.cer -out AppleRootCA-G3.pem
+#     wrangler secret put APPLE_ROOT_CA < AppleRootCA-G3.pem
+#
+# The cert is public (only ever used to *verify*), so this could be a [vars] entry — it rides the
+# secret path purely so multiline PEM survives, which TOML vars make awkward.
+# ---------------------------------------------------------------------------
+
+# Local dev and TestFlight beta share this Worker + its own Neon branch/Clerk dev instance/Upstash DB
+# — kept separate from the [above] production config so a beta build or a stray local `wrangler
+# deploy` can never touch real user data. Deploy with `wrangler deploy --env staging`
+# (`pnpm --filter api deploy:staging`). Cron triggers aren't inherited by named environments in
+# wrangler, so the round-announcement cron is declared again here — TestFlight testers still need it.
+[env.staging]
+name = "aura-api-staging"
+
+[env.staging.triggers]
+crons = ["15 20 * * 1-5"]
+
+[env.staging.vars]
+ALLOWED_ORIGIN = "https://aura-web-staging.tonyhawklover.workers.dev"
+REDIS_KEY_PREFIX = "aura-api-staging"
+
+# Secrets for this environment are set the same way, with --env staging appended:
+# `wrangler secret put DATABASE_URL --env staging`, etc. — a separate copy per secret, never shared
+# with the production Worker above.

@@ -1,79 +1,59 @@
-# Gas clone — full-stack demo
+# Aura
 
-A faithful front-end clone of the shut-down **Gas** app, now with a **real multi-user backend** and an **admin dashboard**. Design-tribute / educational project. No real SMS, no real payments.
+Aura is a school-scoped social app for teens built around anonymous positivity. Each round, a student is shown a short set of compliment-style prompts ("Who has the best smile?", "Who would you want as a lab partner?") paired with a handful of classmates from their own school, and picks one — anonymously. The picks are never shown live; instead they accumulate as "auras" on the receiving student's profile, so what you see is just *that people picked you*, not who, turning a normal school day into a slow drip of anonymous validation instead of a popularity contest played out in public.
+
+The tension that drives engagement is curiosity about the "who": every aura is a small mystery. A face-down card shows the poll and the sender's gender and grade for free; the **Infinite Aura** membership grants a daily allowance of "flips" that turn a card over and reveal the sender's name. **Coins** (earned by playing, or bought in packs) buy boosts and rerolls — never a name. Underneath the fun mechanic sits a real safety surface, because the userbase skews to minors: every account is age-gated at sign-up, students can block or report anyone, and a full admin dashboard gives school/site moderators visibility into schools, poll content, individual votes, and filed reports.
+
+Technically: a GraphQL backend on Cloudflare Workers (`apps/api`), a TanStack Start web app (`apps/web`) — admin dashboard only, the consumer product ships in the native app — and a native Expo/React Native app (`apps/mobile`) for students, sharing a common GraphQL data layer (`packages/api-client`). Clerk handles auth (phone-number + SMS code), Neon Postgres is the database, and Upstash Redis backs rate limiting and ephemeral poll-round state.
+
+> Working in here with Claude Code? See [CLAUDE.md](CLAUDE.md) for environment gotchas (running
+> commands via `nix develop --command`), standing collaboration rules, and house conventions.
 
 ## Run it
 
-Requires Node.js (uses only built-in modules — no `npm install`).
+Requires [Nix](https://nixos.org/) (the flake provides Node 24 + pnpm) or Node 24 + pnpm 11 installed some other way.
 
 ```
-cd gas-clone
-node server.js
+nix develop        # or: direnv allow, if you use direnv
+pnpm install
 ```
 
-Then open:
+Each app needs its own local env file:
 
-- **Phone app:** http://localhost:8777  → best viewed in a phone emulator (Chrome/Edge DevTools → Ctrl+Shift+M → pick an iPhone)
-- **Admin dashboard:** http://localhost:8777/admin  → passcode **`gas-admin`**
+- `apps/api/.dev.vars` — copy from `apps/api/.dev.vars.example`: a Neon `DATABASE_URL`, Upstash Redis REST credentials, a Clerk secret key.
+- `apps/web/.env` — copy from `apps/web/.env.example`: a Clerk publishable key, and `VITE_API_URL` pointing at `apps/api`'s local dev URL.
+- `apps/mobile/.env` — copy from `apps/mobile/.env.example`: the same Clerk publishable key, and `EXPO_PUBLIC_API_URL` pointing at `apps/api`'s local dev URL (a physical device on Expo Go can't reach `localhost` on your machine — use your LAN IP, or run against a simulator).
 
-Change the port or passcode with env vars: `PORT=3000 ADMIN_PASSCODE=secret node server.js`
+Then, from the repo root:
 
-## Phone verification (real codes)
+```
+pnpm dev            # runs apps/api (wrangler dev) and apps/web (vite dev) together, via Turborepo
+pnpm --filter @aura/mobile start   # apps/mobile has its own dev server (Expo)
+```
 
-Sign-up uses **real code verification**: the server generates a random 6-digit code, and login **fails unless the entered code matches** (one-time use, 10-min expiry).
+`apps/api/scripts/migrate.ts` (`pnpm --filter api migrate`) creates the schema on a fresh database.
 
-- **Dev mode (default):** no SMS provider configured, so the code is printed to the **server console** and shown on the code screen (`Dev mode — your code is 123456`). Verification is still enforced — a wrong code is rejected.
-- **Real SMS (Twilio):** set env vars and real texts are sent (US numbers assumed). Two auth styles:
+## Structure
 
-  **Account SID + Auth Token:**
-  ```
-  TWILIO_SID=ACxxxx TWILIO_TOKEN=your_auth_token TWILIO_FROM=+1XXXXXXXXXX node server.js
-  ```
-  **API Key (SK…) + secret** — also needs the Account SID for the URL:
-  ```
-  TWILIO_ACCOUNT_SID=ACxxxx TWILIO_SID=SKxxxx TWILIO_TOKEN=api_key_secret TWILIO_FROM=+1XXXXXXXXXX node server.js
-  ```
-
-  On startup the server prints whether SMS is **LIVE** or in **dev mode**. On a Twilio trial you can only text numbers you've **verified** in the console. You need your own [Twilio](https://www.twilio.com/) account + a from-number; outside the free trial it costs a few cents per message. Any other provider can be swapped into `sendSMS()` in `server.js`.
-
-## How the multi-user part works
-
-1. In the **admin dashboard**, create a school and add students (or use the seeded *Lincoln High* with 16 students).
-2. Click **"Log in as ↗"** on two different students in two browser tabs.
-3. In one tab, answer polls — you're picking real classmates.
-4. Those picks are delivered as **real flames** to the classmate's **Inbox** in the other tab.
-5. Turn on **God Mode** (Inbox → "See Who Likes You") to reveal the first initial of whoever picked you.
-
-Self-signup also works: open the app, tap through onboarding (pick your school, then phone → the verification code shows on screen in dev mode), and start playing.
-
-## Feature list (user side)
-
-- **Onboarding:** age → grade → **school picker** → phone → **real code verification** → name → username → gender → photo
-- **Polls:** 12 per round, real classmates as choices, per-poll colors, pick → *Tap to continue*
-- **Flames inbox:** real votes delivered to you, color-coded by sender gender (💙/💗/💜), reveal hints with coins
-- **God Mode:** unlock first-letter hints on everyone, double coins
-- **Top Flames:** the polls you've been picked for most, shown on your profile
-- **Post on Snap:** share a Gas-branded story card to Snapchat from results or any flame (Web Share API + Save image / Copy link)
-- **Coins & Shop:** earn by voting, spend to boost your name in polls
-- **Add friends, Edit profile, Manage account, About/FAQ**
-
-## Files
-
-| File | Purpose |
+| Path | Purpose |
 |------|---------|
-| `server.js` | Zero-dependency Node server: static hosting + REST API |
-| `data/db.json` | JSON database (auto-created & seeded on first run; delete it to reset) |
-| `index.html` / `styles.css` / `app.js` | The phone app (API-backed) |
-| `admin.html` / `admin.js` | Desktop admin dashboard |
-| `fonts/` | Bundled Fredoka + Nunito (works offline) |
+| `apps/api` | GraphQL API (GraphQL Yoga) on Cloudflare Workers — schools/polls/votes/auras/friends/admin, Clerk auth, Neon Postgres, Upstash Redis |
+| `apps/web` | Student + admin frontend, TanStack Start (SPA mode), TanStack Query, Clerk |
+| `apps/mobile` | Native student app, Expo + Expo Router, NativeWind, Clerk |
+| `packages/api-client` | Shared GraphQL data layer (`createGqlFetch`, query hooks) used by both `apps/web` and `apps/mobile` |
 
-## Admin dashboard can
+## Testing
 
-- **Schools** — create / edit / delete, see student counts
-- **Users** — add students, reassign school & grade inline, edit coins, toggle God Mode, "log in as", delete
-- **Poll Questions** — add / edit / enable / disable the compliment prompts (global or per-school)
-- **Flames / Activity** — see every vote (who gassed whom) and delete to moderate
+```
+pnpm turbo run test     # apps/api + apps/web
+pnpm --filter api test  # apps/api only
+pnpm --filter web test  # apps/web only
+```
 
-## Reset
+`apps/api`'s suite is real integration tests (`node:test`) against a disposable Neon branch — set `TEST_DATABASE_URL` in `apps/api/.dev.vars` to a second, throwaway branch (never your real `DATABASE_URL`; the suite drops and recreates every table on each run). `apps/web`'s suite is Vitest + React Testing Library. `apps/mobile` and `packages/api-client` don't have a test suite yet — `pnpm turbo run typecheck` covers all four.
 
-Stop the server and delete `data/db.json`, then start again for a fresh seeded network.
+## Admin dashboard
+
+Sign in with a Clerk identity whose `publicMetadata.role` is `"admin"` (and whose session token has the `role` custom claim configured — see the Clerk dashboard's Sessions settings) to land on `/admin` instead of the student app. Covers schools, users, poll questions, vote moderation, and safety reports.
+
+:)
